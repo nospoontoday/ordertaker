@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2 } from "lucide-react"
 import { menuItemsApi, categoriesApi, ordersApi, type MenuItem as ApiMenuItem, type Category as ApiCategory } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
 interface OrderItem {
   id: string
@@ -120,6 +121,7 @@ export function OrderTaker({
 
   // Toast for notifications
   const { toast } = useToast()
+  const { user } = useAuth()
 
   // Load menu data from API with fallback
   useEffect(() => {
@@ -338,6 +340,8 @@ export function OrderTaker({
             isPaid: newOrder.isPaid,
             orderType: newOrder.orderType || "dine-in",
             appendedOrders: [],
+            orderTakerName: user?.name,
+            orderTakerEmail: user?.email,
           })
 
           toast({

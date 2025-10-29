@@ -17,6 +17,13 @@ interface OrderItem {
   quantity: number
   status: "pending" | "preparing" | "ready" | "served"
   itemType?: "dine-in" | "take-out"
+  preparingAt?: number
+  readyAt?: number
+  servedAt?: number
+  preparedBy?: string
+  preparedByEmail?: string
+  servedBy?: string
+  servedByEmail?: string
 }
 
 interface AppendedOrder {
@@ -37,6 +44,9 @@ interface Order {
   paymentMethod?: "cash" | "gcash" | null
   orderType: "dine-in" | "take-out"
   appendedOrders?: AppendedOrder[]
+  allItemsServedAt?: number
+  orderTakerName?: string
+  orderTakerEmail?: string
 }
 
 type ItemStatus = "pending" | "preparing" | "ready" | "served"
@@ -77,6 +87,9 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       paymentMethod: newOrder.paymentMethod,
       orderType: newOrder.orderType || "dine-in",
       createdAt: newOrder.createdAt,
+      allItemsServedAt: newOrder.allItemsServedAt,
+      orderTakerName: newOrder.orderTakerName,
+      orderTakerEmail: newOrder.orderTakerEmail,
       items: newOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -84,6 +97,13 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         quantity: item.quantity || 1,
         status: item.status || "pending",
         itemType: item.itemType || "dine-in",
+        preparingAt: item.preparingAt,
+        readyAt: item.readyAt,
+        servedAt: item.servedAt,
+        preparedBy: item.preparedBy,
+        preparedByEmail: item.preparedByEmail,
+        servedBy: item.servedBy,
+        servedByEmail: item.servedByEmail,
       })),
       appendedOrders: (newOrder.appendedOrders || []).map((appended: any) => ({
         id: appended.id,
@@ -97,6 +117,13 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           quantity: item.quantity || 1,
           status: item.status || "pending",
           itemType: item.itemType || "dine-in",
+          preparingAt: item.preparingAt,
+          readyAt: item.readyAt,
+          servedAt: item.servedAt,
+          preparedBy: item.preparedBy,
+          preparedByEmail: item.preparedByEmail,
+          servedBy: item.servedBy,
+          servedByEmail: item.servedByEmail,
         })),
       })),
     }
@@ -131,6 +158,9 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       paymentMethod: updatedOrder.paymentMethod,
       orderType: updatedOrder.orderType || "dine-in",
       createdAt: updatedOrder.createdAt,
+      allItemsServedAt: updatedOrder.allItemsServedAt,
+      orderTakerName: updatedOrder.orderTakerName,
+      orderTakerEmail: updatedOrder.orderTakerEmail,
       items: updatedOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -138,6 +168,13 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         quantity: item.quantity || 1,
         status: item.status || "pending",
         itemType: item.itemType || "dine-in",
+        preparingAt: item.preparingAt,
+        readyAt: item.readyAt,
+        servedAt: item.servedAt,
+        preparedBy: item.preparedBy,
+        preparedByEmail: item.preparedByEmail,
+        servedBy: item.servedBy,
+        servedByEmail: item.servedByEmail,
       })),
       appendedOrders: (updatedOrder.appendedOrders || []).map((appended: any) => ({
         id: appended.id,
@@ -151,6 +188,13 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           quantity: item.quantity || 1,
           status: item.status || "pending",
           itemType: item.itemType || "dine-in",
+          preparingAt: item.preparingAt,
+          readyAt: item.readyAt,
+          servedAt: item.servedAt,
+          preparedBy: item.preparedBy,
+          preparedByEmail: item.preparedByEmail,
+          servedBy: item.servedBy,
+          servedByEmail: item.servedByEmail,
         })),
       })),
     }
@@ -234,6 +278,9 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         paymentMethod: order.paymentMethod || null,
         orderType: order.orderType || "dine-in",
         createdAt: order.createdAt,
+        allItemsServedAt: order.allItemsServedAt,
+        orderTakerName: order.orderTakerName,
+        orderTakerEmail: order.orderTakerEmail,
         items: order.items.map((item: any) => ({
           id: item.id,
           name: item.name,
@@ -241,6 +288,13 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           quantity: item.quantity || 1,
           status: item.status || "pending",
           itemType: item.itemType || "dine-in",
+          preparingAt: item.preparingAt,
+          readyAt: item.readyAt,
+          servedAt: item.servedAt,
+          preparedBy: item.preparedBy,
+          preparedByEmail: item.preparedByEmail,
+          servedBy: item.servedBy,
+          servedByEmail: item.servedByEmail,
         })),
         appendedOrders: (order.appendedOrders || []).map((appended: any) => ({
           id: appended.id,
@@ -254,6 +308,13 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
             quantity: item.quantity || 1,
             status: item.status || "pending",
             itemType: item.itemType || "dine-in",
+            preparingAt: item.preparingAt,
+            readyAt: item.readyAt,
+            servedAt: item.servedAt,
+            preparedBy: item.preparedBy,
+            preparedByEmail: item.preparedByEmail,
+            servedBy: item.servedBy,
+            servedByEmail: item.servedByEmail,
           })),
         })),
       }))
@@ -342,13 +403,45 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   }
 
   const updateItemStatus = async (orderId: string, itemId: string, newStatus: ItemStatus) => {
+    // Find the item to check for crew assignment
+    const order = orders.find(o => o.id === orderId)
+    const item = order?.items.find(i => i.id === itemId)
+
+    if (!item) return
+
+    // Validation: Only crew who prepared the item can update it (unless order taker)
+    if (!isOrderTaker && item.preparedByEmail && item.preparedByEmail !== user?.email) {
+      toast({
+        title: "Permission Denied",
+        description: "Only the crew member who prepared this item can update its status.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Prepare updated item with crew tracking
+    const updatedItem: Partial<OrderItem> = { status: newStatus }
+
+    // When moving to "preparing", assign the crew member
+    if (newStatus === "preparing" && !item.preparedBy && !item.preparedByEmail) {
+      updatedItem.preparedBy = user?.name
+      updatedItem.preparedByEmail = user?.email
+      updatedItem.preparingAt = Date.now()
+    } else if (newStatus === "ready") {
+      updatedItem.readyAt = Date.now()
+    } else if (newStatus === "served") {
+      updatedItem.servedAt = Date.now()
+      updatedItem.servedBy = user?.name
+      updatedItem.servedByEmail = user?.email
+    }
+
     // Update local state immediately for responsiveness
     setOrders(
       orders.map((order) =>
         order.id === orderId
           ? {
               ...order,
-              items: order.items.map((item) => (item.id === itemId ? { ...item, status: newStatus } : item)),
+              items: order.items.map((item) => (item.id === itemId ? { ...item, ...updatedItem } : item)),
             }
           : order,
       ),
@@ -356,7 +449,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
     // Sync to API
     try {
-      await ordersApi.updateItemStatus(orderId, itemId, newStatus)
+      await ordersApi.updateItemStatus(orderId, itemId, newStatus, updatedItem)
       setIsOnline(true)
     } catch (error) {
       console.error("Error updating item status:", error)
@@ -377,6 +470,39 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   ) => {
     console.log('updateAppendedItemStatus called:', { orderId, appendedOrderId, itemId, newStatus })
 
+    // Find the item to check for crew assignment
+    const order = orders.find(o => o.id === orderId)
+    const appendedOrder = order?.appendedOrders?.find(a => a.id === appendedOrderId)
+    const item = appendedOrder?.items.find(i => i.id === itemId)
+
+    if (!item) return
+
+    // Validation: Only crew who prepared the item can update it (unless order taker)
+    if (!isOrderTaker && item.preparedByEmail && item.preparedByEmail !== user?.email) {
+      toast({
+        title: "Permission Denied",
+        description: "Only the crew member who prepared this item can update its status.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Prepare updated item with crew tracking
+    const updatedItem: Partial<OrderItem> = { status: newStatus }
+
+    // When moving to "preparing", assign the crew member
+    if (newStatus === "preparing" && !item.preparedBy && !item.preparedByEmail) {
+      updatedItem.preparedBy = user?.name
+      updatedItem.preparedByEmail = user?.email
+      updatedItem.preparingAt = Date.now()
+    } else if (newStatus === "ready") {
+      updatedItem.readyAt = Date.now()
+    } else if (newStatus === "served") {
+      updatedItem.servedAt = Date.now()
+      updatedItem.servedBy = user?.name
+      updatedItem.servedByEmail = user?.email
+    }
+
     // Update local state immediately
     setOrders(
       orders.map((order) =>
@@ -387,7 +513,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                 appended.id === appendedOrderId
                   ? {
                       ...appended,
-                      items: appended.items.map((item) => (item.id === itemId ? { ...item, status: newStatus } : item)),
+                      items: appended.items.map((item) => (item.id === itemId ? { ...item, ...updatedItem } : item)),
                     }
                   : appended,
               ),
@@ -398,7 +524,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
     // Sync to API using the dedicated appended item status endpoint
     try {
-      const result = await ordersApi.updateAppendedItemStatus(orderId, appendedOrderId, itemId, newStatus)
+      const result = await ordersApi.updateAppendedItemStatus(orderId, appendedOrderId, itemId, newStatus, updatedItem)
       console.log('API update successful:', result)
       setIsOnline(true)
     } catch (error) {
@@ -767,6 +893,85 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
 
+  const formatDuration = (milliseconds: number): string => {
+    if (!milliseconds || milliseconds <= 0) return ""
+    
+    const seconds = Math.floor(milliseconds / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    
+    if (hours > 0) {
+      const remainingMinutes = minutes % 60
+      if (remainingMinutes > 0) {
+        return `${hours}h ${remainingMinutes}m`
+      }
+      return `${hours}h`
+    }
+    
+    if (minutes > 0) {
+      return `${minutes} min`
+    }
+    
+    return `${seconds} sec`
+  }
+
+  const calculateOrderTime = (order: Order): string | null => {
+    if (!order.allItemsServedAt || !order.createdAt) {
+      return null
+    }
+    
+    // Base order time from creation to when all items are served
+    const baseDuration = order.allItemsServedAt - order.createdAt
+    
+    // Sum of prep times for all appended items
+    let appendedPrepTimeSum = 0
+    if (order.appendedOrders && order.appendedOrders.length > 0) {
+      order.appendedOrders.forEach((appended) => {
+        appended.items.forEach((item) => {
+          if (item.preparingAt && item.servedAt) {
+            appendedPrepTimeSum += (item.servedAt - item.preparingAt)
+          }
+        })
+      })
+    }
+    
+    // Total time = base order time + sum of appended items prep times
+    const totalDuration = baseDuration + appendedPrepTimeSum
+    return formatDuration(totalDuration)
+  }
+
+  const calculateItemPrepTime = (item: OrderItem): string | null => {
+    if (!item.preparingAt || !item.servedAt) {
+      return null
+    }
+    const duration = item.servedAt - item.preparingAt
+    return formatDuration(duration)
+  }
+
+  const getCrewDisplay = (item: OrderItem, field: 'prepared' | 'served'): string | null => {
+    const name = field === 'prepared' ? item.preparedBy : item.servedBy
+    const email = field === 'prepared' ? item.preparedByEmail : item.servedByEmail
+
+    if (name) {
+      return name
+    }
+    if (email) {
+      return email.split('@')[0]
+    }
+    return null
+  }
+
+  const getOrderTakerDisplay = (order: Order): string | null => {
+    if (order.orderTakerName) {
+      return order.orderTakerName
+    }
+    if (order.orderTakerEmail) {
+      // Remove @domain.com part
+      return order.orderTakerEmail.split('@')[0]
+    }
+    return null
+  }
+
   const getOrderTotal = (items: OrderItem[]): number => {
     return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   }
@@ -970,6 +1175,12 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                 <span className="font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
                               </>
                             )}
+                            {getOrderTakerDisplay(order) && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="font-medium text-slate-500">Order by: {getOrderTakerDisplay(order)}</span>
+                              </>
+                            )}
                           </div>
 
                           {(mainOrderPaid || (totalAppendedOrders > 0 && appendedOrdersPaid > 0)) && (
@@ -1113,10 +1324,22 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                     </Badge>
                                   </div>
-                                  <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
-                                    {getStatusIcon(item.status)}
-                                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                                  </Badge>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                      {getStatusIcon(item.status)}
+                                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                    </Badge>
+                                    {getCrewDisplay(item, 'prepared') && (
+                                      <span className="text-xs text-slate-600">
+                                        Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                      </span>
+                                    )}
+                                    {getCrewDisplay(item, 'served') && (
+                                      <span className="text-xs text-slate-600">
+                                        Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                   {item.status === "pending" && canDeleteOrders && (
@@ -1232,10 +1455,22 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                             {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                           </Badge>
                                         </div>
-                                        <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
-                                          {getStatusIcon(item.status)}
-                                          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                                        </Badge>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                            {getStatusIcon(item.status)}
+                                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                          </Badge>
+                                          {getCrewDisplay(item, 'prepared') && (
+                                            <span className="text-xs text-slate-600">
+                                              Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                            </span>
+                                          )}
+                                          {getCrewDisplay(item, 'served') && (
+                                            <span className="text-xs text-slate-600">
+                                              Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="flex items-center gap-2 flex-shrink-0">
                                         {item.status === "pending" && canDeleteOrders && (
@@ -1371,6 +1606,21 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                 <span className="font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
                               </>
                             )}
+                            {getOrderTakerDisplay(order) && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="font-medium text-slate-500">Order by: {getOrderTakerDisplay(order)}</span>
+                              </>
+                            )}
+                            {calculateOrderTime(order) && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  {calculateOrderTime(order)}
+                                </span>
+                              </>
+                            )}
                           </div>
 
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
@@ -1427,7 +1677,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             <div>
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                             </div>
-                            {canManagePayments && totalAppendedOrders > 0 && (
+                            {canManagePayments && (
                               mainOrderPaid ? (
                                 <Badge variant="outline" className="border-2 border-gray-400 text-gray-700 bg-gray-50 px-3 py-1.5 text-sm font-semibold flex items-center gap-2">
                                   <CreditCard className="w-4 h-4" />
@@ -1482,10 +1732,28 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                     </Badge>
                                   </div>
-                                  <Badge className={`mt-2 ${getStatusColor(item.status)}`}>
-                                    <span className="mr-1">{getStatusIcon(item.status)}</span>
-                                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                                  </Badge>
+                                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                    <Badge className={`${getStatusColor(item.status)}`}>
+                                      <span className="mr-1">{getStatusIcon(item.status)}</span>
+                                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                    </Badge>
+                                    {calculateItemPrepTime(item) && (
+                                      <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        Prep: {calculateItemPrepTime(item)}
+                                      </span>
+                                    )}
+                                    {getCrewDisplay(item, 'prepared') && (
+                                      <span className="text-xs text-slate-600">
+                                        Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                      </span>
+                                    )}
+                                    {getCrewDisplay(item, 'served') && (
+                                      <span className="text-xs text-slate-600">
+                                        Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -1568,10 +1836,28 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                             {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                           </Badge>
                                         </div>
-                                        <Badge className={`mt-1 text-xs ${getStatusColor(item.status)}`}>
-                                          <span className="mr-1">{getStatusIcon(item.status)}</span>
-                                          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                                        </Badge>
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                          <Badge className={`text-xs ${getStatusColor(item.status)}`}>
+                                            <span className="mr-1">{getStatusIcon(item.status)}</span>
+                                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                          </Badge>
+                                          {calculateItemPrepTime(item) && (
+                                            <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                                              <Clock className="w-3 h-3" />
+                                              Prep: {calculateItemPrepTime(item)}
+                                            </span>
+                                          )}
+                                          {getCrewDisplay(item, 'prepared') && (
+                                            <span className="text-xs text-slate-600">
+                                              Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                            </span>
+                                          )}
+                                          {getCrewDisplay(item, 'served') && (
+                                            <span className="text-xs text-slate-600">
+                                              Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   ))}
@@ -1629,7 +1915,21 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                               #{order.orderNumber}
                             </span>
                           )}
-                          <p className="font-bold text-sm text-slate-900">{order.customerName}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-sm text-slate-900">{order.customerName}</p>
+                            {calculateOrderTime(order) && (
+                              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {calculateOrderTime(order)}
+                              </span>
+                            )}
+                            {getOrderTakerDisplay(order) && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-xs font-medium text-slate-500">Order by: {getOrderTakerDisplay(order)}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <ChevronDown
                           className={`w-5 h-5 text-slate-400 transition-transform flex-shrink-0 ${
@@ -1667,6 +1967,22 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                 {order.paymentMethod === "cash" ? "💵 Cash" : "Ⓖ GCash"}
                               </Badge>
                             )}
+                            {calculateItemPrepTime(item) && (
+                              <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Prep: {calculateItemPrepTime(item)}
+                              </span>
+                            )}
+                            {getCrewDisplay(item, 'prepared') && (
+                              <span className="text-xs text-slate-600">
+                                Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                              </span>
+                            )}
+                            {getCrewDisplay(item, 'served') && (
+                              <span className="text-xs text-slate-600">
+                                Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                              </span>
+                            )}
                           </div>
                           <span className="font-medium">₱{(item.price * item.quantity).toFixed(2)}</span>
                         </div>
@@ -1702,6 +2018,22 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         >
                                           {appended.paymentMethod === "cash" ? "💵 Cash" : "Ⓖ GCash"}
                                         </Badge>
+                                      )}
+                                      {calculateItemPrepTime(item) && (
+                                        <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          Prep: {calculateItemPrepTime(item)}
+                                        </span>
+                                      )}
+                                      {getCrewDisplay(item, 'prepared') && (
+                                        <span className="text-xs text-slate-600">
+                                          Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                        </span>
+                                      )}
+                                      {getCrewDisplay(item, 'served') && (
+                                        <span className="text-xs text-slate-600">
+                                          Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                        </span>
                                       )}
                                     </div>
                                     <span className="font-medium">₱{(item.price * item.quantity).toFixed(2)}</span>

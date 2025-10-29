@@ -130,7 +130,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, customerName, items, createdAt, isPaid, appendedOrders } = req.body;
+    const { id, customerName, items, createdAt, isPaid, appendedOrders, orderTakerName, orderTakerEmail } = req.body;
 
     // Validation
     if (!id) {
@@ -183,7 +183,9 @@ router.post('/', async (req, res) => {
       items,
       createdAt: createdAt || Date.now(),
       isPaid: isPaid || false,
-      appendedOrders: appendedOrders || []
+      appendedOrders: appendedOrders || [],
+      orderTakerName: orderTakerName || null,
+      orderTakerEmail: orderTakerEmail || null
     });
 
     await order.save();
@@ -400,7 +402,7 @@ router.post('/:id/append', async (req, res) => {
  */
 router.put('/:id/items/:itemId/status', async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, preparedBy, preparedByEmail, servedBy, servedByEmail, preparingAt, readyAt, servedAt } = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -430,7 +432,46 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
     const mainItem = order.items.find(item => item.id === req.params.itemId);
     if (mainItem) {
       mainItem.status = status;
+
+      // Set crew tracking fields
+      if (preparedBy !== undefined) mainItem.preparedBy = preparedBy;
+      if (preparedByEmail !== undefined) mainItem.preparedByEmail = preparedByEmail;
+      if (servedBy !== undefined) mainItem.servedBy = servedBy;
+      if (servedByEmail !== undefined) mainItem.servedByEmail = servedByEmail;
+
+      // Set timestamps based on status changes or from request
+      const now = Date.now();
+      if (preparingAt !== undefined) {
+        mainItem.preparingAt = preparingAt;
+      } else if (status === 'preparing' && !mainItem.preparingAt) {
+        mainItem.preparingAt = now;
+      }
+      if (readyAt !== undefined) {
+        mainItem.readyAt = readyAt;
+      } else if (status === 'ready' && !mainItem.readyAt) {
+        mainItem.readyAt = now;
+      }
+      if (servedAt !== undefined) {
+        mainItem.servedAt = servedAt;
+      } else if (status === 'served' && !mainItem.servedAt) {
+        mainItem.servedAt = now;
+      }
+      
+      // Mark items array as modified
+      order.markModified('items');
       await order.save();
+      
+      // Check if all items are now served
+      const allMainServed = order.items.every(item => item.status === 'served');
+      const allAppendedServed = order.appendedOrders.length === 0 ||
+        order.appendedOrders.every(appended =>
+          appended.items.every(item => item.status === 'served')
+        );
+      
+      if (allMainServed && allAppendedServed && !order.allItemsServedAt) {
+        order.allItemsServedAt = now;
+        await order.save();
+      }
 
       // Emit WebSocket event for real-time update IMMEDIATELY
       const io = req.app.get('io');
@@ -460,6 +501,31 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
       if (appendedItem) {
         console.log('Found item in appended order! Current status:', appendedItem.status, 'New status:', status);
         appendedItem.status = status;
+
+        // Set crew tracking fields
+        if (preparedBy !== undefined) appendedItem.preparedBy = preparedBy;
+        if (preparedByEmail !== undefined) appendedItem.preparedByEmail = preparedByEmail;
+        if (servedBy !== undefined) appendedItem.servedBy = servedBy;
+        if (servedByEmail !== undefined) appendedItem.servedByEmail = servedByEmail;
+
+        // Set timestamps based on status changes or from request
+        const now = Date.now();
+        if (preparingAt !== undefined) {
+          appendedItem.preparingAt = preparingAt;
+        } else if (status === 'preparing' && !appendedItem.preparingAt) {
+          appendedItem.preparingAt = now;
+        }
+        if (readyAt !== undefined) {
+          appendedItem.readyAt = readyAt;
+        } else if (status === 'ready' && !appendedItem.readyAt) {
+          appendedItem.readyAt = now;
+        }
+        if (servedAt !== undefined) {
+          appendedItem.servedAt = servedAt;
+        } else if (status === 'served' && !appendedItem.servedAt) {
+          appendedItem.servedAt = now;
+        }
+        
         itemFound = true;
         console.log('Item status after update:', appendedItem.status);
         break;
@@ -479,6 +545,18 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
     console.log('About to save order...');
     await order.save();
     console.log('Order saved successfully');
+    
+    // Check if all items are now served
+    const allMainServed = order.items.every(item => item.status === 'served');
+    const allAppendedServed = order.appendedOrders.length === 0 ||
+      order.appendedOrders.every(appended =>
+        appended.items.every(item => item.status === 'served')
+      );
+    
+    if (allMainServed && allAppendedServed && !order.allItemsServedAt) {
+      order.allItemsServedAt = Date.now();
+      await order.save();
+    }
 
     // Emit WebSocket event for real-time update IMMEDIATELY
     const io = req.app.get('io');
@@ -693,7 +771,7 @@ router.delete('/:id/appended/:appendedId', async (req, res) => {
  */
 router.put('/:id/appended/:appendedId/items/:itemId/status', async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, preparedBy, preparedByEmail, servedBy, servedByEmail, preparingAt, readyAt, servedAt } = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -743,9 +821,45 @@ router.put('/:id/appended/:appendedId/items/:itemId/status', async (req, res) =>
 
     item.status = status;
 
+    // Set crew tracking fields
+    if (preparedBy !== undefined) item.preparedBy = preparedBy;
+    if (preparedByEmail !== undefined) item.preparedByEmail = preparedByEmail;
+    if (servedBy !== undefined) item.servedBy = servedBy;
+    if (servedByEmail !== undefined) item.servedByEmail = servedByEmail;
+
+    // Set timestamps based on status changes or from request
+    const now = Date.now();
+    if (preparingAt !== undefined) {
+      item.preparingAt = preparingAt;
+    } else if (status === 'preparing' && !item.preparingAt) {
+      item.preparingAt = now;
+    }
+    if (readyAt !== undefined) {
+      item.readyAt = readyAt;
+    } else if (status === 'ready' && !item.readyAt) {
+      item.readyAt = now;
+    }
+    if (servedAt !== undefined) {
+      item.servedAt = servedAt;
+    } else if (status === 'served' && !item.servedAt) {
+      item.servedAt = now;
+    }
+
     // Mark the appendedOrders array as modified so Mongoose saves the changes
     order.markModified('appendedOrders');
     await order.save();
+    
+    // Check if all items are now served
+    const allMainServed = order.items.every(item => item.status === 'served');
+    const allAppendedServed = order.appendedOrders.length === 0 ||
+      order.appendedOrders.every(appended =>
+        appended.items.every(item => item.status === 'served')
+      );
+    
+    if (allMainServed && allAppendedServed && !order.allItemsServedAt) {
+      order.allItemsServedAt = now;
+      await order.save();
+    }
 
     // Emit WebSocket event for real-time update
     const io = req.app.get('io');

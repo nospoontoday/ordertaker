@@ -36,6 +36,13 @@ export interface OrderItem {
   quantity: number;
   status: "pending" | "preparing" | "ready" | "served";
   itemType?: "dine-in" | "take-out";
+  preparingAt?: number;
+  readyAt?: number;
+  servedAt?: number;
+  preparedBy?: string;
+  preparedByEmail?: string;
+  servedBy?: string;
+  servedByEmail?: string;
 }
 
 export interface AppendedOrder {
@@ -60,6 +67,9 @@ export interface Order {
   totalAmount?: number;
   totalItems?: number;
   orderStatus?: "pending" | "in_progress" | "completed";
+  allItemsServedAt?: number;
+  orderTakerName?: string;
+  orderTakerEmail?: string;
 }
 
 export interface ApiResponse<T> {
@@ -373,6 +383,8 @@ export const ordersApi = {
     isPaid?: boolean;
     orderType: "dine-in" | "take-out";
     appendedOrders?: AppendedOrder[];
+    orderTakerName?: string;
+    orderTakerEmail?: string;
   }): Promise<Order> => {
     const response = await apiCall<Order>('/orders', {
       method: 'POST',
@@ -438,11 +450,12 @@ export const ordersApi = {
   updateItemStatus: async (
     orderId: string,
     itemId: string,
-    status: "pending" | "preparing" | "ready" | "served"
+    status: "pending" | "preparing" | "ready" | "served",
+    additionalFields?: Partial<OrderItem>
   ): Promise<Order> => {
     const response = await apiCall<Order>(`/orders/${orderId}/items/${itemId}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...additionalFields }),
     });
 
     if (!response.data) {
@@ -459,11 +472,12 @@ export const ordersApi = {
     orderId: string,
     appendedId: string,
     itemId: string,
-    status: "pending" | "preparing" | "ready" | "served"
+    status: "pending" | "preparing" | "ready" | "served",
+    additionalFields?: Partial<OrderItem>
   ): Promise<Order> => {
     const response = await apiCall<Order>(`/orders/${orderId}/appended/${appendedId}/items/${itemId}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...additionalFields }),
     });
 
     if (!response.data) {

@@ -35,6 +35,38 @@ const orderItemSchema = new mongoose.Schema(
       type: String,
       enum: ['dine-in', 'take-out'],
       default: 'dine-in'
+    },
+    preparingAt: {
+      type: Number,
+      required: false
+    },
+    readyAt: {
+      type: Number,
+      required: false
+    },
+    servedAt: {
+      type: Number,
+      required: false
+    },
+    preparedBy: {
+      type: String,
+      required: false,
+      trim: true
+    },
+    preparedByEmail: {
+      type: String,
+      required: false,
+      trim: true
+    },
+    servedBy: {
+      type: String,
+      required: false,
+      trim: true
+    },
+    servedByEmail: {
+      type: String,
+      required: false,
+      trim: true
     }
   },
   { _id: false } // Don't create _id for subdocuments
@@ -135,6 +167,22 @@ const orderSchema = new mongoose.Schema(
     appendedOrders: {
       type: [appendedOrderSchema],
       default: []
+    },
+    allItemsServedAt: {
+      type: Number,
+      required: false
+    },
+    orderTakerName: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: [100, 'Order taker name cannot be more than 100 characters']
+    },
+    orderTakerEmail: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: [255, 'Order taker email cannot be more than 255 characters']
     }
   },
   {
