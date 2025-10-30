@@ -51,6 +51,7 @@ app.use('/api/menu-items', require('./routes/menuItems'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/orders', require('./routes/orders'));
+app.use('/api/withdrawals', require('./routes/withdrawals'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -72,6 +73,7 @@ app.get('/', (req, res) => {
       categories: '/api/categories',
       upload: '/api/upload',
       orders: '/api/orders',
+      withdrawals: '/api/withdrawals',
       images: '/uploads/:filename'
     }
   });
@@ -128,6 +130,7 @@ server.listen(PORT, () => {
   - Categories:   http://localhost:${PORT}/api/categories
   - Upload:       http://localhost:${PORT}/api/upload
   - Orders:       http://localhost:${PORT}/api/orders
+  - Withdrawals:  http://localhost:${PORT}/api/withdrawals
   - Images:       http://localhost:${PORT}/uploads/:filename
 
   WebSocket:

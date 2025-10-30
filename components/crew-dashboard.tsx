@@ -9,6 +9,7 @@ import { ordersApi } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { useOrderEvents } from "@/contexts/websocket-context"
+import { SplitPaymentDialog } from "@/components/split-payment-dialog"
 
 interface OrderItem {
   id: string
@@ -31,7 +32,9 @@ interface AppendedOrder {
   items: OrderItem[]
   createdAt: number
   isPaid?: boolean
-  paymentMethod?: "cash" | "gcash" | null
+  paymentMethod?: "cash" | "gcash" | "split" | null
+  cashAmount?: number
+  gcashAmount?: number
 }
 
 interface Order {
@@ -41,7 +44,9 @@ interface Order {
   items: OrderItem[]
   createdAt: number
   isPaid: boolean
-  paymentMethod?: "cash" | "gcash" | null
+  paymentMethod?: "cash" | "gcash" | "split" | null
+  cashAmount?: number
+  gcashAmount?: number
   orderType: "dine-in" | "take-out"
   appendedOrders?: AppendedOrder[]
   allItemsServedAt?: number
@@ -59,6 +64,19 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   const [todayDate, setTodayDate] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+
+  // Split payment dialog state
+  const [splitPaymentDialog, setSplitPaymentDialog] = useState<{
+    open: boolean
+    orderId: string | null
+    totalAmount: number
+    orderNumber?: number
+    customerName?: string
+  }>({
+    open: false,
+    orderId: null,
+    totalAmount: 0,
+  })
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -85,6 +103,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       customerName: newOrder.customerName,
       isPaid: newOrder.isPaid || false,
       paymentMethod: newOrder.paymentMethod,
+      cashAmount: newOrder.cashAmount,
+      gcashAmount: newOrder.gcashAmount,
       orderType: newOrder.orderType || "dine-in",
       createdAt: newOrder.createdAt,
       allItemsServedAt: newOrder.allItemsServedAt,
@@ -156,6 +176,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       customerName: updatedOrder.customerName,
       isPaid: updatedOrder.isPaid || false,
       paymentMethod: updatedOrder.paymentMethod,
+      cashAmount: updatedOrder.cashAmount,
+      gcashAmount: updatedOrder.gcashAmount,
       orderType: updatedOrder.orderType || "dine-in",
       createdAt: updatedOrder.createdAt,
       allItemsServedAt: updatedOrder.allItemsServedAt,
@@ -276,6 +298,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         customerName: order.customerName,
         isPaid: order.isPaid || false,
         paymentMethod: order.paymentMethod || null,
+        cashAmount: order.cashAmount,
+        gcashAmount: order.gcashAmount,
         orderType: order.orderType || "dine-in",
         createdAt: order.createdAt,
         allItemsServedAt: order.allItemsServedAt,
@@ -300,6 +324,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           id: appended.id,
           isPaid: appended.isPaid || false,
           paymentMethod: appended.paymentMethod || null,
+          cashAmount: appended.cashAmount,
+          gcashAmount: appended.gcashAmount,
           createdAt: appended.createdAt,
           items: appended.items.map((item: any) => ({
             id: item.id,
@@ -673,6 +699,83 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         description: "Failed to mark all as paid.",
         variant: "destructive",
       })
+    }
+  }
+
+  const markAllAsPaidSplit = async (orderId: string, cashAmount: number, gcashAmount: number) => {
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return
+
+    // Update local state immediately - mark main order with split payment, appended orders as just paid
+    setOrders(
+      orders.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              isPaid: true,
+              paymentMethod: "split",
+              cashAmount,
+              gcashAmount,
+              appendedOrders: (o.appendedOrders || []).map((appended) => ({
+                ...appended,
+                isPaid: true,
+                // Don't set payment method for appended - split is tracked at main order level
+              })),
+            }
+          : o,
+      ),
+    )
+
+    // Sync to API
+    try {
+      // Mark main order as paid with split payment (this stores the split details)
+      await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount)
+
+      // Mark all appended orders as just paid (no payment method needed - it's in main order)
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        await Promise.all(
+          order.appendedOrders.map((appended) =>
+            ordersApi.toggleAppendedPayment(orderId, appended.id, true)
+          ),
+        )
+      }
+
+      setIsOnline(true)
+      toast({
+        title: "Payment Completed",
+        description: `Split payment: ₱${cashAmount.toFixed(2)} Cash + ₱${gcashAmount.toFixed(2)} GCash`,
+      })
+    } catch (error) {
+      console.error("Error marking all as paid (split):", error)
+      setIsOnline(false)
+      toast({
+        title: "Error",
+        description: "Failed to process split payment.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const openSplitPaymentDialog = (orderId: string) => {
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return
+
+    const mainTotal = getOrderTotal(order.items)
+    const appendedTotal = order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+    const totalAmount = mainTotal + appendedTotal
+
+    setSplitPaymentDialog({
+      open: true,
+      orderId,
+      totalAmount,
+      orderNumber: order.orderNumber,
+      customerName: order.customerName,
+    })
+  }
+
+  const handleSplitPaymentConfirm = (cashAmount: number, gcashAmount: number) => {
+    if (splitPaymentDialog.orderId) {
+      markAllAsPaidSplit(splitPaymentDialog.orderId, cashAmount, gcashAmount)
     }
   }
 
@@ -1059,9 +1162,52 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     return allServed && notFullyPaid
   }
 
+  // Helper function to check if order is in current business day (8AM to 1AM next day)
+  const isOrderInCurrentBusinessDay = (order: Order): boolean => {
+    const now = new Date()
+    const orderDate = new Date(typeof order.createdAt === 'number' ? order.createdAt : new Date(order.createdAt).getTime())
+    
+    // Determine the current business day range (8AM to 1AM next day)
+    let businessDayStart: Date
+    let businessDayEnd: Date
+    
+    const currentHour = now.getHours()
+    
+    if (currentHour < 1) {
+      // It's between midnight and 1am, we're still in yesterday's business day
+      businessDayStart = new Date(now)
+      businessDayStart.setDate(businessDayStart.getDate() - 1)
+      businessDayStart.setHours(8, 0, 0, 0)
+      
+      businessDayEnd = new Date(now)
+      businessDayEnd.setHours(1, 0, 0, 0)
+    } else if (currentHour < 8) {
+      // It's between 1am and 8am, we're between business days
+      // Show previous business day: yesterday 8AM to today 1AM
+      businessDayStart = new Date(now)
+      businessDayStart.setDate(businessDayStart.getDate() - 1)
+      businessDayStart.setHours(8, 0, 0, 0)
+      
+      businessDayEnd = new Date(now)
+      businessDayEnd.setHours(1, 0, 0, 0)
+    } else {
+      // It's 8AM or later, we're in today's business day
+      businessDayStart = new Date(now)
+      businessDayStart.setHours(8, 0, 0, 0)
+      
+      businessDayEnd = new Date(now)
+      businessDayEnd.setDate(businessDayEnd.getDate() + 1)
+      businessDayEnd.setHours(1, 0, 0, 0)
+    }
+    
+    const orderTime = orderDate.getTime()
+    return orderTime >= businessDayStart.getTime() && orderTime < businessDayEnd.getTime()
+  }
+
   const activeOrders = orders.filter((o) => !isOrderFullyComplete(o) && !isOrderServedNotPaid(o))
   const servedNotPaidOrders = orders.filter((o) => isOrderServedNotPaid(o))
-  const completedOrders = orders.filter((o) => isOrderFullyComplete(o))
+  // Only show completed orders for the current business day
+  const completedOrders = orders.filter((o) => isOrderFullyComplete(o) && isOrderInCurrentBusinessDay(o))
 
   // Helper function to get the latest timestamp for an order (main order or most recent appended order)
   const getLatestOrderTimestamp = (order: Order): number => {
@@ -1224,9 +1370,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             )
                           }
 
-                          // Only show overall payment buttons if main order is unpaid
-                          // If main order is paid and only appended orders are unpaid, don't show (redundant)
-                          if (unpaidTotal > 0 && canManagePayments && !mainOrderPaid) {
+                          // Show payment buttons if there's any unpaid amount
+                          if (unpaidTotal > 0 && canManagePayments) {
                             return (
                               <div className="flex gap-2">
                                 <Button
@@ -1237,7 +1382,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   size="sm"
                                   className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
                                 >
-                                  💵 ₱{unpaidTotal.toFixed(2)}
+                                  💵 Cash
                                 </Button>
                                 <Button
                                   onClick={(e) => {
@@ -1247,7 +1392,17 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   size="sm"
                                   className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
                                 >
-                                  Ⓖ ₱{unpaidTotal.toFixed(2)}
+                                  Ⓖ GCash
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openSplitPaymentDialog(order.id)
+                                  }}
+                                  size="sm"
+                                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  🔀 Split
                                 </Button>
                               </div>
                             )
@@ -1269,37 +1424,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                               <div>
                                 <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                               </div>
-                              {canManagePayments && totalAppendedOrders > 0 && (
-                                mainOrderPaid ? (
-                                  <Badge variant="outline" className="border-2 border-slate-300 text-slate-700 bg-white px-3 py-1.5 text-xs font-bold flex items-center gap-2 shadow-sm">
-                                    <CreditCard className="w-3.5 h-3.5" />
-                                    {order.paymentMethod?.toUpperCase() || 'N/A'}
-                                  </Badge>
-                                ) : (
-                                  <div className="flex gap-2">
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        markAsPaid(order.id, 'cash')
-                                      }}
-                                      size="sm"
-                                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md"
-                                    >
-                                      💵 ₱{getOrderTotal(order.items).toFixed(2)}
-                                    </Button>
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        markAsPaid(order.id, 'gcash')
-                                      }}
-                                      size="sm"
-                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md"
-                                    >
-                                      Ⓖ ₱{getOrderTotal(order.items).toFixed(2)}
-                                    </Button>
-                                  </div>
-                                )
-                              )}
                             </div>
 
                             <div className="space-y-2.5">
@@ -1400,37 +1524,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
                                     <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
                                   </div>
-                                  {canManagePayments && (
-                                    appended.isPaid ? (
-                                      <Badge variant="outline" className="border-2 border-slate-300 text-slate-700 bg-white px-3 py-1.5 text-xs font-bold flex items-center gap-2 shadow-sm">
-                                        <CreditCard className="w-3.5 h-3.5" />
-                                        {appended.paymentMethod?.toUpperCase() || 'N/A'}
-                                      </Badge>
-                                    ) : (
-                                      <div className="flex gap-2">
-                                        <Button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            markAppendedAsPaid(order.id, appended.id, 'cash')
-                                          }}
-                                          size="sm"
-                                          className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md"
-                                        >
-                                          💵 ₱{getOrderTotal(appended.items).toFixed(2)}
-                                        </Button>
-                                        <Button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            markAppendedAsPaid(order.id, appended.id, 'gcash')
-                                          }}
-                                          size="sm"
-                                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md"
-                                        >
-                                          Ⓖ ₱{getOrderTotal(appended.items).toFixed(2)}
-                                        </Button>
-                                      </div>
-                                    )
-                                  )}
                                   </div>
 
                                   <div className="space-y-2.5 mb-4">
@@ -1653,7 +1746,53 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             )
                           }
 
-                          // Show unpaid badge for all users (Order Taker, Order Taker + Crew, and Crew)
+                          // Show payment buttons if there's any unpaid amount and user can manage payments
+                          if (unpaidTotal > 0 && canManagePayments) {
+                            return (
+                              <div className="flex flex-col items-end gap-2">
+                                {/* Total Amount Badge */}
+                                <Badge variant="outline" className="font-bold text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-3 py-1.5">
+                                  ₱{unpaidTotal.toFixed(2)}
+                                </Badge>
+
+                                {/* Payment Buttons */}
+                                <div className="flex gap-2">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      markAllAsPaid(order.id, "cash")
+                                    }}
+                                    size="sm"
+                                    className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                  >
+                                    💵 Cash
+                                  </Button>
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      markAllAsPaid(order.id, "gcash")
+                                    }}
+                                    size="sm"
+                                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                  >
+                                    Ⓖ GCash
+                                  </Button>
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      openSplitPaymentDialog(order.id)
+                                    }}
+                                    size="sm"
+                                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                  >
+                                    🔀 Split
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          // Show unpaid badge for users who cannot manage payments (crew only)
                           if (unpaidTotal > 0) {
                             return (
                               <Badge variant="outline" className="font-bold text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-3 py-1.5">
@@ -1677,37 +1816,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             <div>
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                             </div>
-                            {canManagePayments && (
-                              mainOrderPaid ? (
-                                <Badge variant="outline" className="border-2 border-gray-400 text-gray-700 bg-gray-50 px-3 py-1.5 text-sm font-semibold flex items-center gap-2">
-                                  <CreditCard className="w-4 h-4" />
-                                  Paid: {order.paymentMethod?.toUpperCase() || 'N/A'}
-                                </Badge>
-                              ) : (
-                                <div className="flex gap-2">
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      markAsPaid(order.id, 'cash')
-                                    }}
-                                    size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs"
-                                  >
-                                    💵 Cash ₱{getOrderTotal(order.items).toFixed(2)}
-                                  </Button>
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      markAsPaid(order.id, 'gcash')
-                                    }}
-                                    size="sm"
-                                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs"
-                                  >
-                                    Ⓖ GCash ₱{getOrderTotal(order.items).toFixed(2)}
-                                  </Button>
-                                </div>
-                              )
-                            )}
                           </div>
 
                           <div className="space-y-2">
@@ -1781,37 +1889,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                     <p className="text-sm font-semibold">Appended #{index + 1}</p>
                                     <p className="text-xs text-muted-foreground mt-1">{formatTime(appended.createdAt)}</p>
                                   </div>
-                                  {canManagePayments && (
-                                    appended.isPaid ? (
-                                      <Badge variant="outline" className="border-2 border-gray-400 text-gray-700 bg-gray-50 px-3 py-1.5 text-sm font-semibold flex items-center gap-2">
-                                        <CreditCard className="w-4 h-4" />
-                                        Paid: {appended.paymentMethod?.toUpperCase() || 'N/A'}
-                                      </Badge>
-                                    ) : (
-                                      <div className="flex gap-2">
-                                        <Button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            markAppendedAsPaid(order.id, appended.id, 'cash')
-                                          }}
-                                          size="sm"
-                                          className="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs"
-                                        >
-                                          💵 Cash ₱{getOrderTotal(appended.items).toFixed(2)}
-                                        </Button>
-                                        <Button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            markAppendedAsPaid(order.id, appended.id, 'gcash')
-                                          }}
-                                          size="sm"
-                                          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs"
-                                        >
-                                          Ⓖ GCash ₱{getOrderTotal(appended.items).toFixed(2)}
-                                        </Button>
-                                      </div>
-                                    )
-                                  )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -1956,7 +2033,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             >
                               {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                             </Badge>
-                            {order.paymentMethod && (
+                            {order.paymentMethod && order.paymentMethod !== "split" && (
                               <Badge
                                 className={`text-xs font-bold px-2 py-0.5 rounded-md border shadow-sm ${
                                   order.paymentMethod === "cash"
@@ -2008,7 +2085,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       >
                                         {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                       </Badge>
-                                      {appended.paymentMethod && (
+                                      {appended.paymentMethod && appended.paymentMethod !== "split" && (
                                         <Badge
                                           className={`text-xs font-bold px-2 py-0.5 rounded-md border shadow-sm ${
                                             appended.paymentMethod === "cash"
@@ -2046,20 +2123,44 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                       )}
                       <div className="border-t border-slate-200/80 pt-3 mt-2">
                         {(() => {
-                          const mainCash = order.paymentMethod === 'cash' ? getOrderTotal(order.items) : 0
-                          const appendedCash = order.appendedOrders?.reduce((sum, appended) => {
-                            return sum + (appended.paymentMethod === 'cash' ? getOrderTotal(appended.items) : 0)
-                          }, 0) || 0
-                          const totalCash = mainCash + appendedCash
+                          // For split payment: amounts are stored on main order only
+                          // For other payments: calculate from each order's payment method
+                          let totalCash = 0
+                          let totalGcash = 0
 
-                          const mainGcash = order.paymentMethod === 'gcash' ? getOrderTotal(order.items) : 0
-                          const appendedGcash = order.appendedOrders?.reduce((sum, appended) => {
-                            return sum + (appended.paymentMethod === 'gcash' ? getOrderTotal(appended.items) : 0)
-                          }, 0) || 0
-                          const totalGcash = mainGcash + appendedGcash
+                          if (order.paymentMethod === 'split') {
+                            // Split payment: use the stored amounts from main order
+                            totalCash = order.cashAmount || 0
+                            totalGcash = order.gcashAmount || 0
+                            console.log('Displaying split payment:', {
+                              orderId: order.id,
+                              orderNumber: order.orderNumber,
+                              paymentMethod: order.paymentMethod,
+                              cashAmount: order.cashAmount,
+                              gcashAmount: order.gcashAmount,
+                              totalCash,
+                              totalGcash
+                            })
+                          } else {
+                            // Regular payments: calculate based on payment methods
+                            const mainCash = order.paymentMethod === 'cash' ? getOrderTotal(order.items) : 0
+                            const appendedCash = order.appendedOrders?.reduce((sum, appended) => {
+                              return sum + (appended.paymentMethod === 'cash' ? getOrderTotal(appended.items) : 0)
+                            }, 0) || 0
+                            totalCash = mainCash + appendedCash
+
+                            const mainGcash = order.paymentMethod === 'gcash' ? getOrderTotal(order.items) : 0
+                            const appendedGcash = order.appendedOrders?.reduce((sum, appended) => {
+                              return sum + (appended.paymentMethod === 'gcash' ? getOrderTotal(appended.items) : 0)
+                            }, 0) || 0
+                            totalGcash = mainGcash + appendedGcash
+                          }
 
                           const orderTotal = getOrderTotal(order.items) +
                             (order.appendedOrders?.reduce((sum, appended) => sum + getOrderTotal(appended.items), 0) || 0)
+
+                          // Check if split payment is used (only stored on main order)
+                          const hasSplitPayment = order.paymentMethod === 'split'
 
                           const hasBothPaymentMethods = totalCash > 0 && totalGcash > 0
 
@@ -2074,12 +2175,15 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   {!hasBothPaymentMethods && totalGcash > 0 && (
                                     <Badge className="bg-blue-500 border border-blue-600 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">Ⓖ GCash</Badge>
                                   )}
+                                  {hasSplitPayment && (
+                                    <Badge className="bg-purple-600 border border-purple-700 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">🔀 Split</Badge>
+                                  )}
                                 </span>
                                 <span>₱{orderTotal.toFixed(2)}</span>
                               </div>
-                              {/* Payment Breakdown - only show if both payment methods used */}
-                              {hasBothPaymentMethods && (
-                                <div className="space-y-1.5 text-xs">
+                              {/* Payment Breakdown - show if both payment methods used OR if split payment */}
+                              {(hasBothPaymentMethods || hasSplitPayment) && (
+                                <div className="space-y-1.5 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
                                   <div className="flex justify-between items-center">
                                     <span className="flex items-center gap-1.5">
                                       <Badge className="bg-emerald-600 border border-emerald-700 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">💵</Badge>
@@ -2124,6 +2228,16 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         )}
         </div>
       </div>
+
+      {/* Split Payment Dialog */}
+      <SplitPaymentDialog
+        open={splitPaymentDialog.open}
+        onOpenChange={(open) => setSplitPaymentDialog({ ...splitPaymentDialog, open })}
+        totalAmount={splitPaymentDialog.totalAmount}
+        orderNumber={splitPaymentDialog.orderNumber}
+        customerName={splitPaymentDialog.customerName}
+        onConfirm={handleSplitPaymentConfirm}
+      />
     </div>
   )
 }

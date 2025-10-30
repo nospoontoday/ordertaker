@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2 } from "lucide-react"
-import { menuItemsApi, categoriesApi, ordersApi, type MenuItem as ApiMenuItem, type Category as ApiCategory } from "@/lib/api"
+import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign } from "lucide-react"
+import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
+import { WithdrawalDialog } from "@/components/withdrawal-dialog"
 
 interface OrderItem {
   id: string
@@ -24,7 +25,9 @@ interface AppendedOrder {
   items: OrderItem[]
   createdAt: number
   isPaid?: boolean
-  paymentMethod?: "cash" | "gcash" | null
+  paymentMethod?: "cash" | "gcash" | "split" | null
+  cashAmount?: number
+  gcashAmount?: number
 }
 
 interface Order {
@@ -33,7 +36,9 @@ interface Order {
   items: OrderItem[]
   createdAt: number
   isPaid?: boolean
-  paymentMethod?: "cash" | "gcash" | null
+  paymentMethod?: "cash" | "gcash" | "split" | null
+  cashAmount?: number
+  gcashAmount?: number
   orderType?: "dine-in" | "take-out"
   appendedOrders?: AppendedOrder[]
 }
@@ -118,10 +123,15 @@ export function OrderTaker({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showDailySales, setShowDailySales] = useState(false)
   const [allOrders, setAllOrders] = useState<Order[]>([])
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
+  const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false)
 
   // Toast for notifications
   const { toast } = useToast()
   const { user } = useAuth()
+
+  // Check if user can access withdrawal feature (all roles except crew)
+  const canWithdraw = user?.role !== "crew"
 
   // Load menu data from API with fallback
   useEffect(() => {
@@ -186,10 +196,37 @@ export function OrderTaker({
   // Fetch all orders from API for daily sales
   const fetchAllOrders = async () => {
     try {
+      console.log('Fetching all orders for daily sales...')
       const ordersData = await ordersApi.getAll()
+      console.log('Fetched orders:', {
+        count: ordersData.length,
+        paidCount: ordersData.filter(o => o.isPaid).length,
+        orders: ordersData.slice(0, 5).map(o => ({
+          id: o.id,
+          customerName: o.customerName,
+          isPaid: o.isPaid,
+          paymentMethod: o.paymentMethod,
+          createdAt: new Date(o.createdAt).toISOString()
+        }))
+      })
       setAllOrders(ordersData)
     } catch (error) {
       console.error('Error fetching orders:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch orders for daily sales.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Fetch withdrawals for daily sales
+  const fetchWithdrawals = async () => {
+    try {
+      const withdrawalsData = await withdrawalsApi.getAll()
+      setWithdrawals(withdrawalsData)
+    } catch (error) {
+      console.error('Error fetching withdrawals:', error)
     }
   }
 
@@ -204,6 +241,8 @@ export function OrderTaker({
 
     // Fetch all orders for daily sales
     fetchAllOrders()
+    // Fetch withdrawals for daily sales
+    fetchWithdrawals()
   }, [])
 
   useEffect(() => {
@@ -430,22 +469,136 @@ export function OrderTaker({
   }
 
   // Calculate daily sales from completed orders (fully paid)
+  // Operating hours: 8AM to 12AM (midnight) + 1 hour grace period (8AM today to 1AM tomorrow)
   const calculateDailySales = () => {
-    const today = new Date().setHours(0, 0, 0, 0)
-    const completedOrders = allOrders.filter((order) => {
-      const orderDate = new Date(order.createdAt).setHours(0, 0, 0, 0)
-      const isToday = orderDate === today
+    const now = new Date()
 
-      // Check if main order is paid
-      const mainOrderPaid = order.isPaid === true && order.paymentMethod
+    // Determine the business day range
+    // Business day runs from 8AM to 1AM next day
+    let businessDayStart: Date
+    let businessDayEnd: Date
+
+    // Business day logic:
+    // - Operating hours: 8AM to 12AM (midnight) + grace period up to 1AM
+    // - If before 8AM today: show previous business day (yesterday 8AM to today 1AM)
+    // - If 8AM today or later: show today's business day (today 8AM to tomorrow 1AM)
+    // - If before 1AM today: we're still in previous business day (yesterday 8AM to today 1AM)
+    
+    const currentHour = now.getHours()
+    
+    if (currentHour < 1) {
+      // It's between midnight and 1am, we're still in yesterday's business day
+      // Yesterday's business day: yesterday 8AM to today 1AM
+      businessDayStart = new Date(now)
+      businessDayStart.setDate(businessDayStart.getDate() - 1)
+      businessDayStart.setHours(8, 0, 0, 0)
+
+      businessDayEnd = new Date(now)
+      businessDayEnd.setHours(1, 0, 0, 0)
+    } else if (currentHour < 8) {
+      // It's between 1am and 8am, we're between business days
+      // Show previous business day: yesterday 8AM to today 1AM
+      businessDayStart = new Date(now)
+      businessDayStart.setDate(businessDayStart.getDate() - 1)
+      businessDayStart.setHours(8, 0, 0, 0)
+
+      businessDayEnd = new Date(now)
+      businessDayEnd.setHours(1, 0, 0, 0)
+    } else {
+      // It's 8AM or later, we're in today's business day
+      // Today's business day: today 8AM to tomorrow 1AM
+      businessDayStart = new Date(now)
+      businessDayStart.setHours(8, 0, 0, 0)
+
+      businessDayEnd = new Date(now)
+      businessDayEnd.setDate(businessDayEnd.getDate() + 1)
+      businessDayEnd.setHours(1, 0, 0, 0)
+    }
+
+    console.log('Daily Sales Calculation:', {
+      currentTime: now.toISOString(),
+      currentHour: now.getHours(),
+      businessDayStart: businessDayStart.toISOString(),
+      businessDayEnd: businessDayEnd.toISOString(),
+      allOrdersCount: allOrders.length,
+      paidOrdersCount: allOrders.filter(o => o.isPaid).length
+    })
+
+    // Debug all paid orders first
+    const paidOrders = allOrders.filter(o => o.isPaid)
+    console.log('All paid orders:', paidOrders.map(o => ({
+      id: o.id,
+      customerName: o.customerName,
+      createdAt: typeof o.createdAt === 'number' ? new Date(o.createdAt).toISOString() : o.createdAt,
+      createdAtValue: o.createdAt,
+      isPaid: o.isPaid,
+      paymentMethod: o.paymentMethod,
+      appendedOrders: o.appendedOrders?.length || 0,
+      appendedPaid: o.appendedOrders?.every(a => a.isPaid) || true
+    })))
+
+    const completedOrders = allOrders.filter((order) => {
+      // Handle createdAt as either number (timestamp) or string
+      let orderTime: number
+      if (typeof order.createdAt === 'number') {
+        orderTime = order.createdAt
+      } else {
+        orderTime = new Date(order.createdAt).getTime()
+      }
+      
+      const isInBusinessDay = orderTime >= businessDayStart.getTime() && orderTime < businessDayEnd.getTime()
+      
+      // Check if main order is paid - only require isPaid to be true
+      // paymentMethod can be null for legacy orders, but if isPaid is true, we should count it
+      const mainOrderPaid = order.isPaid === true
 
       // Check if all appended orders are paid (or no appended orders)
       const allAppendedPaid = !order.appendedOrders ||
         order.appendedOrders.length === 0 ||
-        order.appendedOrders.every((appended) => appended.isPaid === true && appended.paymentMethod)
+        order.appendedOrders.every((appended) => appended.isPaid === true)
 
-      return isToday && mainOrderPaid && allAppendedPaid
+      const isCompleted = isInBusinessDay && mainOrderPaid && allAppendedPaid
+
+      // Debug why orders are excluded
+      if (order.isPaid) {
+        const orderDate = new Date(orderTime)
+        if (!isInBusinessDay) {
+          console.log('❌ Paid order OUTSIDE business day:', {
+            id: order.id,
+            customerName: order.customerName,
+            orderTime: orderDate.toISOString(),
+            orderTimeMs: orderTime,
+            businessDayStart: businessDayStart.toISOString(),
+            businessDayStartMs: businessDayStart.getTime(),
+            businessDayEnd: businessDayEnd.toISOString(),
+            businessDayEndMs: businessDayEnd.getTime(),
+            beforeStart: orderTime < businessDayStart.getTime(),
+            afterEnd: orderTime >= businessDayEnd.getTime(),
+            diffFromStart: (orderTime - businessDayStart.getTime()) / (1000 * 60 * 60) + ' hours',
+            diffFromEnd: (orderTime - businessDayEnd.getTime()) / (1000 * 60 * 60) + ' hours'
+          })
+        } else if (!allAppendedPaid) {
+          console.log('❌ Paid order has unpaid appended orders:', {
+            id: order.id,
+            customerName: order.customerName,
+            appendedOrders: order.appendedOrders?.map(a => ({ id: a.id, isPaid: a.isPaid }))
+          })
+        } else {
+          console.log('✅ Completed order:', {
+            id: order.id,
+            customerName: order.customerName,
+            createdAt: orderDate.toISOString(),
+            isPaid: order.isPaid,
+            paymentMethod: order.paymentMethod,
+            total: order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+          })
+        }
+      }
+
+      return isCompleted
     })
+
+    console.log('✅ Completed orders count:', completedOrders.length)
 
     let totalCash = 0
     let totalGcash = 0
@@ -455,11 +608,18 @@ export function OrderTaker({
       const mainTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
       // Add to cash or gcash based on payment method
-      if (order.isPaid && order.paymentMethod) {
+      if (order.isPaid) {
         if (order.paymentMethod === "cash") {
           totalCash += mainTotal
         } else if (order.paymentMethod === "gcash") {
           totalGcash += mainTotal
+        } else if (order.paymentMethod === "split") {
+          // For split payments, use the actual split amounts
+          totalCash += order.cashAmount || 0
+          totalGcash += order.gcashAmount || 0
+        } else {
+          // If order is paid but no paymentMethod is set, treat as cash (legacy orders)
+          totalCash += mainTotal
         }
       }
 
@@ -467,25 +627,75 @@ export function OrderTaker({
       if (order.appendedOrders) {
         order.appendedOrders.forEach((appended) => {
           const appendedTotal = appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-          if (appended.isPaid && appended.paymentMethod) {
+          if (appended.isPaid) {
             if (appended.paymentMethod === "cash") {
               totalCash += appendedTotal
             } else if (appended.paymentMethod === "gcash") {
               totalGcash += appendedTotal
+            } else if (appended.paymentMethod === "split") {
+              // For split payments, use the actual split amounts
+              totalCash += appended.cashAmount || 0
+              totalGcash += appended.gcashAmount || 0
+            } else {
+              // If appended order is paid but no paymentMethod is set, treat as cash (legacy orders)
+              totalCash += appendedTotal
             }
           }
         })
       }
     })
 
+    // Calculate withdrawals/purchases for the business day
+    let totalWithdrawals = 0
+    let totalPurchases = 0
+    
+    withdrawals.forEach((withdrawal) => {
+      // Handle createdAt as either number (timestamp) or string
+      let withdrawalTime: number
+      if (typeof withdrawal.createdAt === 'number') {
+        withdrawalTime = withdrawal.createdAt
+      } else {
+        withdrawalTime = new Date(withdrawal.createdAt).getTime()
+      }
+      
+      const isInBusinessDay = withdrawalTime >= businessDayStart.getTime() && withdrawalTime < businessDayEnd.getTime()
+      
+      if (isInBusinessDay) {
+        if (withdrawal.type === 'withdrawal') {
+          totalWithdrawals += withdrawal.amount
+        } else if (withdrawal.type === 'purchase') {
+          totalPurchases += withdrawal.amount
+        }
+      }
+    })
+
+    const totalDeductions = totalWithdrawals + totalPurchases
+    const totalSales = totalCash + totalGcash
+    const netSales = totalSales - totalDeductions
+
+    console.log('Daily Sales Results:', {
+      totalCash,
+      totalGcash,
+      totalSales,
+      totalWithdrawals,
+      totalPurchases,
+      totalDeductions,
+      netSales
+    })
+
     return {
       totalCash,
       totalGcash,
-      totalSales: totalCash + totalGcash,
+      totalSales,
+      totalWithdrawals,
+      totalPurchases,
+      totalDeductions,
+      netSales,
     }
   }
 
-  const dailySales = calculateDailySales()
+  // Memoize daily sales calculation to avoid unnecessary recalculations
+  const dailySales = useMemo(() => calculateDailySales(), [allOrders, withdrawals])
 
   const totalNewItems = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const totalExistingItems = currentOrder.reduce((sum, item) => sum + item.price * item.quantity, 0)
@@ -511,12 +721,24 @@ export function OrderTaker({
                   <span className="text-xs font-semibold text-amber-700">Offline</span>
                 </div>
               )}
+              {canWithdraw && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowWithdrawalDialog(true)}
+                  className="gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Withdrawal / Purchase
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   if (!showDailySales) {
                     fetchAllOrders() // Refresh orders when showing
+                    fetchWithdrawals() // Refresh withdrawals when showing
                   }
                   setShowDailySales(!showDailySales)
                 }}
@@ -547,29 +769,68 @@ export function OrderTaker({
             <CreditCard className="w-5 h-5" />
             Daily Sales Summary
           </h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
               <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Total Sales</div>
               <div className="text-2xl font-bold text-slate-900">₱{dailySales.totalSales.toFixed(2)}</div>
             </div>
-            {dailySales.totalCash > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
-                <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
-                  <Badge className="bg-emerald-600 border border-emerald-700 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">💵</Badge>
-                  Cash
-                </div>
-                <div className="text-2xl font-bold text-emerald-600">₱{dailySales.totalCash.toFixed(2)}</div>
+            <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
+              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                <Badge className="bg-emerald-600 border border-emerald-700 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">💵</Badge>
+                Cash
               </div>
-            )}
-            {dailySales.totalGcash > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
-                <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
-                  <Badge className="bg-blue-500 border border-blue-600 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">Ⓖ</Badge>
-                  GCash
-                </div>
-                <div className="text-2xl font-bold text-blue-500">₱{dailySales.totalGcash.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-emerald-600">₱{dailySales.totalCash.toFixed(2)}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
+              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                <Badge className="bg-blue-500 border border-blue-600 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">Ⓖ</Badge>
+                GCash
               </div>
-            )}
+              <div className="text-2xl font-bold text-blue-500">₱{dailySales.totalGcash.toFixed(2)}</div>
+            </div>
+          </div>
+          
+          {/* Withdrawals and Purchases */}
+          {(dailySales.totalWithdrawals > 0 || dailySales.totalPurchases > 0) && (
+            <div className="grid grid-cols-3 gap-4 mb-4 pt-4 border-t border-slate-200/80">
+              {dailySales.totalWithdrawals > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-red-200/80 shadow-sm">
+                  <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                    <Badge className="bg-red-600 border border-red-700 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">💰</Badge>
+                    Withdrawals
+                  </div>
+                  <div className="text-2xl font-bold text-red-600">-₱{dailySales.totalWithdrawals.toFixed(2)}</div>
+                </div>
+              )}
+              {dailySales.totalPurchases > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-orange-200/80 shadow-sm">
+                  <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                    <Badge className="bg-orange-500 border border-orange-600 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">🛒</Badge>
+                    Purchases
+                  </div>
+                  <div className="text-2xl font-bold text-orange-600">-₱{dailySales.totalPurchases.toFixed(2)}</div>
+                </div>
+              )}
+              <div className="bg-white rounded-lg p-4 border border-slate-300 shadow-md">
+                <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Total Deductions</div>
+                <div className="text-2xl font-bold text-slate-900">-₱{dailySales.totalDeductions.toFixed(2)}</div>
+              </div>
+            </div>
+          )}
+          
+          {/* Net Sales */}
+          <div className="pt-4 border-t-2 border-slate-300">
+            <div className="bg-gradient-to-r from-slate-100 to-white rounded-lg p-4 border-2 border-slate-300 shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-bold text-slate-700 uppercase tracking-wide">Net Sales</div>
+                <div className={`text-3xl font-bold ${dailySales.netSales >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  ₱{dailySales.netSales.toFixed(2)}
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Total Sales - Total Deductions
+              </div>
+            </div>
           </div>
         </Card>
       )}
@@ -614,7 +875,7 @@ export function OrderTaker({
                   }`}
                 >
                   <img
-                    src={category.image || "/placeholder.svg"}
+                    src={getImageUrl(category.image) || "/placeholder.svg"}
                     alt={category.name}
                     className={`w-16 h-16 rounded-lg object-cover ${selectedCategory === category.id ? "ring-2 ring-blue-300" : ""}`}
                   />
@@ -633,7 +894,7 @@ export function OrderTaker({
                 className="flex flex-col items-center justify-start gap-2.5 p-4 rounded-lg bg-white border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all h-full"
               >
                 <img
-                  src={item.image || "/placeholder.svg"}
+                  src={getImageUrl(item.image) || "/placeholder.svg"}
                   alt={item.name}
                   className="w-20 h-20 rounded-lg object-cover"
                 />
@@ -920,8 +1181,21 @@ export function OrderTaker({
             </div>
           </Card>
         </div>
+        </div>
       </div>
-      </div>
+
+      {/* Withdrawal Dialog */}
+      <WithdrawalDialog
+        open={showWithdrawalDialog}
+        onOpenChange={setShowWithdrawalDialog}
+        onSuccess={() => {
+          fetchWithdrawals()
+          toast({
+            title: "Success!",
+            description: "Withdrawal/Purchase recorded successfully.",
+          })
+        }}
+      />
     </div>
   )
 }

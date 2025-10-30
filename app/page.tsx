@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { OrderTaker } from "@/components/order-taker"
 import { CrewDashboard } from "@/components/crew-dashboard"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings } from "lucide-react"
+import { LogOut, Settings, FileText } from "lucide-react"
 
 export default function Home() {
   const router = useRouter()
@@ -101,6 +101,13 @@ export default function Home() {
 
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">{user.email}</span>
+          {/* Show Sales Reports button for all roles except crew */}
+          {!isCrew && (
+            <Button variant="outline" size="sm" onClick={() => router.push("/sales-reports")}>
+              <FileText className="h-4 w-4 mr-2" />
+              Sales Reports
+            </Button>
+          )}
           {/* Only show Admin button for super admin */}
           {canAccessAdmin && (
             <Button variant="outline" size="sm" onClick={() => router.push("/admin")}>

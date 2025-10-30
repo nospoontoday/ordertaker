@@ -50,6 +50,22 @@ export interface AppendedOrder {
   items: OrderItem[];
   createdAt: number;
   isPaid?: boolean;
+  paymentMethod?: "cash" | "gcash" | "split" | null;
+  cashAmount?: number;
+  gcashAmount?: number;
+}
+
+export interface Withdrawal {
+  _id?: string;
+  type: "withdrawal" | "purchase";
+  amount: number;
+  description: string;
+  createdAt: number;
+  createdBy?: {
+    userId?: string;
+    name?: string;
+    email?: string;
+  };
   paymentMethod?: "cash" | "gcash" | null;
 }
 
@@ -61,7 +77,9 @@ export interface Order {
   items: OrderItem[];
   createdAt: number;
   isPaid: boolean;
-  paymentMethod?: "cash" | "gcash" | null;
+  paymentMethod?: "cash" | "gcash" | "split" | null;
+  cashAmount?: number;
+  gcashAmount?: number;
   orderType: "dine-in" | "take-out";
   appendedOrders?: AppendedOrder[];
   totalAmount?: number;
@@ -490,10 +508,18 @@ export const ordersApi = {
   /**
    * Toggle payment status of main order
    */
-  togglePayment: async (id: string, isPaid?: boolean, paymentMethod?: "cash" | "gcash"): Promise<Order> => {
+  togglePayment: async (
+    id: string,
+    isPaid?: boolean,
+    paymentMethod?: "cash" | "gcash" | "split",
+    cashAmount?: number,
+    gcashAmount?: number
+  ): Promise<Order> => {
     const body: any = {};
     if (isPaid !== undefined) body.isPaid = isPaid;
     if (paymentMethod) body.paymentMethod = paymentMethod;
+    if (cashAmount !== undefined) body.cashAmount = cashAmount;
+    if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
 
     const response = await apiCall<Order>(`/orders/${id}/payment`, {
       method: 'PUT',
@@ -514,11 +540,15 @@ export const ordersApi = {
     orderId: string,
     appendedId: string,
     isPaid?: boolean,
-    paymentMethod?: "cash" | "gcash"
+    paymentMethod?: "cash" | "gcash" | "split",
+    cashAmount?: number,
+    gcashAmount?: number
   ): Promise<Order> => {
     const body: any = {};
     if (isPaid !== undefined) body.isPaid = isPaid;
     if (paymentMethod) body.paymentMethod = paymentMethod;
+    if (cashAmount !== undefined) body.cashAmount = cashAmount;
+    if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
 
     const response = await apiCall<Order>(`/orders/${orderId}/appended/${appendedId}/payment`, {
       method: 'PUT',
@@ -564,6 +594,141 @@ export const ordersApi = {
       unpaidOrders: 0,
       todayOrders: 0,
       totalRevenue: 0
+    };
+  },
+};
+
+// Withdrawals API
+export const withdrawalsApi = {
+  /**
+   * Get all withdrawals/purchases
+   * @param filters - Optional filters (type, startDate, endDate, limit)
+   */
+  getAll: async (filters?: {
+    type?: "withdrawal" | "purchase";
+    startDate?: number;
+    endDate?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+  }): Promise<Withdrawal[]> => {
+    const params = new URLSearchParams();
+    if (filters?.type) params.append("type", filters.type);
+    if (filters?.startDate !== undefined) params.append("startDate", String(filters.startDate));
+    if (filters?.endDate !== undefined) params.append("endDate", String(filters.endDate));
+    if (filters?.limit) params.append("limit", String(filters.limit));
+    if (filters?.sortBy) params.append("sortBy", filters.sortBy);
+    if (filters?.sortOrder) params.append("sortOrder", filters.sortOrder);
+
+    const queryString = params.toString();
+    const endpoint = `/withdrawals${queryString ? `?${queryString}` : ""}`;
+
+    const response = await apiCall<Withdrawal[]>(endpoint);
+    return response.data || [];
+  },
+
+  /**
+   * Get a single withdrawal by ID
+   */
+  getById: async (id: string): Promise<Withdrawal | null> => {
+    const response = await apiCall<Withdrawal>(`/withdrawals/${id}`);
+    return response.data || null;
+  },
+
+  /**
+   * Create a new withdrawal or purchase
+   */
+  create: async (withdrawal: {
+    type: "withdrawal" | "purchase";
+    amount: number;
+    description: string;
+    createdAt?: number; // Optional timestamp - if not provided, backend uses current time
+    createdBy?: {
+      userId?: string;
+      name?: string;
+      email?: string;
+    };
+    paymentMethod?: "cash" | "gcash" | null;
+  }): Promise<Withdrawal> => {
+    const response = await apiCall<Withdrawal>("/withdrawals", {
+      method: "POST",
+      body: JSON.stringify(withdrawal),
+    });
+
+    if (!response.data) {
+      throw new Error("Failed to create withdrawal");
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Delete a withdrawal
+   */
+  delete: async (id: string): Promise<void> => {
+    await apiCall(`/withdrawals/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// Daily Sales API
+export interface DailySalesSummary {
+  date: string;
+  dateTimestamp: number;
+  itemsByCategory: {
+    [category: string]: Array<{
+      name: string;
+      price: number;
+      quantity: number;
+      total: number;
+    }>;
+  };
+  withdrawals: Withdrawal[];
+  purchases: Withdrawal[];
+  totalSales: number;
+  totalCash: number;
+  totalGcash: number;
+  totalWithdrawals: number;
+  totalPurchases: number;
+  netSales: number;
+}
+
+export const dailySalesApi = {
+  /**
+   * Get daily sales summaries with pagination
+   */
+  getDailySales: async (page: number = 1, limit: number = 10): Promise<{
+    data: DailySalesSummary[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> => {
+    const params = new URLSearchParams();
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+
+    const response = await apiCall<{
+      data: DailySalesSummary[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    }>(`/orders/daily-sales?${params.toString()}`);
+
+    return {
+      data: response.data || [],
+      pagination: response.pagination || {
+        page: 1,
+        limit: 10,
+        total: 0,
+        totalPages: 0,
+      },
     };
   },
 };

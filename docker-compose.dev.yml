@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # MongoDB service
+  mongo:
+    image: mongo:7
+    container_name: ordertaker-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: ordertaker
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - ordertaker-network
+
+  # Backend Node.js API (Development mode with hot reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: ordertaker-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://admin:password123@mongo:27017/ordertaker?authSource=admin
+      PORT: 5000
+      FRONTEND_URL: http://localhost:3000
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - backend-uploads:/app/uploads
+    depends_on:
+      - mongo
+    networks:
+      - ordertaker-network
+    command: npm run dev
+
+  # Next.js application (Development mode with hot reload)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: ordertaker-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:5000/api
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - ordertaker-network
+    command: npm run dev
+
+networks:
+  ordertaker-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  mongo-config:
+  backend-uploads:

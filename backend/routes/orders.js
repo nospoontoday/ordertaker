@@ -94,6 +94,252 @@ router.delete('/all', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/orders/daily-sales
+ * @desc    Get daily sales summaries grouped by date
+ * @query   page - Page number (default: 1)
+ * @query   limit - Items per page (default: 10)
+ * @access  Public
+ */
+router.get('/daily-sales', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get all paid orders
+    const allOrders = await Order.find({ isPaid: true }).sort({ createdAt: -1 });
+    
+    // Get all withdrawals
+    const Withdrawal = require('../models/Withdrawal');
+    const allWithdrawals = await Withdrawal.find().sort({ createdAt: -1 });
+
+    // Get menu items to map item IDs to categories
+    const MenuItem = require('../models/MenuItem');
+    const menuItems = await MenuItem.find({});
+    const menuItemMap = new Map();
+    menuItems.forEach((menuItem) => {
+      menuItemMap.set(menuItem._id.toString(), menuItem);
+      menuItemMap.set(menuItem.id, menuItem);
+    });
+
+    // Group orders by business day (8AM to 1AM next day)
+    const dailySalesMap = new Map();
+
+    allOrders.forEach((order) => {
+      const orderDate = new Date(order.createdAt);
+      let businessDay = new Date(orderDate);
+      
+      // Business day logic: 8AM to 1AM next day
+      if (orderDate.getHours() < 1) {
+        // Between midnight and 1AM, belongs to previous day
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else if (orderDate.getHours() < 8) {
+        // Between 1AM and 8AM, belongs to previous day
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else {
+        // 8AM or later, belongs to current day
+        businessDay.setHours(8, 0, 0, 0);
+      }
+      
+      // Use date string as key (YYYY-MM-DD format at 8AM)
+      const dateKey = businessDay.toISOString().split('T')[0];
+      
+      if (!dailySalesMap.has(dateKey)) {
+        dailySalesMap.set(dateKey, {
+          date: dateKey,
+          dateTimestamp: businessDay.getTime(),
+          orders: [],
+          items: new Map(), // category -> { items: Map(itemName -> { quantity, price, total }) }
+          withdrawals: [],
+          purchases: [],
+          totalSales: 0,
+          totalCash: 0,
+          totalGcash: 0,
+          totalWithdrawals: 0,
+          totalPurchases: 0,
+        });
+      }
+
+      const dailySales = dailySalesMap.get(dateKey);
+      dailySales.orders.push(order);
+
+      // Helper function to get category for an item
+      const getItemCategory = (item) => {
+        // First check if item has category directly
+        if (item.category) return item.category;
+        
+        // Try to get from menu item map
+        const menuItem = menuItemMap.get(item.id);
+        if (menuItem && menuItem.category) {
+          return menuItem.category;
+        }
+        
+        return 'uncategorized';
+      };
+
+      // Helper function to calculate payment method totals
+      const calculatePaymentTotals = (orderTotal, paymentMethod, cashAmount, gcashAmount) => {
+        if (paymentMethod === "cash") {
+          dailySales.totalCash += orderTotal;
+        } else if (paymentMethod === "gcash") {
+          dailySales.totalGcash += orderTotal;
+        } else if (paymentMethod === "split") {
+          dailySales.totalCash += cashAmount || 0;
+          dailySales.totalGcash += gcashAmount || 0;
+        } else {
+          // Default to cash for legacy orders without payment method
+          dailySales.totalCash += orderTotal;
+        }
+      };
+
+      // Process main order items
+      const mainOrderTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      calculatePaymentTotals(mainOrderTotal, order.paymentMethod, order.cashAmount, order.gcashAmount);
+
+      order.items.forEach((item) => {
+        const category = getItemCategory(item);
+        
+        if (!dailySales.items.has(category)) {
+          dailySales.items.set(category, new Map());
+        }
+        
+        const categoryItems = dailySales.items.get(category);
+        const itemKey = `${item.name}_${item.price}`;
+        
+        if (!categoryItems.has(itemKey)) {
+          categoryItems.set(itemKey, {
+            name: item.name,
+            price: item.price,
+            quantity: 0,
+            total: 0,
+          });
+        }
+        
+        const itemData = categoryItems.get(itemKey);
+        itemData.quantity += item.quantity;
+        itemData.total += item.price * item.quantity;
+        dailySales.totalSales += item.price * item.quantity;
+      });
+
+      // Process appended orders
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        order.appendedOrders.forEach((appended) => {
+          if (appended.isPaid) {
+            const appendedOrderTotal = appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            calculatePaymentTotals(appendedOrderTotal, appended.paymentMethod, appended.cashAmount, appended.gcashAmount);
+
+            appended.items.forEach((item) => {
+              const category = getItemCategory(item);
+              
+              if (!dailySales.items.has(category)) {
+                dailySales.items.set(category, new Map());
+              }
+              
+              const categoryItems = dailySales.items.get(category);
+              const itemKey = `${item.name}_${item.price}`;
+              
+              if (!categoryItems.has(itemKey)) {
+                categoryItems.set(itemKey, {
+                  name: item.name,
+                  price: item.price,
+                  quantity: 0,
+                  total: 0,
+                });
+              }
+              
+              const itemData = categoryItems.get(itemKey);
+              itemData.quantity += item.quantity;
+              itemData.total += item.price * item.quantity;
+              dailySales.totalSales += item.price * item.quantity;
+            });
+          }
+        });
+      }
+    });
+
+    // Process withdrawals and purchases
+    allWithdrawals.forEach((withdrawal) => {
+      const withdrawalDate = new Date(withdrawal.createdAt);
+      let businessDay = new Date(withdrawalDate);
+      
+      // Same business day logic
+      if (withdrawalDate.getHours() < 1) {
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else if (withdrawalDate.getHours() < 8) {
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else {
+        businessDay.setHours(8, 0, 0, 0);
+      }
+      
+      const dateKey = businessDay.toISOString().split('T')[0];
+      
+      if (dailySalesMap.has(dateKey)) {
+        const dailySales = dailySalesMap.get(dateKey);
+        
+        if (withdrawal.type === 'withdrawal') {
+          dailySales.withdrawals.push(withdrawal);
+          dailySales.totalWithdrawals += withdrawal.amount;
+        } else if (withdrawal.type === 'purchase') {
+          dailySales.purchases.push(withdrawal);
+          dailySales.totalPurchases += withdrawal.amount;
+        }
+      }
+    });
+
+    // Convert Map to Array and sort by date (latest first)
+    let dailySalesArray = Array.from(dailySalesMap.values()).map((daily) => {
+      // Convert category items Map to array
+      const itemsByCategory = {};
+      daily.items.forEach((categoryItems, category) => {
+        itemsByCategory[category] = Array.from(categoryItems.values());
+      });
+
+      return {
+        date: daily.date,
+        dateTimestamp: daily.dateTimestamp,
+        itemsByCategory,
+        withdrawals: daily.withdrawals,
+        purchases: daily.purchases,
+        totalSales: daily.totalSales,
+        totalCash: daily.totalCash,
+        totalGcash: daily.totalGcash,
+        totalWithdrawals: daily.totalWithdrawals,
+        totalPurchases: daily.totalPurchases,
+        netSales: daily.totalSales - daily.totalWithdrawals - daily.totalPurchases,
+      };
+    });
+
+    // Sort by date descending (latest first)
+    dailySalesArray.sort((a, b) => b.dateTimestamp - a.dateTimestamp);
+
+    // Pagination
+    const total = dailySalesArray.length;
+    const paginatedData = dailySalesArray.slice(skip, skip + limit);
+
+    res.json({
+      success: true,
+      data: paginatedData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching daily sales:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch daily sales'
+    });
+  }
+});
+
+/**
  * @route   GET /api/orders/:id
  * @desc    Get single order by ID
  * @access  Public
@@ -598,10 +844,10 @@ router.put('/:id/payment', async (req, res) => {
     }
 
     // Validate payment method if provided
-    if (req.body.paymentMethod && !['cash', 'gcash'].includes(req.body.paymentMethod)) {
+    if (req.body.paymentMethod && !['cash', 'gcash', 'split'].includes(req.body.paymentMethod)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid payment method. Must be cash or gcash'
+        error: 'Invalid payment method. Must be cash, gcash, or split'
       });
     }
 
@@ -611,12 +857,40 @@ router.put('/:id/payment', async (req, res) => {
     // Set payment method if marking as paid
     if (order.isPaid && req.body.paymentMethod) {
       order.paymentMethod = req.body.paymentMethod;
+
+      // Set split payment amounts if provided
+      if (req.body.paymentMethod === 'split') {
+        order.cashAmount = req.body.cashAmount || 0;
+        order.gcashAmount = req.body.gcashAmount || 0;
+        console.log('Saving split payment:', {
+          orderId: order.id,
+          cashAmount: order.cashAmount,
+          gcashAmount: order.gcashAmount
+        });
+      } else {
+        // Clear split amounts for non-split payments
+        order.cashAmount = undefined;
+        order.gcashAmount = undefined;
+      }
     } else if (!order.isPaid) {
-      // Clear payment method if marking as unpaid
+      // Clear payment method and amounts if marking as unpaid
       order.paymentMethod = null;
+      order.cashAmount = undefined;
+      order.gcashAmount = undefined;
     }
 
     await order.save();
+
+    // Log saved order for debugging split payments
+    if (order.paymentMethod === 'split') {
+      console.log('Order saved with split payment:', {
+        orderId: order.id,
+        paymentMethod: order.paymentMethod,
+        cashAmount: order.cashAmount,
+        gcashAmount: order.gcashAmount,
+        isPaid: order.isPaid
+      });
+    }
 
     // Emit WebSocket event for real-time update
     const io = req.app.get('io');
@@ -669,10 +943,10 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
     }
 
     // Validate payment method if provided
-    if (req.body.paymentMethod && !['cash', 'gcash'].includes(req.body.paymentMethod)) {
+    if (req.body.paymentMethod && !['cash', 'gcash', 'split'].includes(req.body.paymentMethod)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid payment method. Must be cash or gcash'
+        error: 'Invalid payment method. Must be cash, gcash, or split'
       });
     }
 
@@ -682,6 +956,16 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
     // Set payment method if marking as paid
     if (appendedOrder.isPaid && req.body.paymentMethod) {
       appendedOrder.paymentMethod = req.body.paymentMethod;
+
+      // Set split payment amounts if provided
+      if (req.body.paymentMethod === 'split') {
+        appendedOrder.cashAmount = req.body.cashAmount || 0;
+        appendedOrder.gcashAmount = req.body.gcashAmount || 0;
+      } else {
+        // Clear split amounts for non-split payments
+        appendedOrder.cashAmount = undefined;
+        appendedOrder.gcashAmount = undefined;
+      }
     } else if (!appendedOrder.isPaid) {
       // Clear payment method if marking as unpaid
       appendedOrder.paymentMethod = null;
@@ -920,6 +1204,227 @@ router.get('/stats/summary', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch order statistics'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/orders/daily-sales
+ * @desc    Get daily sales summaries grouped by date
+ * @query   page - Page number (default: 1)
+ * @query   limit - Items per page (default: 10)
+ * @access  Public
+ */
+router.get('/daily-sales', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get all paid orders
+    const allOrders = await Order.find({ isPaid: true }).sort({ createdAt: -1 });
+    
+    // Get all withdrawals
+    const Withdrawal = require('../models/Withdrawal');
+    const allWithdrawals = await Withdrawal.find().sort({ createdAt: -1 });
+
+    // Get menu items to map item IDs to categories
+    const MenuItem = require('../models/MenuItem');
+    const menuItems = await MenuItem.find({});
+    const menuItemMap = new Map();
+    menuItems.forEach((menuItem) => {
+      menuItemMap.set(menuItem._id.toString(), menuItem);
+      menuItemMap.set(menuItem.id, menuItem);
+    });
+
+    // Group orders by business day (8AM to 1AM next day)
+    const dailySalesMap = new Map();
+
+    allOrders.forEach((order) => {
+      const orderDate = new Date(order.createdAt);
+      let businessDay = new Date(orderDate);
+      
+      // Business day logic: 8AM to 1AM next day
+      if (orderDate.getHours() < 1) {
+        // Between midnight and 1AM, belongs to previous day
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else if (orderDate.getHours() < 8) {
+        // Between 1AM and 8AM, belongs to previous day
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else {
+        // 8AM or later, belongs to current day
+        businessDay.setHours(8, 0, 0, 0);
+      }
+      
+      // Use date string as key (YYYY-MM-DD format at 8AM)
+      const dateKey = businessDay.toISOString().split('T')[0];
+      
+      if (!dailySalesMap.has(dateKey)) {
+        dailySalesMap.set(dateKey, {
+          date: dateKey,
+          dateTimestamp: businessDay.getTime(),
+          orders: [],
+          items: new Map(), // category -> { items: Map(itemName -> { quantity, price, total }) }
+          withdrawals: [],
+          purchases: [],
+          totalSales: 0,
+          totalWithdrawals: 0,
+          totalPurchases: 0,
+        });
+      }
+
+      const dailySales = dailySalesMap.get(dateKey);
+      dailySales.orders.push(order);
+
+      // Helper function to get category for an item
+      const getItemCategory = (item) => {
+        // First check if item has category directly
+        if (item.category) return item.category;
+        
+        // Try to get from menu item map
+        const menuItem = menuItemMap.get(item.id);
+        if (menuItem && menuItem.category) {
+          return menuItem.category;
+        }
+        
+        return 'uncategorized';
+      };
+
+      // Process main order items
+      order.items.forEach((item) => {
+        const category = getItemCategory(item);
+        
+        if (!dailySales.items.has(category)) {
+          dailySales.items.set(category, new Map());
+        }
+        
+        const categoryItems = dailySales.items.get(category);
+        const itemKey = `${item.name}_${item.price}`;
+        
+        if (!categoryItems.has(itemKey)) {
+          categoryItems.set(itemKey, {
+            name: item.name,
+            price: item.price,
+            quantity: 0,
+            total: 0,
+          });
+        }
+        
+        const itemData = categoryItems.get(itemKey);
+        itemData.quantity += item.quantity;
+        itemData.total += item.price * item.quantity;
+        dailySales.totalSales += item.price * item.quantity;
+      });
+
+      // Process appended orders
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        order.appendedOrders.forEach((appended) => {
+          if (appended.isPaid) {
+            appended.items.forEach((item) => {
+              const category = getItemCategory(item);
+              
+              if (!dailySales.items.has(category)) {
+                dailySales.items.set(category, new Map());
+              }
+              
+              const categoryItems = dailySales.items.get(category);
+              const itemKey = `${item.name}_${item.price}`;
+              
+              if (!categoryItems.has(itemKey)) {
+                categoryItems.set(itemKey, {
+                  name: item.name,
+                  price: item.price,
+                  quantity: 0,
+                  total: 0,
+                });
+              }
+              
+              const itemData = categoryItems.get(itemKey);
+              itemData.quantity += item.quantity;
+              itemData.total += item.price * item.quantity;
+              dailySales.totalSales += item.price * item.quantity;
+            });
+          }
+        });
+      }
+    });
+
+    // Process withdrawals and purchases
+    allWithdrawals.forEach((withdrawal) => {
+      const withdrawalDate = new Date(withdrawal.createdAt);
+      let businessDay = new Date(withdrawalDate);
+      
+      // Same business day logic
+      if (withdrawalDate.getHours() < 1) {
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else if (withdrawalDate.getHours() < 8) {
+        businessDay.setDate(businessDay.getDate() - 1);
+        businessDay.setHours(8, 0, 0, 0);
+      } else {
+        businessDay.setHours(8, 0, 0, 0);
+      }
+      
+      const dateKey = businessDay.toISOString().split('T')[0];
+      
+      if (dailySalesMap.has(dateKey)) {
+        const dailySales = dailySalesMap.get(dateKey);
+        
+        if (withdrawal.type === 'withdrawal') {
+          dailySales.withdrawals.push(withdrawal);
+          dailySales.totalWithdrawals += withdrawal.amount;
+        } else if (withdrawal.type === 'purchase') {
+          dailySales.purchases.push(withdrawal);
+          dailySales.totalPurchases += withdrawal.amount;
+        }
+      }
+    });
+
+    // Convert Map to Array and sort by date (latest first)
+    let dailySalesArray = Array.from(dailySalesMap.values()).map((daily) => {
+      // Convert category items Map to array
+      const itemsByCategory = {};
+      daily.items.forEach((categoryItems, category) => {
+        itemsByCategory[category] = Array.from(categoryItems.values());
+      });
+
+      return {
+        date: daily.date,
+        dateTimestamp: daily.dateTimestamp,
+        itemsByCategory,
+        withdrawals: daily.withdrawals,
+        purchases: daily.purchases,
+        totalSales: daily.totalSales,
+        totalWithdrawals: daily.totalWithdrawals,
+        totalPurchases: daily.totalPurchases,
+        netSales: daily.totalSales - daily.totalWithdrawals - daily.totalPurchases,
+      };
+    });
+
+    // Sort by date descending (latest first)
+    dailySalesArray.sort((a, b) => b.dateTimestamp - a.dateTimestamp);
+
+    // Pagination
+    const total = dailySalesArray.length;
+    const paginatedData = dailySalesArray.slice(skip, skip + limit);
+
+    res.json({
+      success: true,
+      data: paginatedData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching daily sales:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch daily sales'
     });
   }
 });

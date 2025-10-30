@@ -102,8 +102,18 @@ const appendedOrderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'gcash', null],
+      enum: ['cash', 'gcash', 'split', null],
       default: null
+    },
+    cashAmount: {
+      type: Number,
+      required: false,
+      min: [0, 'Cash amount cannot be negative']
+    },
+    gcashAmount: {
+      type: Number,
+      required: false,
+      min: [0, 'GCash amount cannot be negative']
     }
   },
   { _id: false } // Don't create _id for subdocuments
@@ -155,8 +165,18 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'gcash', null],
+      enum: ['cash', 'gcash', 'split', null],
       default: null
+    },
+    cashAmount: {
+      type: Number,
+      required: false,
+      min: [0, 'Cash amount cannot be negative']
+    },
+    gcashAmount: {
+      type: Number,
+      required: false,
+      min: [0, 'GCash amount cannot be negative']
     },
     orderType: {
       type: String,
