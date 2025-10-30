@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar } from "lucide-react"
 import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
+import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { WithdrawalDialog } from "@/components/withdrawal-dialog"
@@ -231,12 +232,18 @@ export function OrderTaker({
     }
   }
 
-  // Load orders from localStorage
+  // Load orders from IndexedDB
   useEffect(() => {
-    const saved = localStorage.getItem("orders")
-    if (saved) {
-      setOrders(JSON.parse(saved))
+    const loadOrders = async () => {
+      try {
+        const cachedOrders = await orderDB.getAllOrders()
+        setOrders(cachedOrders)
+      } catch (error) {
+        console.error("Failed to load orders from IndexedDB:", error)
+      }
     }
+
+    loadOrders()
     const today = new Date()
     setTodayDate(today.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" }))
 
@@ -248,24 +255,30 @@ export function OrderTaker({
 
   useEffect(() => {
     if (appendingOrderId) {
-      const saved = localStorage.getItem("orders")
-      if (saved) {
-        const allOrders = JSON.parse(saved)
-        const orderToAppend = allOrders.find((o: Order) => o.id === appendingOrderId)
-        if (orderToAppend) {
-          setCustomerName(orderToAppend.customerName)
-          setCurrentOrder([...orderToAppend.items])
-          setAppendingOrder(orderToAppend)
-          setNewItems([])
-          setIsAppending(true)
+      const loadAppendingOrder = async () => {
+        try {
+          const orderToAppend = await orderDB.getOrder(appendingOrderId)
+          if (orderToAppend) {
+            setCustomerName(orderToAppend.customerName)
+            setCurrentOrder([...orderToAppend.items])
+            setAppendingOrder(orderToAppend)
+            setNewItems([])
+            setIsAppending(true)
+          }
+        } catch (error) {
+          console.error("Failed to load appending order:", error)
         }
       }
+
+      loadAppendingOrder()
     }
   }, [appendingOrderId])
 
-  // Save orders to localStorage
+  // Save orders to IndexedDB
   useEffect(() => {
-    localStorage.setItem("orders", JSON.stringify(orders))
+    if (orders.length > 0) {
+      orderDB.saveOrders(orders.map((order: Order) => ({ ...order, synced: false }))).catch(console.error)
+    }
   }, [orders])
 
   const addItem = (menuItem: MenuItem) => {
@@ -715,9 +728,9 @@ export function OrderTaker({
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">Order Taker</h1>
               <p className="text-sm text-slate-500 font-medium">{todayDate}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {!isOnline && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200/80 shadow-sm">
+                <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200/80 shadow-sm">
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                   <span className="text-xs font-semibold text-amber-700">Offline</span>
                 </div>
@@ -727,10 +740,11 @@ export function OrderTaker({
                   variant="outline"
                   size="sm"
                   onClick={() => window.location.href = '/historical-order'}
-                  className="gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all"
+                  className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
                 >
-                  <Calendar className="h-4 w-4" />
-                  Daily Summary
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Daily Summary</span>
+                  <span className="sm:hidden">Summary</span>
                 </Button>
               )}
               {canWithdraw && (
@@ -738,10 +752,11 @@ export function OrderTaker({
                   variant="outline"
                   size="sm"
                   onClick={() => setShowWithdrawalDialog(true)}
-                  className="gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all"
+                  className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
                 >
-                  <DollarSign className="h-4 w-4" />
-                  Withdrawal / Purchase
+                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Withdrawal / Purchase</span>
+                  <span className="sm:hidden">Withdraw</span>
                 </Button>
               )}
               <Button
@@ -754,20 +769,22 @@ export function OrderTaker({
                   }
                   setShowDailySales(!showDailySales)
                 }}
-                className="gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all"
+                className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
               >
-                <CreditCard className="h-4 w-4" />
-                {showDailySales ? "Hide" : "Show"} Daily Sales
+                <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">{showDailySales ? "Hide" : "Show"} Daily Sales</span>
+                <span className="sm:hidden">{showDailySales ? "Hide" : "Sales"}</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={fetchMenuData}
                 disabled={isLoadingData}
-                className="gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all"
+                className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
               >
-                <RefreshCw className={`h-4 w-4 ${isLoadingData ? "animate-spin" : ""}`} />
-                Refresh Menu
+                <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isLoadingData ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">Refresh Menu</span>
+                <span className="sm:hidden">Refresh</span>
               </Button>
             </div>
           </div>
@@ -781,30 +798,30 @@ export function OrderTaker({
             <CreditCard className="w-5 h-5" />
             Daily Sales Summary
           </h3>
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
+            <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200/80 shadow-sm">
               <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Total Sales</div>
-              <div className="text-2xl font-bold text-slate-900">₱{dailySales.totalSales.toFixed(2)}</div>
+              <div className="text-xl sm:text-2xl font-bold text-slate-900">₱{dailySales.totalSales.toFixed(2)}</div>
             </div>
-            <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
+            <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200/80 shadow-sm">
               <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
                 <Badge className="bg-emerald-600 border border-emerald-700 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">💵</Badge>
                 Cash
               </div>
-              <div className="text-2xl font-bold text-emerald-600">₱{dailySales.totalCash.toFixed(2)}</div>
+              <div className="text-xl sm:text-2xl font-bold text-emerald-600">₱{dailySales.totalCash.toFixed(2)}</div>
             </div>
-            <div className="bg-white rounded-lg p-4 border border-slate-200/80 shadow-sm">
+            <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200/80 shadow-sm">
               <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
                 <Badge className="bg-blue-500 border border-blue-600 text-white font-bold text-xs px-2 py-0.5 rounded-md shadow-sm">Ⓖ</Badge>
                 GCash
               </div>
-              <div className="text-2xl font-bold text-blue-500">₱{dailySales.totalGcash.toFixed(2)}</div>
+              <div className="text-xl sm:text-2xl font-bold text-blue-500">₱{dailySales.totalGcash.toFixed(2)}</div>
             </div>
           </div>
           
           {/* Withdrawals and Purchases */}
           {(dailySales.totalWithdrawals > 0 || dailySales.totalPurchases > 0) && (
-            <div className="grid grid-cols-3 gap-4 mb-4 pt-4 border-t border-slate-200/80">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 pt-4 border-t border-slate-200/80">
               {dailySales.totalWithdrawals > 0 && (
                 <div className="bg-white rounded-lg p-4 border border-red-200/80 shadow-sm">
                   <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
@@ -898,7 +915,7 @@ export function OrderTaker({
               </div>
 
               {/* Menu Items Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {getDisplayedItems().map((item) => (
               <button
                 key={item.id}
@@ -922,7 +939,7 @@ export function OrderTaker({
 
         {/* Order Summary */}
         <div className="lg:col-span-1">
-          <Card className={`p-5 sticky top-4 bg-white border border-slate-200/80 shadow-sm ${isAppending ? "border-2 border-blue-300 bg-blue-50/30" : ""}`}>
+          <Card className={`p-4 sm:p-5 sticky top-4 bg-white border border-slate-200/80 shadow-sm ${isAppending ? "border-2 border-blue-300 bg-blue-50/30" : ""}`}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-xl font-bold text-slate-900">{isAppending ? "Append Items" : "Current Order"}</h3>
               {isAppending && (

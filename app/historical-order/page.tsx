@@ -236,22 +236,22 @@ export default function HistoricalOrderPage() {
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4">
             <Button
               variant="outline"
               size="sm"
               onClick={() => router.push("/")}
-              className="gap-2"
+              className="gap-1 sm:gap-2 text-xs sm:text-sm self-start sm:self-auto"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4" />
               Back
             </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1 flex items-center gap-3">
-                <Calendar className="w-8 h-8" />
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-1 flex items-center gap-2 sm:gap-3">
+                <Calendar className="w-6 h-6 sm:w-8 sm:h-8" />
                 Daily Summary Entry
               </h1>
-              <p className="text-sm text-slate-500 font-medium">Enter item quantities sold for a previous date</p>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">Enter item quantities sold for a previous date</p>
             </div>
           </div>
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />

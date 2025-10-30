@@ -241,20 +241,20 @@ export function HistoricalOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
+          <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
             Create Historical Order
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             Create an order with a custom date for historical record-keeping.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 gap-6 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 py-4">
           {/* Left Column: Menu */}
-          <div className="col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-4">
             {/* Categories */}
             <div>
               <Label className="mb-2 block">Categories</Label>
@@ -298,7 +298,7 @@ export function HistoricalOrderDialog({
               {isLoadingMenu ? (
                 <div className="text-center py-8 text-slate-500">Loading menu...</div>
               ) : (
-                <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
                   {getDisplayedItems().map((item) => (
                     <button
                       key={item.id}
@@ -320,7 +320,7 @@ export function HistoricalOrderDialog({
           </div>
 
           {/* Right Column: Order Details */}
-          <div className="space-y-4">
+          <div className="lg:col-span-1 space-y-4">
           {/* Customer Name */}
           <div className="space-y-2">
             <Label htmlFor="customerName">Customer Name</Label>

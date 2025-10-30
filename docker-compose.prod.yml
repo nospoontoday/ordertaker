@@ -18,11 +18,9 @@ services:
     networks:
       - ordertaker-network
 
-  # Backend Node.js API (Production mode)
+  # Backend Node.js API (Production mode - using Docker Hub image)
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: YOUR_DOCKERHUB_USERNAME/ordertaker-backend:latest
     container_name: ordertaker-backend
     restart: unless-stopped
     ports:
@@ -41,11 +39,9 @@ services:
       - ordertaker-network
     command: node server.js
 
-  # Next.js application (Production mode)
+  # Next.js application (Production mode - using Docker Hub image)
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: YOUR_DOCKERHUB_USERNAME/ordertaker-app:latest
     container_name: ordertaker-app
     restart: unless-stopped
     ports:
@@ -67,4 +63,3 @@ networks:
 volumes:
   mongo-data:
   mongo-config:
-

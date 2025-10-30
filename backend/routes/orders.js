@@ -1522,4 +1522,74 @@ router.get('/daily-sales', async (req, res) => {
   }
 });
 
+/**
+ * @route   POST /api/orders/sync
+ * @desc    Sync an order from offline device to server
+ * @access  Public
+ */
+router.post('/sync', async (req, res) => {
+  try {
+    const orderData = req.body;
+
+    // Check if order already exists
+    const existingOrder = await Order.findOne({ id: orderData.id });
+
+    if (existingOrder) {
+      // Update existing order with newer data
+      Object.assign(existingOrder, orderData);
+      await existingOrder.save();
+
+      res.json({
+        success: true,
+        message: 'Order synced successfully (updated)',
+        order: existingOrder,
+      });
+    } else {
+      // Create new order
+      const newOrder = new Order(orderData);
+      await newOrder.save();
+
+      res.status(201).json({
+        success: true,
+        message: 'Order synced successfully (created)',
+        order: newOrder,
+      });
+    }
+  } catch (error) {
+    console.error('Error syncing order:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to sync order',
+    });
+  }
+});
+
+/**
+ * @route   GET /api/orders/updates
+ * @desc    Get orders updated since a timestamp (for pulling server changes)
+ * @query   since - Timestamp to get updates since
+ * @access  Public
+ */
+router.get('/updates', async (req, res) => {
+  try {
+    const since = parseInt(req.query.since) || 0;
+
+    // Find orders modified after the given timestamp
+    const orders = await Order.find({
+      $or: [
+        { lastModified: { $gt: since } },
+        { createdAt: { $gt: since } },
+      ],
+    }).sort({ createdAt: -1 });
+
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching order updates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch order updates',
+    });
+  }
+});
+
 module.exports = router;

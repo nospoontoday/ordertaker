@@ -6,10 +6,20 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ChevronDown, Check, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2 } from "lucide-react"
 import { ordersApi } from "@/lib/api"
+import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { useOrderEvents } from "@/contexts/websocket-context"
 import { SplitPaymentDialog } from "@/components/split-payment-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 
 interface OrderItem {
   id: string
@@ -77,6 +87,26 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     orderId: null,
     totalAmount: 0,
   })
+
+  // Delete item dialog state
+  const [deleteItemDialog, setDeleteItemDialog] = useState<{
+    open: boolean
+    orderId: string | null
+    itemId: string | null
+    itemName: string
+    itemStatus: string
+    isAppended: boolean
+    appendedOrderId: string | null
+  }>({
+    open: false,
+    orderId: null,
+    itemId: null,
+    itemName: "",
+    itemStatus: "",
+    isAppended: false,
+    appendedOrderId: null,
+  })
+  const [deleteReason, setDeleteReason] = useState("")
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -348,21 +378,20 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       setOrders(transformedOrders)
       setIsOnline(true)
 
-      // Cache in localStorage
-      localStorage.setItem("orders", JSON.stringify(transformedOrders))
+      // Cache in IndexedDB with synced flag
+      await orderDB.saveOrders(transformedOrders.map((order: Order) => ({ ...order, synced: true })))
 
       // Expand active orders
       const activeOrderIds = new Set<string>(transformedOrders.filter((o: Order) => !isOrderFullyComplete(o)).map((o: Order) => o.id))
       setExpandedOrders(activeOrderIds)
     } catch (error) {
-      console.error("Error fetching orders from API, using localStorage:", error)
+      console.error("Error fetching orders from API, using IndexedDB:", error)
       setIsOnline(false)
 
-      // Fall back to localStorage
-      const saved = localStorage.getItem("orders")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        const initialized = parsed.map((order: any) => ({
+      // Fall back to IndexedDB
+      try {
+        const cachedOrders = await orderDB.getAllOrders()
+        const initialized = cachedOrders.map((order: any) => ({
           ...order,
           isPaid: order.isPaid || false,
           paymentMethod: order.paymentMethod || null,
@@ -387,14 +416,23 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
         const activeOrderIds = new Set<string>(initialized.filter((o: Order) => !isOrderFullyComplete(o)).map((o: Order) => o.id))
         setExpandedOrders(activeOrderIds)
-      }
 
-      if (!silent) {
-        toast({
-          title: "Offline Mode",
-          description: "Showing cached orders. Will sync when online.",
-          variant: "default",
-        })
+        if (!silent) {
+          toast({
+            title: "Offline Mode",
+            description: "Showing cached orders. Will sync when online.",
+            variant: "default",
+          })
+        }
+      } catch (dbError) {
+        console.error("Failed to load from IndexedDB:", dbError)
+        if (!silent) {
+          toast({
+            title: "Error",
+            description: "Failed to load orders from cache.",
+            variant: "destructive",
+          })
+        }
       }
     } finally {
       if (!silent) {
@@ -403,9 +441,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     }
   }
 
-  // Save orders to localStorage
+  // Save orders to IndexedDB
   useEffect(() => {
-    localStorage.setItem("orders", JSON.stringify(orders))
+    if (orders.length > 0) {
+      orderDB.saveOrders(orders.map((order: Order) => ({ ...order, synced: false }))).catch(console.error)
+    }
   }, [orders])
 
   const toggleOrderExpanded = (orderId: string) => {
@@ -802,8 +842,69 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     }
   }
 
-  const deleteItemFromOrder = async (orderId: string, itemId: string) => {
-    console.log('deleteItemFromOrder called:', { orderId, itemId })
+  const handleDeleteItemClick = (orderId: string, itemId: string, itemName: string, itemStatus: string, isAppended: boolean = false, appendedOrderId: string | null = null) => {
+    // If item is pending, delete directly without confirmation
+    if (itemStatus === "pending") {
+      if (isAppended && appendedOrderId) {
+        deleteItemFromAppendedOrder(orderId, appendedOrderId, itemId)
+      } else {
+        deleteItemFromOrder(orderId, itemId)
+      }
+    } else {
+      // Item is prepared/ready/served/paid - show dialog requiring explanation
+      setDeleteItemDialog({
+        open: true,
+        orderId,
+        itemId,
+        itemName,
+        itemStatus,
+        isAppended,
+        appendedOrderId,
+      })
+      setDeleteReason("")
+    }
+  }
+
+  const confirmDeleteItem = async () => {
+    if (!deleteItemDialog.orderId || !deleteItemDialog.itemId) return
+
+    if (!deleteReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please provide a reason for deleting this item.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Close dialog first
+    setDeleteItemDialog({
+      open: false,
+      orderId: null,
+      itemId: null,
+      itemName: "",
+      itemStatus: "",
+      isAppended: false,
+      appendedOrderId: null,
+    })
+
+    // Execute deletion
+    if (deleteItemDialog.isAppended && deleteItemDialog.appendedOrderId) {
+      await deleteItemFromAppendedOrder(
+        deleteItemDialog.orderId,
+        deleteItemDialog.appendedOrderId,
+        deleteItemDialog.itemId,
+        deleteReason
+      )
+    } else {
+      await deleteItemFromOrder(deleteItemDialog.orderId, deleteItemDialog.itemId, deleteReason)
+    }
+
+    setDeleteReason("")
+  }
+
+  const deleteItemFromOrder = async (orderId: string, itemId: string, reason?: string) => {
+    console.log('deleteItemFromOrder called:', { orderId, itemId, reason })
     const order = orders.find((o) => o.id === orderId)
     if (!order) {
       console.log('Order not found')
@@ -841,9 +942,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       await ordersApi.update(orderId, { items: updatedItems })
       console.log('API update successful')
       setIsOnline(true)
+
+      const reasonText = reason ? ` Reason: ${reason}` : ""
       toast({
         title: "Item Deleted",
-        description: "Item has been removed from the order.",
+        description: `Item has been removed from the order.${reasonText}`,
       })
     } catch (error) {
       console.error("Error deleting item from main order:", error)
@@ -856,8 +959,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     }
   }
 
-  const deleteItemFromAppendedOrder = async (orderId: string, appendedOrderId: string, itemId: string) => {
-    console.log('deleteItemFromAppendedOrder called:', { orderId, appendedOrderId, itemId })
+  const deleteItemFromAppendedOrder = async (orderId: string, appendedOrderId: string, itemId: string, reason?: string) => {
+    console.log('deleteItemFromAppendedOrder called:', { orderId, appendedOrderId, itemId, reason })
     const order = orders.find((o) => o.id === orderId)
     const appendedOrder = order?.appendedOrders?.find((a) => a.id === appendedOrderId)
 
@@ -908,9 +1011,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       await ordersApi.update(orderId, { appendedOrders: updatedAppendedOrders })
       console.log('API update successful')
       setIsOnline(true)
+
+      const reasonText = reason ? ` Reason: ${reason}` : ""
       toast({
         title: "Item Deleted",
-        description: "Item has been removed from the appended order.",
+        description: `Item has been removed from the appended order.${reasonText}`,
       })
     } catch (error) {
       console.error("Error deleting item from appended order:", error)
@@ -1274,10 +1379,10 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Active Orders */}
           {sortedActiveOrders.length > 0 && (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center gap-3 mb-1">
                 <div className="h-2 w-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50" />
                 <h2 className="text-base font-bold tracking-wide uppercase text-slate-800">Active Orders</h2>
@@ -1296,44 +1401,48 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-5">
-                      <div className="flex items-start justify-between gap-3">
+                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1 min-w-0 space-y-2.5">
-                          <div className="flex items-center gap-3">
+                          {/* Order Number and Customer Name - Row 1 */}
+                          <div className="flex items-center gap-2 sm:gap-3">
                             {order.orderNumber && (
-                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-bold shadow-sm">
+                              <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs sm:text-sm font-bold shadow-sm flex-shrink-0">
                                 #{order.orderNumber}
                               </span>
                             )}
-                            <h3 className="font-bold text-base text-slate-900 truncate">{order.customerName}</h3>
+                            <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate">{order.customerName}</h3>
                           </div>
 
-                          <div className="flex items-center gap-2.5 text-xs text-slate-600">
+                          {/* Time and Items Count - Row 2 */}
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs text-slate-600">
                             <span className="flex items-center gap-1.5 font-medium">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
                               {formatTime(order.createdAt)}
                             </span>
-                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
                             <span className="font-medium">{order.items.reduce((sum, item) => sum + item.quantity, 0)} items</span>
                             {totalAppendedOrders > 0 && (
                               <>
-                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
                                 <span className="font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
-                              </>
-                            )}
-                            {getOrderTakerDisplay(order) && (
-                              <>
-                                <span className="text-slate-300">•</span>
-                                <span className="font-medium text-slate-500">Order by: {getOrderTakerDisplay(order)}</span>
                               </>
                             )}
                           </div>
 
+                          {/* Order Taker - Row 3 */}
+                          {getOrderTakerDisplay(order) && (
+                            <div className="text-xs text-slate-500">
+                              <span className="font-medium">Order by: {getOrderTakerDisplay(order)}</span>
+                            </div>
+                          )}
+
+                          {/* Payment Status Badges - Row 4 */}
                           {(mainOrderPaid || (totalAppendedOrders > 0 && appendedOrdersPaid > 0)) && (
                             <div className="flex flex-wrap items-center gap-2">
                               {mainOrderPaid && (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
-                                  <Check className="w-3.5 h-3.5" />
+                                  <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                   Paid
                                 </span>
                               )}
@@ -1345,7 +1454,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             </div>
                           )}
                         </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-2 flex-shrink-0">
                         {(() => {
                           const mainTotal = getOrderTotal(order.items)
                           const appendedTotal =
@@ -1373,22 +1482,22 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                           // Show total amount badge and payment buttons if there's any unpaid amount
                           if (unpaidTotal > 0) {
                             return (
-                              <div className="flex flex-col items-end gap-2">
+                              <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
                                 {/* Total Amount Badge */}
-                                <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                <Badge variant="outline" className="font-bold text-xs sm:text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
                                   ₱{totalAmount.toFixed(2)}
                                 </Badge>
 
                                 {/* Payment Buttons */}
                                 {canManagePayments && (
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         markAllAsPaid(order.id, "cash")
                                       }}
                                       size="sm"
-                                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                      className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
                                     >
                                       💵 Cash
                                     </Button>
@@ -1398,7 +1507,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         markAllAsPaid(order.id, "gcash")
                                       }}
                                       size="sm"
-                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                      className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
                                     >
                                       Ⓖ GCash
                                     </Button>
@@ -1408,7 +1517,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         openSplitPaymentDialog(order.id)
                                       }}
                                       size="sm"
-                                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                      className="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
                                     >
                                       🔀 Split
                                     </Button>
@@ -1420,7 +1529,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
                           return null
                         })()}
-                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""} self-center`} />
                       </div>
                       </div>
                     </div>
@@ -1476,11 +1585,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                  {item.status === "pending" && canDeleteOrders && (
+                                  {canDeleteOrders && (
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        deleteItemFromOrder(order.id, item.id)
+                                        handleDeleteItemClick(order.id, item.id, item.name, item.status)
                                       }}
                                       size="sm"
                                       variant="outline"
@@ -1576,12 +1685,12 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-2 flex-shrink-0">
-                                        {item.status === "pending" && canDeleteOrders && (
+                                        {canDeleteOrders && (
                                           <Button
                                             onClick={(e) => {
                                               console.log('Appended item delete button clicked!')
                                               e.stopPropagation()
-                                              deleteItemFromAppendedOrder(order.id, appended.id, item.id)
+                                              handleDeleteItemClick(order.id, item.id, item.name, item.status, true, appended.id)
                                             }}
                                             size="sm"
                                             variant="outline"
@@ -1684,54 +1793,58 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-5">
-                      <div className="flex items-start justify-between gap-3">
+                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1 min-w-0 space-y-2.5">
-                          <div className="flex items-center gap-3">
+                          {/* Order Number and Customer Name - Row 1 */}
+                          <div className="flex items-center gap-2 sm:gap-3">
                             {order.orderNumber && (
-                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-sm font-bold shadow-sm">
+                              <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-xs sm:text-sm font-bold shadow-sm flex-shrink-0">
                                 #{order.orderNumber}
                               </span>
                             )}
-                            <h3 className="font-bold text-base text-slate-900 truncate">{order.customerName}</h3>
+                            <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate">{order.customerName}</h3>
                           </div>
 
-                          <div className="flex items-center gap-2.5 text-xs text-slate-600">
+                          {/* Time and Items Count - Row 2 */}
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs text-slate-600">
                             <span className="flex items-center gap-1.5 font-medium">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
                               {formatTime(order.createdAt)}
                             </span>
-                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
                             <span className="font-medium">{order.items.reduce((sum, item) => sum + item.quantity, 0)} items</span>
                             {totalAppendedOrders > 0 && (
                               <>
-                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
                                 <span className="font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
-                              </>
-                            )}
-                            {getOrderTakerDisplay(order) && (
-                              <>
-                                <span className="text-slate-300">•</span>
-                                <span className="font-medium text-slate-500">Order by: {getOrderTakerDisplay(order)}</span>
                               </>
                             )}
                             {calculateOrderTime(order) && (
                               <>
-                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
                                 <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
-                                  <Clock className="w-3.5 h-3.5" />
+                                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                   {calculateOrderTime(order)}
                                 </span>
                               </>
                             )}
                           </div>
 
+                          {/* Order Taker - Row 3 */}
+                          {getOrderTakerDisplay(order) && (
+                            <div className="text-xs text-slate-500">
+                              <span className="font-medium">Order by: {getOrderTakerDisplay(order)}</span>
+                            </div>
+                          )}
+
+                          {/* Awaiting Payment Badge - Row 4 */}
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
-                            <AlertCircle className="w-3.5 h-3.5" />
+                            <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                             Awaiting Payment
                           </span>
                         </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-2 flex-shrink-0">
                         {(() => {
                           const mainTotal = getOrderTotal(order.items)
                           const appendedTotal =
@@ -1750,7 +1863,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
                           if (allPaid) {
                             return (
-                              <Badge variant="outline" className="font-bold text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                              <Badge variant="outline" className="font-bold text-xs sm:text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
                                 ₱{totalAmount.toFixed(2)}
                               </Badge>
                             )
@@ -1759,21 +1872,21 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                           // Show payment buttons if there's any unpaid amount and user can manage payments
                           if (unpaidTotal > 0 && canManagePayments) {
                             return (
-                              <div className="flex flex-col items-end gap-2">
+                              <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
                                 {/* Total Amount Badge */}
-                                <Badge variant="outline" className="font-bold text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-3 py-1.5">
+                                <Badge variant="outline" className="font-bold text-xs sm:text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
                                   ₱{unpaidTotal.toFixed(2)}
                                 </Badge>
 
                                 {/* Payment Buttons */}
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                                   <Button
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       markAllAsPaid(order.id, "cash")
                                     }}
                                     size="sm"
-                                    className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                    className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
                                   >
                                     💵 Cash
                                   </Button>
@@ -1783,7 +1896,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       markAllAsPaid(order.id, "gcash")
                                     }}
                                     size="sm"
-                                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                    className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
                                   >
                                     Ⓖ GCash
                                   </Button>
@@ -1793,7 +1906,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       openSplitPaymentDialog(order.id)
                                     }}
                                     size="sm"
-                                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                    className="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
                                   >
                                     🔀 Split
                                   </Button>
@@ -1805,7 +1918,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                           // Show unpaid badge for users who cannot manage payments (crew only)
                           if (unpaidTotal > 0) {
                             return (
-                              <Badge variant="outline" className="font-bold text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-3 py-1.5">
+                              <Badge variant="outline" className="font-bold text-xs sm:text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
                                 ₱{unpaidTotal.toFixed(2)}
                               </Badge>
                             )
@@ -1813,7 +1926,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
                           return null
                         })()}
-                        <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""} self-center`} />
                       </div>
                       </div>
                     </div>
@@ -1993,33 +2106,38 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-500 to-emerald-400 opacity-0 hover:opacity-100 transition-opacity duration-300" />
                     <div
                       onClick={() => setExpandedCompleted(expandedCompleted === order.id ? null : order.id)}
-                      className="relative cursor-pointer p-4"
+                      className="relative cursor-pointer p-4 sm:p-4"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 flex items-center gap-3">
-                          {order.orderNumber && (
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-bold shadow-sm">
-                              #{order.orderNumber}
-                            </span>
-                          )}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-sm text-slate-900">{order.customerName}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                        <div className="flex-1 min-w-0 space-y-2">
+                          {/* Order Number and Customer Name - Row 1 */}
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            {order.orderNumber && (
+                              <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-xs sm:text-sm font-bold shadow-sm flex-shrink-0">
+                                #{order.orderNumber}
+                              </span>
+                            )}
+                            <p className="font-bold text-sm sm:text-base text-slate-900 truncate">{order.customerName}</p>
+                          </div>
+
+                          {/* Time and Order Taker - Row 2 */}
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs text-slate-600">
                             {calculateOrderTime(order) && (
-                              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
+                              <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                 {calculateOrderTime(order)}
                               </span>
                             )}
                             {getOrderTakerDisplay(order) && (
                               <>
-                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
                                 <span className="text-xs font-medium text-slate-500">Order by: {getOrderTakerDisplay(order)}</span>
                               </>
                             )}
                           </div>
                         </div>
                         <ChevronDown
-                          className={`w-5 h-5 text-slate-400 transition-transform flex-shrink-0 ${
+                          className={`w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform flex-shrink-0 self-start sm:self-center ${
                             expandedCompleted === order.id ? "rotate-180" : ""
                           }`}
                         />
@@ -2248,6 +2366,86 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         customerName={splitPaymentDialog.customerName}
         onConfirm={handleSplitPaymentConfirm}
       />
+
+      {/* Delete Item Confirmation Dialog */}
+      <Dialog
+        open={deleteItemDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteItemDialog({
+              open: false,
+              orderId: null,
+              itemId: null,
+              itemName: "",
+              itemStatus: "",
+              isAppended: false,
+              appendedOrderId: null,
+            })
+            setDeleteReason("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Delete Item - Explanation Required
+            </DialogTitle>
+            <DialogDescription>
+              This item has status "{deleteItemDialog.itemStatus}". Please provide a reason for deleting it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Item:</label>
+              <p className="text-base font-bold text-slate-900">{deleteItemDialog.itemName}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">
+                Reason for deletion: <span className="text-red-600">*</span>
+              </label>
+              <Textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Enter reason for deleting this item..."
+                className="min-h-[100px]"
+              />
+              <p className="text-xs text-slate-500">
+                This reason will be logged for record-keeping purposes.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteItemDialog({
+                  open: false,
+                  orderId: null,
+                  itemId: null,
+                  itemName: "",
+                  itemStatus: "",
+                  isAppended: false,
+                  appendedOrderId: null,
+                })
+                setDeleteReason("")
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteItem}
+              disabled={!deleteReason.trim()}
+            >
+              Delete Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -123,21 +123,21 @@ export default function SalesReportsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               <Button
                 variant="outline"
                 onClick={() => router.push("/")}
-                className="gap-2"
+                className="gap-1 sm:gap-2 text-xs sm:text-sm"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
                 Back
               </Button>
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-1">
                   Daily Sales Reports
                 </h1>
-                <p className="text-sm text-slate-500 font-medium">
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">
                   View detailed sales summaries by day
                 </p>
               </div>
@@ -147,9 +147,9 @@ export default function SalesReportsPage() {
               size="sm"
               onClick={() => fetchDailySales(pagination.page)}
               disabled={isLoadingData}
-              className="gap-2"
+              className="gap-1 sm:gap-2 text-xs sm:text-sm"
             >
-              <RefreshCw className={`h-4 w-4 ${isLoadingData ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isLoadingData ? "animate-spin" : ""}`} />
               Refresh
             </Button>
           </div>
@@ -362,7 +362,7 @@ export default function SalesReportsPage() {
                   {/* Overall Summary */}
                   <div className="mb-6">
                     <h4 className="text-lg font-bold text-slate-900 mb-4 border-b pb-2">Overall Summary</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                       <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
                         <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">
                           Total Sales
@@ -403,7 +403,7 @@ export default function SalesReportsPage() {
                   {/* Owner Breakdown */}
                   <div className="mb-6">
                     <h4 className="text-lg font-bold text-slate-900 mb-4 border-b pb-2">Owner Breakdown</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
                       {/* John */}
                       <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-300">
                         <div className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">

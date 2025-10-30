@@ -15,6 +15,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   register: (email: string, password: string, role: "order_taker" | "crew" | "order_taker_crew", name?: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
+  changePassword: (email: string, currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -116,8 +117,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(CURRENT_USER_KEY)
   }
 
+  const changePassword = async (
+    email: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, currentPassword, newPassword }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to change password' }
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error("Change password error:", error)
+      return { success: false, error: "Failed to change password. Please try again." }
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, changePassword }}>
       {children}
     </AuthContext.Provider>
   )

@@ -81,7 +81,7 @@ export function SplitPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Split Payment</DialogTitle>
           <DialogDescription>
@@ -117,7 +117,7 @@ export function SplitPaymentDialog({
             />
 
             {/* Quick Amount Buttons */}
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
               {quickAmounts.map((amount) => (
                 <Button
                   key={amount}
@@ -125,7 +125,7 @@ export function SplitPaymentDialog({
                   variant="outline"
                   size="sm"
                   onClick={() => handleQuickAmount(amount)}
-                  className="flex-1 min-w-[70px] bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700 font-semibold"
+                  className="flex-1 min-w-[70px] bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700 font-semibold text-xs sm:text-sm"
                   disabled={amount > totalAmount}
                 >
                   ₱{amount}

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
 import { WebSocketProvider } from '@/contexts/websocket-context'
+import { ServiceWorkerInitializer } from '@/components/sw-initializer'
+import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -10,8 +12,21 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'Order Taker App',
-  description: 'Simple order management system',
+  description: 'Coffee shop order management system with offline support',
   generator: 'v0.app',
+  manifest: '/manifest.json',
+  themeColor: '#000000',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'OrderTaker',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
 }
 
 export default function RootLayout({
@@ -22,11 +37,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
+        <ServiceWorkerInitializer />
         <AuthProvider>
           <WebSocketProvider>
             {children}
           </WebSocketProvider>
         </AuthProvider>
+        <Toaster />
         <Analytics />
       </body>
     </html>

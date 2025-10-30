@@ -25,12 +25,13 @@ const seedUsers = async () => {
 
     const salt = await bcrypt.genSalt(10);
 
-    // Static passwords for all users (change these if needed)
+    // Static passwords for all users
+    const STATIC_PASSWORD = '123456';
     const passwords = {
-      admin: 'Admin123!',
-      elwin: 'Elwin123!',
-      krisnela: 'Krisnela123!',
-      jowicks: 'Jowicks123!'
+      admin: STATIC_PASSWORD,
+      elwin: STATIC_PASSWORD,
+      krisnela: STATIC_PASSWORD,
+      jowicks: STATIC_PASSWORD
     };
 
     // 1. Admin user

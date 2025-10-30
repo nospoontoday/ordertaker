@@ -282,24 +282,26 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto py-6 sm:py-8 px-4 sm:px-6">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Button variant="outline" size="icon" onClick={() => router.push("/")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Manage your menu items</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage your menu items</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/admin/categories")}>
-            Manage Categories
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => router.push("/admin/categories")} className="text-xs sm:text-sm">
+            <span className="hidden sm:inline">Manage Categories</span>
+            <span className="sm:hidden">Categories</span>
           </Button>
-          <Button onClick={() => handleOpenDialog()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Menu Item
+          <Button onClick={() => handleOpenDialog()} className="text-xs sm:text-sm">
+            <Plus className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Add Menu Item</span>
+            <span className="sm:hidden">Add Item</span>
           </Button>
         </div>
       </div>
@@ -323,63 +325,65 @@ export default function AdminDashboard() {
               </Button>
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Image</TableHead>
+                    <TableHead className="hidden sm:table-cell">Image</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Price (₱)</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Best Seller</TableHead>
+                    <TableHead className="hidden md:table-cell">Category</TableHead>
+                    <TableHead className="hidden lg:table-cell">Owner</TableHead>
+                    <TableHead className="hidden md:table-cell">Best Seller</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {menuItems.map((item) => (
                     <TableRow key={item._id}>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <img
                           src={item.image || "/placeholder.svg"}
                           alt={item.name}
-                          className="w-12 h-12 rounded object-cover"
+                          className="w-10 h-10 sm:w-12 sm:h-12 rounded object-cover"
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>₱{item.price.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{item.category}</Badge>
+                      <TableCell className="font-medium text-sm sm:text-base">{item.name}</TableCell>
+                      <TableCell className="text-sm sm:text-base">₱{item.price.toFixed(2)}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant="outline" className="text-xs">{item.category}</Badge>
                       </TableCell>
-                      <TableCell>
-                        <Badge className={
+                      <TableCell className="hidden lg:table-cell">
+                        <Badge className={`text-xs ${
                           item.owner === 'john' ? 'bg-purple-600 text-white' :
                           item.owner === 'elwin' ? 'bg-indigo-600 text-white' :
                           'bg-slate-600 text-white'
-                        }>
+                        }`}>
                           {item.owner === 'john' ? '👤 John' :
                            item.owner === 'elwin' ? '👤 Elwin' :
                            '👤 John'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        {item.isBestSeller && <Badge className="bg-yellow-500">Best Seller</Badge>}
+                      <TableCell className="hidden md:table-cell">
+                        {item.isBestSeller && <Badge className="bg-yellow-500 text-xs">Best Seller</Badge>}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-1 sm:gap-2">
                           <Button
                             variant="outline"
                             size="icon"
                             onClick={() => handleOpenDialog(item)}
+                            className="h-8 w-8 sm:h-10 sm:w-10"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="icon"
                             onClick={() => item._id && handleDelete(item._id)}
+                            className="h-8 w-8 sm:h-10 sm:w-10"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </div>
                       </TableCell>

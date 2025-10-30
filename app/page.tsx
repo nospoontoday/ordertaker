@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { OrderTaker } from "@/components/order-taker"
 import { CrewDashboard } from "@/components/crew-dashboard"
+import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound } from "lucide-react"
 
 export default function Home() {
   const router = useRouter()
@@ -73,13 +74,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="flex items-center justify-between gap-2 p-4 border-b border-border">
+      <OfflineIndicator />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-2 p-3 sm:p-4 border-b border-border">
         {/* Only show view toggle buttons for non-crew users */}
         {!isCrew && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setView("taker")}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
                 view === "taker" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
@@ -87,7 +89,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => setView("crew")}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
                 view === "crew" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
@@ -99,25 +101,32 @@ export default function Home() {
         {/* Show placeholder for crew users to maintain layout */}
         {isCrew && <div></div>}
 
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">{user.email}</span>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="text-xs sm:text-sm text-muted-foreground truncate min-w-0 flex-shrink">{user.email}</span>
           {/* Show Sales Reports button for all roles except crew */}
           {!isCrew && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/sales-reports")}>
-              <FileText className="h-4 w-4 mr-2" />
-              Sales Reports
+            <Button variant="outline" size="sm" onClick={() => router.push("/sales-reports")} className="text-xs sm:text-sm">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Sales Reports</span>
+              <span className="sm:hidden">Reports</span>
             </Button>
           )}
           {/* Only show Admin button for super admin */}
           {canAccessAdmin && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/admin")}>
-              <Settings className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => router.push("/admin")} className="text-xs sm:text-sm">
+              <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               Admin
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
+          <Button variant="outline" size="sm" onClick={() => router.push("/change-password")} className="text-xs sm:text-sm">
+            <KeyRound className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Change Password</span>
+            <span className="sm:hidden">Password</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs sm:text-sm">
+            <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Logout</span>
+            <span className="sm:hidden">Out</span>
           </Button>
         </div>
       </div>
