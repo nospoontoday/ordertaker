@@ -27,6 +27,9 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
+# Copy .env.local if it exists (for NEXT_PUBLIC_API_URL)
+COPY --from=builder /app/.env.local* ./
 
 # Expose port
 EXPOSE 3000

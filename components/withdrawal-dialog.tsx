@@ -25,6 +25,7 @@ export function WithdrawalDialog({ open, onOpenChange, onSuccess }: WithdrawalDi
   const [description, setDescription] = useState<string>("")
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "gcash" | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [chargedTo, setChargedTo] = useState<"john" | "elwin" | "all">("john")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Reset form when dialog opens/closes
@@ -35,6 +36,7 @@ export function WithdrawalDialog({ open, onOpenChange, onSuccess }: WithdrawalDi
       setDescription("")
       setPaymentMethod(null)
       setSelectedDate(new Date()) // Reset to today when dialog opens
+      setChargedTo("john") // Default to john
     }
   }, [open])
 
@@ -73,6 +75,7 @@ export function WithdrawalDialog({ open, onOpenChange, onSuccess }: WithdrawalDi
           email: user?.email,
         },
         paymentMethod: paymentMethod || null,
+        chargedTo: chargedTo, // Who this withdrawal/purchase is charged to
       }
 
       // Import and use the API
@@ -193,6 +196,46 @@ export function WithdrawalDialog({ open, onOpenChange, onSuccess }: WithdrawalDi
             </p>
           </div>
 
+          {/* Charged To */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Charged To</label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setChargedTo("john")}
+                className={`flex-1 px-4 py-2 rounded-lg font-bold transition-all border shadow-sm ${
+                  chargedTo === "john"
+                    ? "bg-purple-50 border-purple-600 text-purple-700 shadow-md"
+                    : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                }`}
+              >
+                👤 John
+              </button>
+              <button
+                onClick={() => setChargedTo("elwin")}
+                className={`flex-1 px-4 py-2 rounded-lg font-bold transition-all border shadow-sm ${
+                  chargedTo === "elwin"
+                    ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-md"
+                    : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                }`}
+              >
+                👤 Elwin
+              </button>
+              <button
+                onClick={() => setChargedTo("all")}
+                className={`flex-1 px-4 py-2 rounded-lg font-bold transition-all border shadow-sm ${
+                  chargedTo === "all"
+                    ? "bg-slate-50 border-slate-600 text-slate-700 shadow-md"
+                    : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                }`}
+              >
+                ↔️ Split (Both)
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Select who this {type === "withdrawal" ? "withdrawal" : "purchase"} is charged to. "Split" divides the amount equally between John and Elwin.
+            </p>
+          </div>
+
           {/* Payment Method (Optional) */}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">Payment Method (Optional)</label>
@@ -230,6 +273,24 @@ export function WithdrawalDialog({ open, onOpenChange, onSuccess }: WithdrawalDi
                 <span className="text-xl font-bold text-slate-900">
                   ₱{parseFloat(amount || "0").toFixed(2)}
                 </span>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <Badge
+                  className={
+                    chargedTo === "john" ? "bg-purple-600 text-white" :
+                    chargedTo === "elwin" ? "bg-indigo-600 text-white" :
+                    "bg-slate-600 text-white"
+                  }
+                >
+                  {chargedTo === "john" ? "👤 John" :
+                   chargedTo === "elwin" ? "👤 Elwin" :
+                   "↔️ Split (Both)"}
+                </Badge>
+                {chargedTo === "all" && (
+                  <span className="text-xs text-slate-600">
+                    (₱{(parseFloat(amount || "0") / 2).toFixed(2)} each)
+                  </span>
+                )}
               </div>
               {paymentMethod && (
                 <div className="flex items-center gap-2 mt-2">

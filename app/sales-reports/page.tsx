@@ -99,7 +99,9 @@ export default function SalesReportsPage() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // Parse YYYY-MM-DD as local date to avoid UTC conversion issues
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -298,11 +300,24 @@ export default function SalesReportsPage() {
                               <span className="text-sm font-bold text-red-700">-₱{withdrawal.amount.toFixed(2)}</span>
                             </div>
                             <p className="text-sm text-slate-700">{withdrawal.description}</p>
-                            {withdrawal.createdBy && (
-                              <p className="text-xs text-slate-500 mt-1">
-                                by {withdrawal.createdBy.name || withdrawal.createdBy.email || "Unknown"}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {withdrawal.chargedTo && (
+                                <Badge className={`text-xs font-bold ${
+                                  withdrawal.chargedTo === 'john' ? 'bg-purple-600 text-white' :
+                                  withdrawal.chargedTo === 'elwin' ? 'bg-indigo-600 text-white' :
+                                  'bg-slate-600 text-white'
+                                }`}>
+                                  {withdrawal.chargedTo === 'john' ? '👤 John' :
+                                   withdrawal.chargedTo === 'elwin' ? '👤 Elwin' :
+                                   '↔️ Split (Both)'}
+                                </Badge>
+                              )}
+                              {withdrawal.createdBy && (
+                                <p className="text-xs text-slate-500">
+                                  by {withdrawal.createdBy.name || withdrawal.createdBy.email || "Unknown"}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -317,11 +332,24 @@ export default function SalesReportsPage() {
                               <span className="text-sm font-bold text-orange-700">-₱{purchase.amount.toFixed(2)}</span>
                             </div>
                             <p className="text-sm text-slate-700">{purchase.description}</p>
-                            {purchase.createdBy && (
-                              <p className="text-xs text-slate-500 mt-1">
-                                by {purchase.createdBy.name || purchase.createdBy.email || "Unknown"}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              {purchase.chargedTo && (
+                                <Badge className={`text-xs font-bold ${
+                                  purchase.chargedTo === 'john' ? 'bg-purple-600 text-white' :
+                                  purchase.chargedTo === 'elwin' ? 'bg-indigo-600 text-white' :
+                                  'bg-slate-600 text-white'
+                                }`}>
+                                  {purchase.chargedTo === 'john' ? '👤 John' :
+                                   purchase.chargedTo === 'elwin' ? '👤 Elwin' :
+                                   '↔️ Split (Both)'}
+                                </Badge>
+                              )}
+                              {purchase.createdBy && (
+                                <p className="text-xs text-slate-500">
+                                  by {purchase.createdBy.name || purchase.createdBy.email || "Unknown"}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -331,74 +359,154 @@ export default function SalesReportsPage() {
 
                 {/* Summary Footer */}
                 <div className="mt-6 pt-4 border-t-2 border-slate-300">
-                  {/* Payment Method Breakdown */}
-                  <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
-                      <div className="text-xs text-emerald-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
-                        <span>💵</span> Cash Received
+                  {/* Overall Summary */}
+                  <div className="mb-6">
+                    <h4 className="text-lg font-bold text-slate-900 mb-4 border-b pb-2">Overall Summary</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                        <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">
+                          Total Sales
+                        </div>
+                        <div className="text-lg font-bold text-slate-900">₱{daily.totalSales.toFixed(2)}</div>
                       </div>
-                      <div className="text-lg font-bold text-emerald-700">₱{daily.totalCash.toFixed(2)}</div>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                      <div className="text-xs text-blue-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
-                        <span>Ⓖ</span> GCash Received
+                      <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                        <div className="text-xs text-orange-600 mb-1 uppercase tracking-wide font-semibold">
+                          Total Purchases
+                        </div>
+                        <div className="text-lg font-bold text-orange-600">-₱{daily.totalPurchases.toFixed(2)}</div>
                       </div>
-                      <div className="text-lg font-bold text-blue-700">₱{daily.totalGcash.toFixed(2)}</div>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                      <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">
-                        Total Sales
+                      <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                        <div className="text-xs text-red-600 mb-1 uppercase tracking-wide font-semibold">
+                          Total Withdrawals
+                        </div>
+                        <div className="text-lg font-bold text-red-600">-₱{daily.totalWithdrawals.toFixed(2)}</div>
                       </div>
-                      <div className="text-lg font-bold text-slate-900">₱{daily.totalSales.toFixed(2)}</div>
+                      <div className={`rounded-lg p-3 border-2 ${
+                        daily.netSales >= 0
+                          ? "bg-emerald-50 border-emerald-300"
+                          : "bg-red-50 border-red-300"
+                      }`}>
+                        <div className={`text-xs mb-1 uppercase tracking-wide font-semibold ${
+                          daily.netSales >= 0 ? "text-emerald-600" : "text-red-600"
+                        }`}>
+                          Net Balance
+                        </div>
+                        <div className={`text-xl font-bold ${
+                          daily.netSales >= 0 ? "text-emerald-600" : "text-red-600"
+                        }`}>
+                          ₱{daily.netSales.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Deductions and Net Sales */}
-                  <div className="grid grid-cols-4 gap-4">
-                    {(daily.totalWithdrawals > 0 || daily.totalPurchases > 0) && (
-                      <>
-                        {daily.totalWithdrawals > 0 && (
-                          <div className="bg-red-50 rounded-lg p-3 border border-red-200">
-                            <div className="text-xs text-red-600 mb-1 uppercase tracking-wide font-semibold">
-                              Withdrawals
-                            </div>
-                            <div className="text-lg font-bold text-red-600">-₱{daily.totalWithdrawals.toFixed(2)}</div>
-                          </div>
-                        )}
-                        {daily.totalPurchases > 0 && (
-                          <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
-                            <div className="text-xs text-orange-600 mb-1 uppercase tracking-wide font-semibold">
-                              Purchases
-                            </div>
-                            <div className="text-lg font-bold text-orange-600">-₱{daily.totalPurchases.toFixed(2)}</div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {(daily.totalWithdrawals > 0 || daily.totalPurchases > 0) && (
-                      <div className="bg-slate-100 rounded-lg p-3 border border-slate-300">
-                        <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">
-                          Total Deductions
+                  {/* Owner Breakdown */}
+                  <div className="mb-6">
+                    <h4 className="text-lg font-bold text-slate-900 mb-4 border-b pb-2">Owner Breakdown</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* John */}
+                      <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-300">
+                        <div className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
+                          <span>👤</span> John
                         </div>
-                        <div className="text-lg font-bold text-slate-900">
-                          -₱{(daily.totalWithdrawals + daily.totalPurchases).toFixed(2)}
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-purple-700 font-semibold">Sales:</span>
+                            <span className="text-purple-900 font-bold">₱{daily.salesByOwner?.john?.toFixed(2) || "0.00"}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-red-600 font-semibold">Withdrawals:</span>
+                            <span className="text-red-700 font-bold">-₱{daily.withdrawalsByOwner?.john?.toFixed(2) || "0.00"}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-orange-600 font-semibold">Purchases:</span>
+                            <span className="text-orange-700 font-bold">-₱{daily.purchasesByOwner?.john?.toFixed(2) || "0.00"}</span>
+                          </div>
+                          <div className="pt-2 border-t border-purple-200">
+                            <div className="flex justify-between">
+                              <span className="text-purple-800 font-bold">Net Total:</span>
+                              <span className={`text-lg font-bold ${
+                                (daily.netTotalsByOwner?.john || 0) >= 0 ? "text-emerald-600" : "text-red-600"
+                              }`}>
+                                ₱{(daily.netTotalsByOwner?.john || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    )}
-                    <div className={`rounded-lg p-3 border-2 ${
-                      daily.netSales >= 0
-                        ? "bg-emerald-50 border-emerald-300"
-                        : "bg-red-50 border-red-300"
-                    }`}>
-                      <div className={`text-xs mb-1 uppercase tracking-wide font-semibold ${
-                        daily.netSales >= 0 ? "text-emerald-600" : "text-red-600"
-                      }`}>
-                        Net Sales
+
+                      {/* Elwin */}
+                      <div className="bg-indigo-50 rounded-lg p-4 border-2 border-indigo-300">
+                        <div className="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
+                          <span>👤</span> Elwin
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-indigo-700 font-semibold">Sales:</span>
+                            <span className="text-indigo-900 font-bold">₱{daily.salesByOwner?.elwin?.toFixed(2) || "0.00"}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-red-600 font-semibold">Withdrawals:</span>
+                            <span className="text-red-700 font-bold">-₱{daily.withdrawalsByOwner?.elwin?.toFixed(2) || "0.00"}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-orange-600 font-semibold">Purchases:</span>
+                            <span className="text-orange-700 font-bold">-₱{daily.purchasesByOwner?.elwin?.toFixed(2) || "0.00"}</span>
+                          </div>
+                          <div className="pt-2 border-t border-indigo-200">
+                            <div className="flex justify-between">
+                              <span className="text-indigo-800 font-bold">Net Total:</span>
+                              <span className={`text-lg font-bold ${
+                                (daily.netTotalsByOwner?.elwin || 0) >= 0 ? "text-emerald-600" : "text-red-600"
+                              }`}>
+                                ₱{(daily.netTotalsByOwner?.elwin || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className={`text-xl font-bold ${
-                        daily.netSales >= 0 ? "text-emerald-600" : "text-red-600"
-                      }`}>
-                        ₱{daily.netSales.toFixed(2)}
+
+                      {/* All (Split Items) */}
+                      {(daily.withdrawalsByOwner?.all > 0 || daily.purchasesByOwner?.all > 0) && (
+                        <div className="bg-slate-50 rounded-lg p-4 border-2 border-slate-300">
+                          <div className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                            <span>↔️</span> All (Split)
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-red-600 font-semibold">Withdrawals:</span>
+                              <span className="text-red-700 font-bold">-₱{daily.withdrawalsByOwner?.all?.toFixed(2) || "0.00"}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-orange-600 font-semibold">Purchases:</span>
+                              <span className="text-orange-700 font-bold">-₱{daily.purchasesByOwner?.all?.toFixed(2) || "0.00"}</span>
+                            </div>
+                            <div className="pt-2 border-t border-slate-200">
+                              <div className="text-xs text-slate-600">
+                                Split equally between John and Elwin
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Payment Method Breakdown */}
+                  <div className="mb-4">
+                    <h4 className="text-md font-bold text-slate-900 mb-3">Payment Methods</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+                        <div className="text-xs text-emerald-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                          <span>💵</span> Cash Received
+                        </div>
+                        <div className="text-lg font-bold text-emerald-700">₱{daily.totalCash.toFixed(2)}</div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                        <div className="text-xs text-blue-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                          <span>Ⓖ</span> GCash Received
+                        </div>
+                        <div className="text-lg font-bold text-blue-700">₱{daily.totalGcash.toFixed(2)}</div>
                       </div>
                     </div>
                   </div>

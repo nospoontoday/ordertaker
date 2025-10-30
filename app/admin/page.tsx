@@ -34,6 +34,7 @@ export default function AdminDashboard() {
     category: "",
     image: "",
     isBestSeller: false,
+    owner: "john" as "john" | "elwin",
   })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -61,7 +62,24 @@ export default function AdminDashboard() {
         menuItemsApi.getAll(),
         categoriesApi.getAll(),
       ])
-      setMenuItems(itemsData)
+      // Sort menu items by owner (john first, then elwin), then alphabetically by name
+      const sortedItems = [...itemsData].sort((a, b) => {
+        const ownerA = a.owner || 'john'
+        const ownerB = b.owner || 'john'
+        
+        // First sort by owner: john comes before elwin
+        if (ownerA !== ownerB) {
+          // john should come first, elwin second
+          if (ownerA === 'john') return -1
+          if (ownerB === 'john') return 1
+          // Both are elwin or other, compare alphabetically
+          return ownerA.localeCompare(ownerB)
+        }
+        
+        // If same owner, sort alphabetically by name
+        return a.name.localeCompare(b.name)
+      })
+      setMenuItems(sortedItems)
       setCategories(categoriesData)
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -84,6 +102,7 @@ export default function AdminDashboard() {
         category: item.category,
         image: item.image || "",
         isBestSeller: item.isBestSeller || false,
+        owner: item.owner || "john",
       })
       setImagePreview(item.image ? getImageUrl(item.image) : null)
     } else {
@@ -94,6 +113,7 @@ export default function AdminDashboard() {
         category: "",
         image: "",
         isBestSeller: false,
+        owner: "john",
       })
       setImagePreview(null)
     }
@@ -110,6 +130,7 @@ export default function AdminDashboard() {
       category: "",
       image: "",
       isBestSeller: false,
+      owner: "john",
     })
     setSelectedFile(null)
     setImagePreview(null)
@@ -197,6 +218,7 @@ export default function AdminDashboard() {
         category: formData.category,
         image: imageUrl,
         isBestSeller: formData.isBestSeller,
+        owner: formData.owner,
       }
 
       if (editingItem && editingItem._id) {
@@ -309,6 +331,7 @@ export default function AdminDashboard() {
                     <TableHead>Name</TableHead>
                     <TableHead>Price (₱)</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead>Owner</TableHead>
                     <TableHead>Best Seller</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -327,6 +350,17 @@ export default function AdminDashboard() {
                       <TableCell>₱{item.price.toFixed(2)}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{item.category}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={
+                          item.owner === 'john' ? 'bg-purple-600 text-white' :
+                          item.owner === 'elwin' ? 'bg-indigo-600 text-white' :
+                          'bg-slate-600 text-white'
+                        }>
+                          {item.owner === 'john' ? '👤 John' :
+                           item.owner === 'elwin' ? '👤 Elwin' :
+                           '👤 John'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {item.isBestSeller && <Badge className="bg-yellow-500">Best Seller</Badge>}
@@ -405,6 +439,25 @@ export default function AdminDashboard() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="owner">Owner *</Label>
+                <Select
+                  value={formData.owner}
+                  onValueChange={(value: "john" | "elwin") => setFormData({ ...formData, owner: value })}
+                  required
+                >
+                  <SelectTrigger id="owner">
+                    <SelectValue placeholder="Select owner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="john">👤 John</SelectItem>
+                    <SelectItem value="elwin">👤 Elwin</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Select who owns this menu item. Sales will be credited to the owner.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="image">Image</Label>

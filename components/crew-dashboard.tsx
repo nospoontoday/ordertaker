@@ -1370,40 +1370,50 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             )
                           }
 
-                          // Show payment buttons if there's any unpaid amount
-                          if (unpaidTotal > 0 && canManagePayments) {
+                          // Show total amount badge and payment buttons if there's any unpaid amount
+                          if (unpaidTotal > 0) {
                             return (
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    markAllAsPaid(order.id, "cash")
-                                  }}
-                                  size="sm"
-                                  className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
-                                >
-                                  💵 Cash
-                                </Button>
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    markAllAsPaid(order.id, "gcash")
-                                  }}
-                                  size="sm"
-                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
-                                >
-                                  Ⓖ GCash
-                                </Button>
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    openSplitPaymentDialog(order.id)
-                                  }}
-                                  size="sm"
-                                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
-                                >
-                                  🔀 Split
-                                </Button>
+                              <div className="flex flex-col items-end gap-2">
+                                {/* Total Amount Badge */}
+                                <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                  ₱{totalAmount.toFixed(2)}
+                                </Badge>
+
+                                {/* Payment Buttons */}
+                                {canManagePayments && (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        markAllAsPaid(order.id, "cash")
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      💵 Cash
+                                    </Button>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        markAllAsPaid(order.id, "gcash")
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      Ⓖ GCash
+                                    </Button>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openSplitPaymentDialog(order.id)
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      🔀 Split
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             )
                           }

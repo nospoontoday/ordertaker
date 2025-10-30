@@ -10,81 +10,11 @@ const User = require('../models/User');
  * @access  Public
  */
 router.post('/register', async (req, res) => {
-  try {
-    const { email, password, role, name } = req.body;
-
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email and password are required'
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'Password must be at least 6 characters'
-      });
-    }
-
-    // Validate role
-    const validRoles = ['order_taker', 'crew', 'order_taker_crew'];
-    if (role && !validRoles.includes(role)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid role. Must be order_taker, crew, or order_taker_crew'
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        error: 'User with this email already exists'
-      });
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new user
-    const user = new User({
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      role: role || 'crew',
-      name: name || email.split('@')[0]
-    });
-
-    await user.save();
-
-    res.status(201).json({
-      success: true,
-      data: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        name: user.name
-      },
-      message: 'User registered successfully'
-    });
-  } catch (error) {
-    console.error('Error registering user:', error);
-
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({
-        success: false,
-        error: error.message
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to register user'
-    });
-  }
+  // Registration is disabled - only predefined users can access the app
+  return res.status(403).json({
+    success: false,
+    error: 'Registration is disabled. Please contact the administrator for access.'
+  });
 });
 
 /**

@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, price, category, image, isBestSeller } = req.body;
+    const { name, price, category, image, isBestSeller, owner } = req.body;
 
     // Validation
     if (!name || !price || !category) {
@@ -93,13 +93,22 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate owner if provided
+    if (owner && !['john', 'elwin'].includes(owner)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Owner must be "john" or "elwin"'
+      });
+    }
+
     // Create menu item
     const menuItem = await MenuItem.create({
       name,
       price,
       category,
       image: image || '',
-      isBestSeller: isBestSeller || false
+      isBestSeller: isBestSeller || false,
+      owner: owner || 'john'
     });
 
     res.status(201).json({

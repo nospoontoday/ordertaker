@@ -16,6 +16,7 @@ export interface MenuItem {
   category: string;
   image: string;
   isBestSeller?: boolean;
+  owner?: "john" | "elwin";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -67,6 +68,7 @@ export interface Withdrawal {
     email?: string;
   };
   paymentMethod?: "cash" | "gcash" | null;
+  chargedTo?: "john" | "elwin" | "all";
 }
 
 export interface Order {
@@ -399,6 +401,7 @@ export const ordersApi = {
     items: OrderItem[];
     createdAt?: number;
     isPaid?: boolean;
+    paymentMethod?: "cash" | "gcash" | "split" | null;
     orderType: "dine-in" | "take-out";
     appendedOrders?: AppendedOrder[];
     orderTakerName?: string;
@@ -649,6 +652,7 @@ export const withdrawalsApi = {
       email?: string;
     };
     paymentMethod?: "cash" | "gcash" | null;
+    chargedTo?: "john" | "elwin" | "all"; // Who this withdrawal/purchase is charged to
   }): Promise<Withdrawal> => {
     const response = await apiCall<Withdrawal>("/withdrawals", {
       method: "POST",
@@ -692,6 +696,25 @@ export interface DailySalesSummary {
   totalWithdrawals: number;
   totalPurchases: number;
   netSales: number;
+  // Owner breakdown
+  salesByOwner: {
+    john: number;
+    elwin: number;
+  };
+  withdrawalsByOwner: {
+    john: number;
+    elwin: number;
+    all: number;  // Split withdrawals
+  };
+  purchasesByOwner: {
+    john: number;
+    elwin: number;
+    all: number;  // Split purchases
+  };
+  netTotalsByOwner: {
+    john: number;
+    elwin: number;
+  };
 }
 
 export const dailySalesApi = {

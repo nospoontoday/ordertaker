@@ -108,7 +108,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { type, amount, description, createdBy, paymentMethod, createdAt } = req.body;
+    const { type, amount, description, createdBy, paymentMethod, createdAt, chargedTo } = req.body;
 
     // Validation
     if (!type || !['withdrawal', 'purchase'].includes(type)) {
@@ -129,6 +129,14 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Description is required'
+      });
+    }
+
+    // Validate chargedTo
+    if (chargedTo && !['john', 'elwin', 'all'].includes(chargedTo)) {
+      return res.status(400).json({
+        success: false,
+        error: 'chargedTo must be "john", "elwin", or "all"'
       });
     }
 
@@ -162,7 +170,8 @@ router.post('/', async (req, res) => {
       description: description.trim(),
       createdAt: createdAtTimestamp,
       createdBy: createdBy || {},
-      paymentMethod: paymentMethod || null
+      paymentMethod: paymentMethod || null,
+      chargedTo: chargedTo || 'john'
     });
 
     await withdrawal.save();

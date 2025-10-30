@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign } from "lucide-react"
+import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar } from "lucide-react"
 import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -132,6 +132,7 @@ export function OrderTaker({
 
   // Check if user can access withdrawal feature (all roles except crew)
   const canWithdraw = user?.role !== "crew"
+  const isAdmin = user?.role === "super_admin"
 
   // Load menu data from API with fallback
   useEffect(() => {
@@ -720,6 +721,17 @@ export function OrderTaker({
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                   <span className="text-xs font-semibold text-amber-700">Offline</span>
                 </div>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.location.href = '/historical-order'}
+                  className="gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Daily Summary
+                </Button>
               )}
               {canWithdraw && (
                 <Button

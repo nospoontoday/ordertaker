@@ -36,6 +36,12 @@ const menuItemSchema = new mongoose.Schema(
     isBestSeller: {
       type: Boolean,
       default: false
+    },
+    owner: {
+      type: String,
+      enum: ['john', 'elwin'],
+      required: [true, 'Owner is required. Must be "john" or "elwin"'],
+      default: 'john'
     }
   },
   {

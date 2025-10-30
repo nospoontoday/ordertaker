@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
@@ -45,24 +45,13 @@ export default function RegisterPage() {
     resolver: zodResolver(registerSchema),
   })
 
+  useEffect(() => {
+    // Registration is disabled - redirect to login
+    router.push("/login")
+  }, [router])
+
   const onSubmit = async (data: RegisterFormData) => {
-    setError(null)
-    setIsSubmitting(true)
-
-    try {
-      const result = await registerUser(data.email, data.password, data.role, data.name)
-
-      if (result.success) {
-        router.push("/")
-      } else {
-        setError(result.error || "Registration failed")
-      }
-    } catch (err) {
-      setError("An unexpected error occurred")
-      console.error(err)
-    } finally {
-      setIsSubmitting(false)
-    }
+    setError("Registration is disabled. Please contact the administrator for access.")
   }
 
   return (

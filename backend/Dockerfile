@@ -8,7 +8,7 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy application code
+# Copy application files
 COPY . .
 
 # Create uploads directory
@@ -17,5 +17,5 @@ RUN mkdir -p uploads
 # Expose port
 EXPOSE 5000
 
-# Start the application
-CMD ["npm", "start"]
+# Start the server
+CMD ["node", "server.js"]

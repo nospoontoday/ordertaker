@@ -3,6 +3,59 @@ const router = express.Router();
 const Order = require('../models/Order');
 
 /**
+ * Helper function to format date as YYYY-MM-DD from UTC components
+ * (ensures consistent date extraction regardless of server timezone)
+ * This extracts the actual calendar date from a timestamp
+ */
+function formatLocalDate(date) {
+  // Use UTC methods to extract the date components
+  // This ensures the date is consistent regardless of server timezone
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Helper function to calculate business day date from a timestamp
+ * Business day logic: 8AM to 1AM next day (in local timezone, but we use UTC for consistency)
+ * Returns a Date object set to 8 AM UTC of the business day
+ * 
+ * The key insight: We extract the UTC calendar date from the timestamp,
+ * which represents the actual calendar date regardless of timezone.
+ * Business day adjustments only apply when UTC hours indicate early morning (1AM-8AM),
+ * which might be from the previous calendar day's business period.
+ */
+function getBusinessDayDate(timestamp) {
+  const date = new Date(timestamp);
+  
+  // Extract UTC calendar date components - this gives us the actual calendar date
+  // e.g., Oct 13, 2025 2 PM UTC+8 = Oct 13, 2025 6 AM UTC = calendar date Oct 13
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const hours = date.getUTCHours();
+  
+  // Start with the UTC calendar date
+  let businessDayDate = new Date(Date.UTC(year, month, day));
+  
+  // Business day logic: Use UTC calendar date for accuracy
+  // Only adjust for very early morning hours (< 1 AM UTC) which are clearly from previous day
+  // This ensures that transactions created at 2 PM local (e.g., 6 AM UTC) stay on their calendar date
+  if (hours < 1) {
+    // Between midnight and 1AM UTC, belongs to previous calendar day's business period
+    businessDayDate.setUTCDate(businessDayDate.getUTCDate() - 1);
+  }
+  // For all other times, use the UTC calendar date directly
+  // This ensures accurate date assignment regardless of timezone
+  
+  // Set to 8 AM UTC to represent the business day start
+  businessDayDate.setUTCHours(8, 0, 0, 0);
+  
+  return businessDayDate;
+}
+
+/**
  * @route   GET /api/orders
  * @desc    Get all orders with optional filters
  * @query   isPaid - Filter by payment status (true/false)
@@ -126,30 +179,16 @@ router.get('/daily-sales', async (req, res) => {
     const dailySalesMap = new Map();
 
     allOrders.forEach((order) => {
-      const orderDate = new Date(order.createdAt);
-      let businessDay = new Date(orderDate);
+      // Calculate business day date using UTC to ensure accuracy
+      const businessDayDate = getBusinessDayDate(order.createdAt);
       
-      // Business day logic: 8AM to 1AM next day
-      if (orderDate.getHours() < 1) {
-        // Between midnight and 1AM, belongs to previous day
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else if (orderDate.getHours() < 8) {
-        // Between 1AM and 8AM, belongs to previous day
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else {
-        // 8AM or later, belongs to current day
-        businessDay.setHours(8, 0, 0, 0);
-      }
-      
-      // Use date string as key (YYYY-MM-DD format at 8AM)
-      const dateKey = businessDay.toISOString().split('T')[0];
+      // Use date string as key (YYYY-MM-DD format) extracted from UTC
+      const dateKey = formatLocalDate(businessDayDate);
       
       if (!dailySalesMap.has(dateKey)) {
         dailySalesMap.set(dateKey, {
           date: dateKey,
-          dateTimestamp: businessDay.getTime(),
+          dateTimestamp: businessDayDate.getTime(),
           orders: [],
           items: new Map(), // category -> { items: Map(itemName -> { quantity, price, total }) }
           withdrawals: [],
@@ -159,6 +198,21 @@ router.get('/daily-sales', async (req, res) => {
           totalGcash: 0,
           totalWithdrawals: 0,
           totalPurchases: 0,
+          // Owner-specific totals
+          salesByOwner: {
+            john: 0,
+            elwin: 0
+          },
+          withdrawalsByOwner: {
+            john: 0,
+            elwin: 0,
+            all: 0  // Split withdrawals/purchases
+          },
+          purchasesByOwner: {
+            john: 0,
+            elwin: 0,
+            all: 0  // Split purchases
+          }
         });
       }
 
@@ -177,6 +231,23 @@ router.get('/daily-sales', async (req, res) => {
         }
         
         return 'uncategorized';
+      };
+
+      // Helper function to get owner for an item
+      const getItemOwner = (item) => {
+        // First check if item has owner directly
+        if (item.owner && ['john', 'elwin'].includes(item.owner)) {
+          return item.owner;
+        }
+        
+        // Try to get from menu item map
+        const menuItem = menuItemMap.get(item.id);
+        if (menuItem && menuItem.owner && ['john', 'elwin'].includes(menuItem.owner)) {
+          return menuItem.owner;
+        }
+        
+        // Default to john if owner not found (for legacy items)
+        return 'john';
       };
 
       // Helper function to calculate payment method totals
@@ -200,6 +271,11 @@ router.get('/daily-sales', async (req, res) => {
 
       order.items.forEach((item) => {
         const category = getItemCategory(item);
+        const owner = getItemOwner(item);
+        const itemTotal = item.price * item.quantity;
+        
+        // Track sales by owner
+        dailySales.salesByOwner[owner] += itemTotal;
         
         if (!dailySales.items.has(category)) {
           dailySales.items.set(category, new Map());
@@ -219,8 +295,8 @@ router.get('/daily-sales', async (req, res) => {
         
         const itemData = categoryItems.get(itemKey);
         itemData.quantity += item.quantity;
-        itemData.total += item.price * item.quantity;
-        dailySales.totalSales += item.price * item.quantity;
+        itemData.total += itemTotal;
+        dailySales.totalSales += itemTotal;
       });
 
       // Process appended orders
@@ -232,6 +308,11 @@ router.get('/daily-sales', async (req, res) => {
 
             appended.items.forEach((item) => {
               const category = getItemCategory(item);
+              const owner = getItemOwner(item);
+              const itemTotal = item.price * item.quantity;
+              
+              // Track sales by owner
+              dailySales.salesByOwner[owner] += itemTotal;
               
               if (!dailySales.items.has(category)) {
                 dailySales.items.set(category, new Map());
@@ -251,8 +332,8 @@ router.get('/daily-sales', async (req, res) => {
               
               const itemData = categoryItems.get(itemKey);
               itemData.quantity += item.quantity;
-              itemData.total += item.price * item.quantity;
-              dailySales.totalSales += item.price * item.quantity;
+              itemData.total += itemTotal;
+              dailySales.totalSales += itemTotal;
             });
           }
         });
@@ -261,31 +342,41 @@ router.get('/daily-sales', async (req, res) => {
 
     // Process withdrawals and purchases
     allWithdrawals.forEach((withdrawal) => {
-      const withdrawalDate = new Date(withdrawal.createdAt);
-      let businessDay = new Date(withdrawalDate);
+      // Calculate business day date using UTC to ensure accuracy
+      const businessDayDate = getBusinessDayDate(withdrawal.createdAt);
       
-      // Same business day logic
-      if (withdrawalDate.getHours() < 1) {
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else if (withdrawalDate.getHours() < 8) {
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else {
-        businessDay.setHours(8, 0, 0, 0);
-      }
-      
-      const dateKey = businessDay.toISOString().split('T')[0];
+      const dateKey = formatLocalDate(businessDayDate);
       
       if (dailySalesMap.has(dateKey)) {
         const dailySales = dailySalesMap.get(dateKey);
+        const chargedTo = withdrawal.chargedTo || 'john';
         
         if (withdrawal.type === 'withdrawal') {
           dailySales.withdrawals.push(withdrawal);
           dailySales.totalWithdrawals += withdrawal.amount;
+          
+          // Track withdrawals by owner
+          if (chargedTo === 'all') {
+            // Split equally between both owners
+            dailySales.withdrawalsByOwner.john += withdrawal.amount / 2;
+            dailySales.withdrawalsByOwner.elwin += withdrawal.amount / 2;
+            dailySales.withdrawalsByOwner.all += withdrawal.amount;
+          } else {
+            dailySales.withdrawalsByOwner[chargedTo] += withdrawal.amount;
+          }
         } else if (withdrawal.type === 'purchase') {
           dailySales.purchases.push(withdrawal);
           dailySales.totalPurchases += withdrawal.amount;
+          
+          // Track purchases by owner
+          if (chargedTo === 'all') {
+            // Split equally between both owners
+            dailySales.purchasesByOwner.john += withdrawal.amount / 2;
+            dailySales.purchasesByOwner.elwin += withdrawal.amount / 2;
+            dailySales.purchasesByOwner.all += withdrawal.amount;
+          } else {
+            dailySales.purchasesByOwner[chargedTo] += withdrawal.amount;
+          }
         }
       }
     });
@@ -297,6 +388,12 @@ router.get('/daily-sales', async (req, res) => {
       daily.items.forEach((categoryItems, category) => {
         itemsByCategory[category] = Array.from(categoryItems.values());
       });
+
+      // Calculate net totals per owner
+      const johnTotalDeductions = daily.withdrawalsByOwner.john + daily.purchasesByOwner.john;
+      const elwinTotalDeductions = daily.withdrawalsByOwner.elwin + daily.purchasesByOwner.elwin;
+      const johnNetTotal = daily.salesByOwner.john - johnTotalDeductions;
+      const elwinNetTotal = daily.salesByOwner.elwin - elwinTotalDeductions;
 
       return {
         date: daily.date,
@@ -310,6 +407,25 @@ router.get('/daily-sales', async (req, res) => {
         totalWithdrawals: daily.totalWithdrawals,
         totalPurchases: daily.totalPurchases,
         netSales: daily.totalSales - daily.totalWithdrawals - daily.totalPurchases,
+        // Owner breakdown
+        salesByOwner: {
+          john: daily.salesByOwner.john,
+          elwin: daily.salesByOwner.elwin
+        },
+        withdrawalsByOwner: {
+          john: daily.withdrawalsByOwner.john,
+          elwin: daily.withdrawalsByOwner.elwin,
+          all: daily.withdrawalsByOwner.all
+        },
+        purchasesByOwner: {
+          john: daily.purchasesByOwner.john,
+          elwin: daily.purchasesByOwner.elwin,
+          all: daily.purchasesByOwner.all
+        },
+        netTotalsByOwner: {
+          john: johnNetTotal,
+          elwin: elwinNetTotal
+        }
       };
     });
 
@@ -376,7 +492,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, customerName, items, createdAt, isPaid, appendedOrders, orderTakerName, orderTakerEmail } = req.body;
+    const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail } = req.body;
 
     // Validation
     if (!id) {
@@ -429,6 +545,8 @@ router.post('/', async (req, res) => {
       items,
       createdAt: createdAt || Date.now(),
       isPaid: isPaid || false,
+      paymentMethod: paymentMethod || null,
+      orderType: orderType || 'dine-in',
       appendedOrders: appendedOrders || [],
       orderTakerName: orderTakerName || null,
       orderTakerEmail: orderTakerEmail || null
@@ -1241,30 +1359,16 @@ router.get('/daily-sales', async (req, res) => {
     const dailySalesMap = new Map();
 
     allOrders.forEach((order) => {
-      const orderDate = new Date(order.createdAt);
-      let businessDay = new Date(orderDate);
+      // Calculate business day date using UTC to ensure accuracy
+      const businessDayDate = getBusinessDayDate(order.createdAt);
       
-      // Business day logic: 8AM to 1AM next day
-      if (orderDate.getHours() < 1) {
-        // Between midnight and 1AM, belongs to previous day
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else if (orderDate.getHours() < 8) {
-        // Between 1AM and 8AM, belongs to previous day
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else {
-        // 8AM or later, belongs to current day
-        businessDay.setHours(8, 0, 0, 0);
-      }
-      
-      // Use date string as key (YYYY-MM-DD format at 8AM)
-      const dateKey = businessDay.toISOString().split('T')[0];
+      // Use date string as key (YYYY-MM-DD format) extracted from UTC
+      const dateKey = formatLocalDate(businessDayDate);
       
       if (!dailySalesMap.has(dateKey)) {
         dailySalesMap.set(dateKey, {
           date: dateKey,
-          dateTimestamp: businessDay.getTime(),
+          dateTimestamp: businessDayDate.getTime(),
           orders: [],
           items: new Map(), // category -> { items: Map(itemName -> { quantity, price, total }) }
           withdrawals: [],
@@ -1353,21 +1457,10 @@ router.get('/daily-sales', async (req, res) => {
 
     // Process withdrawals and purchases
     allWithdrawals.forEach((withdrawal) => {
-      const withdrawalDate = new Date(withdrawal.createdAt);
-      let businessDay = new Date(withdrawalDate);
+      // Calculate business day date using UTC to ensure accuracy
+      const businessDayDate = getBusinessDayDate(withdrawal.createdAt);
       
-      // Same business day logic
-      if (withdrawalDate.getHours() < 1) {
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else if (withdrawalDate.getHours() < 8) {
-        businessDay.setDate(businessDay.getDate() - 1);
-        businessDay.setHours(8, 0, 0, 0);
-      } else {
-        businessDay.setHours(8, 0, 0, 0);
-      }
-      
-      const dateKey = businessDay.toISOString().split('T')[0];
+      const dateKey = formatLocalDate(businessDayDate);
       
       if (dailySalesMap.has(dateKey)) {
         const dailySales = dailySalesMap.get(dateKey);

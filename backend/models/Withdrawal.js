@@ -51,6 +51,12 @@ const withdrawalSchema = new mongoose.Schema(
       type: String,
       enum: ['cash', 'gcash', null],
       default: null
+    },
+    chargedTo: {
+      type: String,
+      enum: ['john', 'elwin', 'all'],
+      required: [true, 'chargedTo is required. Must be "john", "elwin", or "all"'],
+      default: 'john'
     }
   },
   {
