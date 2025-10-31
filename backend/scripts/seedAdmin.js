@@ -2,17 +2,43 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const connectDB = require('../config/db');
 
 /**
  * Seed Script to Create All Required Users
  * Clears all existing users and creates the predefined users
+ * Safe to run while backend server is running
  */
 
 const seedUsers = async () => {
+  let shouldCloseConnection = false;
+  
   try {
-    // Connect to MongoDB
-    await connectDB();
+    // Check if already connected
+    const wasConnected = mongoose.connection.readyState === 1;
+    
+    if (!wasConnected) {
+      // Connect to MongoDB only if not already connected
+      const mongoUri = process.env.MONGODB_URI;
+      
+      if (!mongoUri) {
+        console.error('❌ Error: MONGODB_URI environment variable is not set');
+        process.exit(1);
+      }
+
+      try {
+        await mongoose.connect(mongoUri, {
+          serverSelectionTimeoutMS: 10000,
+        });
+        shouldCloseConnection = true; // Only close if we opened it
+        console.log(`✓ MongoDB Connected: ${mongoose.connection.host}`);
+        console.log(`✓ Database: ${mongoose.connection.name}`);
+      } catch (connectError) {
+        console.error('❌ Error connecting to MongoDB:', connectError.message);
+        process.exit(1);
+      }
+    } else {
+      console.log('✓ Using existing MongoDB connection');
+    }
 
     console.log('\n========================================');
     console.log('Starting User Database Seed');
@@ -104,14 +130,36 @@ const seedUsers = async () => {
     console.log('Seed completed successfully!');
     console.log('========================================\n');
 
-    // Disconnect from MongoDB
-    await mongoose.connection.close();
-    process.exit(0);
   } catch (error) {
     console.error('\n❌ Error seeding database:', error);
+    if (error.stack) {
+      console.error('Stack:', error.stack);
+    }
     process.exit(1);
+  } finally {
+    // Only close connection if we opened it
+    // Don't close if it was already open (main server's connection)
+    if (shouldCloseConnection && mongoose.connection.readyState === 1) {
+      try {
+        await mongoose.connection.close();
+        console.log('✓ MongoDB connection closed');
+      } catch (closeError) {
+        console.error('Warning: Error closing connection:', closeError.message);
+      }
+    }
   }
 };
 
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (error) => {
+  console.error('❌ Unhandled promise rejection:', error);
+  process.exit(1);
+});
+
 // Run the seed script
-seedUsers();
+seedUsers().then(() => {
+  process.exit(0);
+}).catch((error) => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+});
