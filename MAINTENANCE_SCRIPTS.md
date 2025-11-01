@@ -147,8 +147,16 @@ Proceeding with database reset...
 - ✅ Admin user: `oliverjohnpr2013@gmail.com` / `123456`
 - ✅ Crew members (3 users)
 - ✅ Menu items (Coffee, Pastries, Sandwiches, etc.)
-- ✅ Categories
-- ✅ Test orders
+- ✅ Categories</search>
+<start_line>
+1
+end_line>
+-1
+use_regex>
+false
+ignore_case>
+false
+</search_and_replace>
 
 ### Output
 
@@ -191,17 +199,22 @@ Seeding users...
 Seeding menu items and categories...
 ✓ Menu items and categories seeded
 
-Seeding test orders...
-✓ Test orders seeded
-
 ==========================================
 ✓ DATABASE RESET COMPLETE!
 ==========================================
 
 Database has been cleared and reseeded with:
   ✓ Admin user and crew members
-  ✓ Menu items and categories
-  ✓ Test orders
+  ✓ Menu items and categories</search>
+<start_line>
+1
+end_line>
+-1
+use_regex>
+false
+ignore_case>
+false
+</search_and_replace>
 
 Default credentials:
   Admin: oliverjohnpr2013@gmail.com / 123456

@@ -68,18 +68,6 @@ node scripts/seedMenuItems.js
 - Categories (Coffee, Pastries, Sandwiches, etc.)
 - Menu items with prices and descriptions
 
-### Seed Test Orders
-
-Seeds sample orders for testing:
-
-```bash
-node scripts/seedTestOrders.js
-```
-
-**Creates:**
-- Sample orders with various statuses
-- Test data for reports and analytics
-
 ### Seed All at Once
 
 Run all seeders in sequence:
@@ -87,8 +75,7 @@ Run all seeders in sequence:
 ```bash
 # From backend directory
 node scripts/seedAdmin.js && \
-node scripts/seedMenuItems.js && \
-node scripts/seedTestOrders.js
+node scripts/seedMenuItems.js
 ```
 
 ---

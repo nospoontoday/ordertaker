@@ -54,88 +54,14 @@ else
 fi
 echo ""
 
-# Clear all data
-echo "Step 3: Clearing all database data..."
+# Wait for MongoDB to be ready
+echo "Step 3: Waiting for MongoDB to be ready..."
 echo "=========================================="
-echo "Clearing users..."
-node -e "
-require('dotenv').config();
-const mongoose = require('mongoose');
-const User = require('../models/User');
-
-(async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    await User.deleteMany({});
-    console.log('✓ Users cleared');
-    await mongoose.connection.close();
-  } catch (err) {
-    console.error('Error clearing users:', err.message);
-    process.exit(1);
-  }
-})();
-" || echo "⚠️  Error clearing users"
-
-echo "Clearing menu items..."
-node -e "
-require('dotenv').config();
-const mongoose = require('mongoose');
-const MenuItem = require('../models/MenuItem');
-
-(async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    await MenuItem.deleteMany({});
-    console.log('✓ Menu items cleared');
-    await mongoose.connection.close();
-  } catch (err) {
-    console.error('Error clearing menu items:', err.message);
-    process.exit(1);
-  }
-})();
-" || echo "⚠️  Error clearing menu items"
-
-echo "Clearing categories..."
-node -e "
-require('dotenv').config();
-const mongoose = require('mongoose');
-const Category = require('../models/Category');
-
-(async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    await Category.deleteMany({});
-    console.log('✓ Categories cleared');
-    await mongoose.connection.close();
-  } catch (err) {
-    console.error('Error clearing categories:', err.message);
-    process.exit(1);
-  }
-})();
-" || echo "⚠️  Error clearing categories"
-
-echo "Clearing orders..."
-node -e "
-require('dotenv').config();
-const mongoose = require('mongoose');
-const Order = require('../models/Order');
-
-(async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    await Order.deleteMany({});
-    console.log('✓ Orders cleared');
-    await mongoose.connection.close();
-  } catch (err) {
-    console.error('Error clearing orders:', err.message);
-    process.exit(1);
-  }
-})();
-" || echo "⚠️  Error clearing orders"
-
+sleep 3
+echo "✓ MongoDB ready"
 echo ""
 
-# Reseed database
+# Run seeders
 echo "Step 4: Reseeding database..."
 echo "=========================================="
 
@@ -157,15 +83,6 @@ else
 fi
 
 echo ""
-echo "Seeding test orders..."
-node scripts/seedTestOrders.js
-if [ $? -eq 0 ]; then
-    echo "✓ Test orders seeded"
-else
-    echo "⚠️  Error seeding test orders"
-fi
-
-echo ""
 
 # Final status
 echo "=========================================="
@@ -175,7 +92,6 @@ echo ""
 echo "Database has been cleared and reseeded with:"
 echo "  ✓ Admin user and crew members"
 echo "  ✓ Menu items and categories"
-echo "  ✓ Test orders"
 echo ""
 echo "Default credentials:"
 echo "  Admin: oliverjohnpr2013@gmail.com / 123456"

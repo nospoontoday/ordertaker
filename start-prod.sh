@@ -262,14 +262,6 @@ else
     echo "⚠️  seedMenuItems.js not found"
 fi
 
-# Seed test orders (optional)
-if [ -f scripts/seedTestOrders.js ]; then
-    echo "Seeding test orders..."
-    node scripts/seedTestOrders.js || echo "⚠️  Test orders seeding had issues"
-else
-    echo "⚠️  seedTestOrders.js not found"
-fi
-
 echo "✓ Database seeding completed"
 cd ..
 echo ""
