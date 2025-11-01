@@ -12,21 +12,14 @@ const server = http.createServer(app);
 
 // Initialize Socket.io with CORS
 const io = new Server(server, {
-  cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
-  }
+  cors: true
 });
 
 // Connect to MongoDB
 connectDB();
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+app.use(cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
