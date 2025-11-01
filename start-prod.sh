@@ -230,16 +230,47 @@ FIREWALL_PID=$!
 echo "✓ Firewall configuration started (PID: $FIREWALL_PID)"
 echo ""
 
-# Seed admin user
+# Seed database with initial data
 echo "=========================================="
-echo "Step 11: Seeding admin user..."
+echo "Step 11: Seeding database with initial data..."
 echo "=========================================="
 cd backend
+
+# Install backend dependencies if not already installed
+if [ ! -d "node_modules" ]; then
+    echo "Installing backend dependencies..."
+    npm install
+fi
+
+# Run all seeders
+echo ""
+echo "Running seeders..."
+
+# Seed admin and users
 if [ -f scripts/seedAdmin.js ]; then
-    node scripts/seedAdmin.js || echo "⚠️  Admin user may already exist"
+    echo "Seeding users..."
+    node scripts/seedAdmin.js || echo "⚠️  User seeding had issues"
 else
     echo "⚠️  seedAdmin.js not found"
 fi
+
+# Seed menu items and categories
+if [ -f scripts/seedMenuItems.js ]; then
+    echo "Seeding menu items and categories..."
+    node scripts/seedMenuItems.js || echo "⚠️  Menu items seeding had issues"
+else
+    echo "⚠️  seedMenuItems.js not found"
+fi
+
+# Seed test orders (optional)
+if [ -f scripts/seedTestOrders.js ]; then
+    echo "Seeding test orders..."
+    node scripts/seedTestOrders.js || echo "⚠️  Test orders seeding had issues"
+else
+    echo "⚠️  seedTestOrders.js not found"
+fi
+
+echo "✓ Database seeding completed"
 cd ..
 echo ""
 
