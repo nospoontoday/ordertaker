@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
+const DailyReportValidation = require('../models/DailyReportValidation');
+const User = require('../models/User');
 
 /**
  * Helper function to format date as YYYY-MM-DD from UTC components
@@ -432,6 +434,26 @@ router.get('/daily-sales', async (req, res) => {
     // Sort by date descending (latest first)
     dailySalesArray.sort((a, b) => b.dateTimestamp - a.dateTimestamp);
 
+    // Get validation status for all dates
+    const dateKeys = dailySalesArray.map(daily => daily.date);
+    const validations = await DailyReportValidation.find({ date: { $in: dateKeys } });
+    const validationMap = new Map();
+    validations.forEach(val => {
+      validationMap.set(val.date, {
+        isValidated: val.isValidated,
+        validatedAt: val.validatedAt,
+        validatedBy: val.validatedBy
+      });
+    });
+
+    // Add validation status to each daily report
+    dailySalesArray = dailySalesArray.map(daily => ({
+      ...daily,
+      isValidated: validationMap.has(daily.date) ? validationMap.get(daily.date).isValidated : false,
+      validatedAt: validationMap.has(daily.date) ? validationMap.get(daily.date).validatedAt : null,
+      validatedBy: validationMap.has(daily.date) ? validationMap.get(daily.date).validatedBy : null
+    }));
+
     // Pagination
     const total = dailySalesArray.length;
     const paginatedData = dailySalesArray.slice(skip, skip + limit);
@@ -451,6 +473,81 @@ router.get('/daily-sales', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch daily sales'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/orders/daily-sales/:date/validate
+ * @desc    Mark a daily report as validated (super admin only)
+ * @params  date - Date in YYYY-MM-DD format
+ * @body    { user } - User object with id, email, name, role
+ * @access  Super Admin only
+ */
+router.post('/daily-sales/:date/validate', async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { user } = req.body;
+
+    // Validate date format
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format. Must be YYYY-MM-DD'
+      });
+    }
+
+    // Validate user
+    if (!user || !user.id || !user.role) {
+      return res.status(400).json({
+        success: false,
+        error: 'User information is required'
+      });
+    }
+
+    // Verify user is super_admin
+    if (user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only super admin can validate daily reports'
+      });
+    }
+
+    // Verify user exists and has super_admin role
+    const dbUser = await User.findById(user.id);
+    if (!dbUser || dbUser.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized. Only super admin can validate daily reports'
+      });
+    }
+
+    // Create or update validation record
+    const validation = await DailyReportValidation.findOneAndUpdate(
+      { date },
+      {
+        date,
+        isValidated: true,
+        validatedAt: Date.now(),
+        validatedBy: {
+          userId: user.id,
+          name: user.name || '',
+          email: user.email || ''
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      data: validation,
+      message: 'Daily report marked as validated'
+    });
+  } catch (error) {
+    console.error('Error validating daily report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to validate daily report'
     });
   }
 });

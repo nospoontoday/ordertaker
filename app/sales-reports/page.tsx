@@ -7,7 +7,7 @@ import { dailySalesApi, type DailySalesSummary } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function SalesReportsPage() {
@@ -27,6 +27,8 @@ export default function SalesReportsPage() {
 
   // Check if user can access (all roles except crew)
   const canAccess = user?.role !== "crew"
+  // Check if user is super admin
+  const isSuperAdmin = user?.role === "super_admin"
 
   useEffect(() => {
     setMounted(true)
@@ -95,6 +97,41 @@ export default function SalesReportsPage() {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       fetchDailySales(newPage)
       window.scrollTo({ top: 0, behavior: "smooth" })
+    }
+  }
+
+  const handleValidateReport = async (date: string) => {
+    if (!user || !isSuperAdmin) {
+      toast({
+        title: "Access Denied",
+        description: "Only super admin can validate daily reports.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await dailySalesApi.validateDailyReport(date, {
+        id: user.id,
+        email: user.email,
+        name: user.name || "",
+        role: user.role,
+      })
+      
+      toast({
+        title: "Success",
+        description: "Daily report marked as validated.",
+      })
+      
+      // Refresh the data to show updated validation status
+      fetchDailySales(pagination.page)
+    } catch (error) {
+      console.error("Error validating daily report:", error)
+      toast({
+        title: "Error",
+        description: "Failed to validate daily report.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -196,6 +233,12 @@ export default function SalesReportsPage() {
                         Latest
                       </Badge>
                     )}
+                    {daily.isValidated && (
+                      <Badge className="bg-emerald-600 text-white font-bold text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Validated
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
@@ -206,23 +249,39 @@ export default function SalesReportsPage() {
                         ₱{daily.netSales.toFixed(2)}
                       </div>
                     </div>
-                    {!isLatest && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleDate(daily.date)
-                        }}
-                        className="ml-4"
-                      >
-                        {expanded ? (
-                          <ChevronUp className="h-5 w-5 text-slate-600" />
-                        ) : (
-                          <ChevronDown className="h-5 w-5 text-slate-600" />
-                        )}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isSuperAdmin && !daily.isValidated && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleValidateReport(daily.date)
+                          }}
+                          className="gap-1.5 text-xs"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Validate
+                        </Button>
+                      )}
+                      {!isLatest && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleDate(daily.date)
+                          }}
+                          className="ml-4"
+                        >
+                          {expanded ? (
+                            <ChevronUp className="h-5 w-5 text-slate-600" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-slate-600" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -356,6 +415,44 @@ export default function SalesReportsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Validation Section - Super Admin Only */}
+
+                  <div className="mt-6 pt-4 border-t border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-700 mb-1">
+                          Validation Status
+                        </h4>
+                        {daily.isValidated ? (
+                          <p className="text-xs text-slate-600">
+                            Validated by {daily.validatedBy?.name || daily.validatedBy?.email || "Admin"}
+                            {daily.validatedAt && (
+                              <span className="ml-2">
+                                on {new Date(daily.validatedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">
+                            This report has not been validated yet
+                          </p>
+                        )}
+                      </div>
+                      {!daily.isValidated && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleValidateReport(daily.date)}
+                          className="gap-2 text-xs"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Mark as Validated
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
 
                 {/* Summary Footer */}
                 <div className="mt-6 pt-4 border-t-2 border-slate-300">

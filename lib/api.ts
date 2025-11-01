@@ -715,6 +715,14 @@ export interface DailySalesSummary {
     john: number;
     elwin: number;
   };
+  // Validation status
+  isValidated?: boolean;
+  validatedAt?: number | null;
+  validatedBy?: {
+    userId: string;
+    name: string;
+    email: string;
+  } | null;
 }
 
 export const dailySalesApi = {
@@ -753,5 +761,14 @@ export const dailySalesApi = {
         totalPages: 0,
       },
     };
+  },
+  /**
+   * Mark a daily report as validated (super admin only)
+   */
+  validateDailyReport: async (date: string, user: { id: string; email: string; name: string; role: string }): Promise<void> => {
+    await apiCall(`/orders/daily-sales/${date}/validate`, {
+      method: "POST",
+      body: JSON.stringify({ user }),
+    });
   },
 };
