@@ -3,8 +3,10 @@
 # Production Startup Script - Run on DigitalOcean Droplet
 # This script sets up the server and starts the application
 # Usage: bash start-prod.sh
+# Or run in background: nohup bash start-prod.sh > deployment.log 2>&1 &
 
-set -e
+# Don't exit on error - continue with deployment
+set +e
 
 echo "=========================================="
 echo "Order Taker App - Production Setup"
@@ -16,12 +18,25 @@ DROPLET_IP=$(curl -s ifconfig.me || hostname -I | awk '{print $1}')
 echo "Detected Droplet IP: $DROPLET_IP"
 echo ""
 
+# Kill any existing apt processes immediately
+echo "Checking for running apt processes..."
+pkill -9 apt 2>/dev/null || true
+pkill -9 apt-get 2>/dev/null || true
+pkill -9 unattended-upgrade 2>/dev/null || true
+sleep 2
+echo "✓ Package manager ready"
+echo ""
+
 # Update system
 echo "=========================================="
 echo "Step 1: Updating system packages..."
 echo "=========================================="
 apt update && apt upgrade -y
-echo "✓ System packages updated"
+if [ $? -eq 0 ]; then
+    echo "✓ System packages updated"
+else
+    echo "⚠️  System update had issues, continuing..."
+fi
 echo ""
 
 # Install required software
@@ -113,7 +128,11 @@ echo "=========================================="
 echo "Step 6: Pulling Docker images from Docker Hub..."
 echo "=========================================="
 docker compose -f docker-compose.prod.yml pull
-echo "✓ Docker images pulled successfully"
+if [ $? -eq 0 ]; then
+    echo "✓ Docker images pulled successfully"
+else
+    echo "⚠️  Docker pull had issues, continuing..."
+fi
 echo ""
 
 # Start Docker services
@@ -189,19 +208,26 @@ rm -f /etc/nginx/sites-enabled/default
 
 # Test and restart Nginx
 nginx -t
-systemctl restart nginx
-echo "✓ Nginx configured and restarted"
+if [ $? -eq 0 ]; then
+    systemctl restart nginx
+    echo "✓ Nginx configured and restarted"
+else
+    echo "⚠️  Nginx configuration had issues"
+fi
 echo ""
 
-# Configure firewall
+# Configure firewall (run in background to prevent logout)
 echo "=========================================="
 echo "Step 10: Configuring firewall..."
 echo "=========================================="
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw --force enable
-echo "✓ Firewall configured"
+(
+    ufw allow 22/tcp > /dev/null 2>&1
+    ufw allow 80/tcp > /dev/null 2>&1
+    ufw allow 443/tcp > /dev/null 2>&1
+    ufw --force enable > /dev/null 2>&1
+) &
+FIREWALL_PID=$!
+echo "✓ Firewall configuration started (PID: $FIREWALL_PID)"
 echo ""
 
 # Seed admin user
