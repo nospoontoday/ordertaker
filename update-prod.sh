@@ -24,20 +24,30 @@ else
 fi
 echo ""
 
-echo "Step 2: Rebuilding and restarting containers..."
+echo "Step 2: Stopping containers..."
 echo "=========================================="
-docker compose -f docker-compose.prod.yml up -d --force-recreate
+docker compose -f docker-compose.prod.yml down
 if [ $? -eq 0 ]; then
-    echo "✓ Containers rebuilt and restarted"
+    echo "✓ Containers stopped"
 else
-    echo "⚠️  Container rebuild had issues"
+    echo "⚠️  Error stopping containers"
 fi
 echo ""
 
-echo "Step 3: Waiting for services to initialize..."
+echo "Step 3: Starting updated containers..."
+echo "=========================================="
+docker compose -f docker-compose.prod.yml up -d --build
+if [ $? -eq 0 ]; then
+    echo "✓ Containers started with updated images"
+else
+    echo "⚠️  Container startup had issues"
+fi
+echo ""
+
+echo "Step 4: Waiting for services to initialize..."
 sleep 10
 
-echo "Step 4: Verifying services..."
+echo "Step 5: Verifying services..."
 echo "=========================================="
 docker compose -f docker-compose.prod.yml ps
 echo "✓ Services verified"
