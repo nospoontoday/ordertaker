@@ -53,6 +53,22 @@ docker compose -f docker-compose.prod.yml ps
 echo "✓ Services verified"
 echo ""
 
+echo "Step 6: Verifying Nginx configuration..."
+echo "=========================================="
+if nginx -t 2>/dev/null; then
+    echo "✓ Nginx configuration is valid"
+    # Check if /uploads location exists
+    if grep -q "location /uploads" /etc/nginx/sites-available/ordertaker 2>/dev/null; then
+        echo "✓ Nginx has /uploads location configured"
+    else
+        echo "⚠️  Nginx missing /uploads location (image uploads may not work)"
+        echo "   Run: bash fix-nginx-uploads.sh to fix this"
+    fi
+else
+    echo "⚠️  Nginx configuration check skipped (nginx may not be installed)"
+fi
+echo ""
+
 echo "=========================================="
 echo "✓ UPDATE COMPLETE!"
 echo "=========================================="
