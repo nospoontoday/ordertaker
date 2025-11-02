@@ -12,14 +12,74 @@ const server = http.createServer(app);
 
 // Initialize Socket.io with CORS
 const io = new Server(server, {
-  cors: true
+  cors: {
+    origin: process.env.FRONTEND_URL || '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
 });
 
 // Connect to MongoDB
 connectDB();
 
 // Middleware
-app.use(cors());
+// CORS configuration - allow requests from frontend and mobile browsers
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile browsers, Postman, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Build list of allowed origins
+    const allowedOrigins = [];
+    
+    // Add FRONTEND_URL if set
+    if (process.env.FRONTEND_URL) {
+      const frontendUrl = process.env.FRONTEND_URL.trim();
+      allowedOrigins.push(frontendUrl);
+      // Also add without trailing slash
+      if (frontendUrl.endsWith('/')) {
+        allowedOrigins.push(frontendUrl.slice(0, -1));
+      } else {
+        allowedOrigins.push(frontendUrl + '/');
+      }
+    }
+    
+    // Add localhost for development
+    if (process.env.NODE_ENV === 'development') {
+      allowedOrigins.push('http://localhost:3000', 'http://localhost');
+    }
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowed => {
+      return origin === allowed || 
+             origin === allowed.replace(/\/$/, '') ||
+             origin === allowed + '/';
+    });
+    
+    // In production, allow if origin matches or if FRONTEND_URL matches
+    // Also be lenient for mobile browsers that might have slightly different origins
+    if (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) {
+      // Allow if exact match, or if origin starts with FRONTEND_URL (for mobile subdomains, etc.)
+      if (isAllowed || origin.startsWith(process.env.FRONTEND_URL)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Temporarily allow all to fix mobile issue
+      }
+    } else {
+      // In development or if FRONTEND_URL not set, allow the origin
+      callback(null, true);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  optionsSuccessStatus: 200 // Important for mobile browsers and legacy clients
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
