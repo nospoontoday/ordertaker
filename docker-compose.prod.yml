@@ -20,7 +20,7 @@ services:
 
   # Backend Node.js API (Production mode - using Docker Hub image)
   backend:
-    image: YOUR_DOCKERHUB_USERNAME/ordertaker-backend:latest
+    image: oliverjohnpr2013/ordertaker-backend:latest
     container_name: ordertaker-backend
     restart: unless-stopped
     ports:
@@ -41,7 +41,7 @@ services:
 
   # Next.js application (Production mode - using Docker Hub image)
   app:
-    image: YOUR_DOCKERHUB_USERNAME/ordertaker-app:latest
+    image: oliverjohnpr2013/ordertaker-app:latest
     container_name: ordertaker-app
     restart: unless-stopped
     ports:
