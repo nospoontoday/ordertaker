@@ -53,14 +53,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Critical for mobile browsers with CORS
         body: JSON.stringify({ email, password, role, name }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        return { success: false, error: data.error || 'Registration failed' }
+        let errorMessage = 'Registration failed'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // If response isn't JSON, use status text
+          errorMessage = response.statusText || errorMessage
+        }
+        return { success: false, error: errorMessage }
       }
+
+      const data = await response.json()
 
       // Set current user
       const newUser: User = {
@@ -69,12 +78,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: data.data.role,
         name: data.data.name,
       }
-      setUser(newUser)
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newUser))
+      
+      // Wrap localStorage in try-catch for mobile browser issues
+      try {
+        setUser(newUser)
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newUser))
+      } catch (storageError) {
+        console.error("localStorage error (common on mobile with IP addresses):", storageError)
+        // Still set user in memory even if localStorage fails
+        setUser(newUser)
+        return { success: true, error: 'Registered but session may not persist' }
+      }
 
       return { success: true }
     } catch (error) {
       console.error("Registration error:", error)
+      // Provide more specific error messages
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return { success: false, error: "Network error. Please check your connection." }
+      }
       return { success: false, error: "Registration failed. Please try again." }
     }
   }
@@ -86,14 +108,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Critical for mobile browsers with CORS
         body: JSON.stringify({ email, password }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        return { success: false, error: data.error || 'Login failed' }
+        let errorMessage = 'Login failed'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // If response isn't JSON, use status text
+          errorMessage = response.statusText || errorMessage
+        }
+        return { success: false, error: errorMessage }
       }
+
+      const data = await response.json()
 
       // Set current user
       const loggedInUser: User = {
@@ -102,12 +133,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: data.data.role,
         name: data.data.name,
       }
-      setUser(loggedInUser)
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedInUser))
+      
+      // Wrap localStorage in try-catch for mobile browser issues
+      try {
+        setUser(loggedInUser)
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedInUser))
+      } catch (storageError) {
+        console.error("localStorage error (common on mobile with IP addresses):", storageError)
+        // Still set user in memory even if localStorage fails
+        setUser(loggedInUser)
+        return { success: true, error: 'Logged in but session may not persist' }
+      }
 
       return { success: true }
     } catch (error) {
       console.error("Login error:", error)
+      // Provide more specific error messages
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return { success: false, error: "Network error. Please check your connection." }
+      }
       return { success: false, error: "Login failed. Please try again." }
     }
   }
@@ -128,18 +172,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Critical for mobile browsers with CORS
         body: JSON.stringify({ email, currentPassword, newPassword }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        return { success: false, error: data.error || 'Failed to change password' }
+        let errorMessage = 'Failed to change password'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // If response isn't JSON, use status text
+          errorMessage = response.statusText || errorMessage
+        }
+        return { success: false, error: errorMessage }
       }
+
+      const data = await response.json()
 
       return { success: true }
     } catch (error) {
       console.error("Change password error:", error)
+      // Provide more specific error messages
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return { success: false, error: "Network error. Please check your connection." }
+      }
       return { success: false, error: "Failed to change password. Please try again." }
     }
   }
