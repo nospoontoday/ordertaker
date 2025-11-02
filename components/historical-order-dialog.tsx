@@ -114,31 +114,33 @@ export function HistoricalOrderDialog({
   }
 
   const addItemFromMenu = (menuItem: MenuItem) => {
-    const existingItem = items.find((item) => item.id === menuItem.id)
+    setItems((prevItems) => {
+      const existingItem = prevItems.find((item) => item.id === menuItem.id)
 
-    if (existingItem) {
-      setItems(
-        items.map((item) =>
+      if (existingItem) {
+        return prevItems.map((item) =>
           item.id === menuItem.id ? { ...item, quantity: item.quantity + 1 } : item
         )
-      )
-    } else {
-      setItems([...items, { ...menuItem, quantity: 1 }])
-    }
+      } else {
+        return [...prevItems, { ...menuItem, quantity: 1 }]
+      }
+    })
   }
 
   const updateItemQuantity = (itemId: string, delta: number) => {
-    setItems(items.map(item => {
-      if (item.id === itemId) {
-        const newQuantity = Math.max(1, item.quantity + delta)
-        return { ...item, quantity: newQuantity }
-      }
-      return item
-    }))
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        if (item.id === itemId) {
+          const newQuantity = Math.max(1, item.quantity + delta)
+          return { ...item, quantity: newQuantity }
+        }
+        return item
+      })
+    )
   }
 
   const removeItem = (itemId: string) => {
-    setItems(items.filter(item => item.id !== itemId))
+    setItems((prevItems) => prevItems.filter((item) => item.id !== itemId))
   }
 
   const calculateTotal = () => {
@@ -398,6 +400,15 @@ export function HistoricalOrderDialog({
                         type="button"
                         size="sm"
                         variant="outline"
+                        onClick={() => removeItem(item.id)}
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
                         onClick={() => updateItemQuantity(item.id, -1)}
                         className="h-8 w-8 p-0"
                       >
@@ -412,15 +423,6 @@ export function HistoricalOrderDialog({
                         className="h-8 w-8 p-0"
                       >
                         <Plus className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => removeItem(item.id)}
-                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <X className="w-3 h-3" />
                       </Button>
                     </div>
                     <div className="text-sm font-bold">

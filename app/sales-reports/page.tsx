@@ -7,8 +7,9 @@ import { dailySalesApi, type DailySalesSummary } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2, Pencil } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { EditDailySalesDialog } from "@/components/edit-daily-sales-dialog"
 
 export default function SalesReportsPage() {
   const router = useRouter()
@@ -24,6 +25,8 @@ export default function SalesReportsPage() {
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingDate, setEditingDate] = useState<string | null>(null)
 
   // Check if user can access (all roles except crew)
   const canAccess = user?.role !== "crew"
@@ -170,6 +173,15 @@ export default function SalesReportsPage() {
     }
   }
 
+  const handleEditReport = (date: string) => {
+    setEditingDate(date)
+    setEditDialogOpen(true)
+  }
+
+  const handleEditSuccess = () => {
+    fetchDailySales(pagination.page)
+  }
+
   const formatDate = (dateString: string) => {
     // Parse YYYY-MM-DD as local date to avoid UTC conversion issues
     const [year, month, day] = dateString.split('-').map(Number)
@@ -300,18 +312,32 @@ export default function SalesReportsPage() {
                         </Button>
                       )}
                       {canAccess && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteReport(daily.date)
-                          }}
-                          className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditReport(daily.date)
+                            }}
+                            className="gap-1.5 text-xs"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteReport(daily.date)
+                            }}
+                            className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </Button>
+                        </>
                       )}
                       {!isLatest && (
                         <Button
@@ -709,6 +735,16 @@ export default function SalesReportsPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      {editingDate && (
+        <EditDailySalesDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          date={editingDate}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </div>
   )
 }

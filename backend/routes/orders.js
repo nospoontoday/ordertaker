@@ -553,6 +553,61 @@ router.post('/daily-sales/:date/validate', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/orders/daily-sales/:date/details
+ * @desc    Get detailed orders and withdrawals for a specific date (admin only)
+ * @params  date - Date in YYYY-MM-DD format
+ * @access  Admin or Super Admin only
+ */
+router.get('/daily-sales/:date/details', async (req, res) => {
+  try {
+    const { date } = req.params;
+
+    // Validate date format
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format. Must be YYYY-MM-DD'
+      });
+    }
+
+    // Parse the date to get start and end timestamps for the business day
+    const [year, month, day] = date.split('-').map(Number);
+    const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+    // Get all orders and withdrawals for this date
+    const [orders, withdrawals] = await Promise.all([
+      Order.find({
+        createdAt: {
+          $gte: startDate.getTime(),
+          $lte: endDate.getTime()
+        }
+      }).sort({ createdAt: 1 }),
+      require('../models/Withdrawal').find({
+        createdAt: {
+          $gte: startDate.getTime(),
+          $lte: endDate.getTime()
+        }
+      }).sort({ createdAt: 1 })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        orders,
+        withdrawals
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching daily sales details:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch daily sales details'
+    });
+  }
+});
+
+/**
  * @route   DELETE /api/orders/daily-sales/:date
  * @desc    Delete a daily sales report (admin/super_admin only)
  * @params  date - Date in YYYY-MM-DD format

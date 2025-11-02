@@ -763,6 +763,20 @@ export const dailySalesApi = {
     };
   },
   /**
+   * Get detailed orders and withdrawals for a specific date
+   */
+  getDailySalesDetails: async (date: string): Promise<{
+    orders: Order[];
+    withdrawals: Withdrawal[];
+  }> => {
+    const response = await apiCall<{
+      orders: Order[];
+      withdrawals: Withdrawal[];
+    }>(`/orders/daily-sales/${date}/details`);
+
+    return response.data || { orders: [], withdrawals: [] };
+  },
+  /**
    * Mark a daily report as validated (super admin only)
    */
   validateDailyReport: async (date: string, user: { id: string; email: string; name: string; role: string }): Promise<void> => {
