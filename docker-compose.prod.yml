@@ -48,8 +48,11 @@ services:
       - "127.0.0.1:3000:3000"  # Only accessible locally, via Nginx
     environment:
       NODE_ENV: production
-    volumes:
-      - ./.env.local:/app/.env.local:ro  # Mount .env.local as read-only
+      NEXT_PUBLIC_API_URL: http://165.232.167.105/api
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_URL: http://165.232.167.105/api
     depends_on:
       - backend
     networks:

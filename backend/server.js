@@ -13,9 +13,9 @@ const server = http.createServer(app);
 // Initialize Socket.io with CORS
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || '*',
+    origin: '*',
     methods: ['GET', 'POST'],
-    credentials: true
+    credentials: false
   }
 });
 
@@ -23,74 +23,17 @@ const io = new Server(server, {
 connectDB();
 
 // Middleware
-// CORS configuration - allow requests from frontend and mobile browsers
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Log CORS check for debugging in production
-    if (process.env.NODE_ENV === 'production') {
-      console.log(`[${new Date().toISOString()}] [CORS] Checking origin:`, origin || 'none');
-      console.log(`[${new Date().toISOString()}] [CORS] FRONTEND_URL:`, process.env.FRONTEND_URL || 'not set');
-    }
-    
-    // Allow requests with no origin (mobile browsers, Postman, etc.)
-    if (!origin) {
-      if (process.env.NODE_ENV === 'production') {
-        console.log(`[${new Date().toISOString()}] [CORS] Allowing request with no origin`);
-      }
-      return callback(null, true);
-    }
-    
-    // Build list of allowed origins
-    const allowedOrigins = [];
-    
-    // Add FRONTEND_URL if set
-    if (process.env.FRONTEND_URL) {
-      const frontendUrl = process.env.FRONTEND_URL.trim();
-      allowedOrigins.push(frontendUrl);
-      // Also add without trailing slash
-      if (frontendUrl.endsWith('/')) {
-        allowedOrigins.push(frontendUrl.slice(0, -1));
-      } else {
-        allowedOrigins.push(frontendUrl + '/');
-      }
-    }
-    
-    // Add localhost for development
-    if (process.env.NODE_ENV === 'development') {
-      allowedOrigins.push('http://localhost:3000', 'http://localhost');
-    }
-    
-    // Check if origin is allowed
-    const isAllowed = allowedOrigins.some(allowed => {
-      return origin === allowed || 
-             origin === allowed.replace(/\/$/, '') ||
-             origin === allowed + '/';
-    });
-    
-    // In production, allow if origin matches or if FRONTEND_URL matches
-    // Also be lenient for mobile browsers that might have slightly different origins
-    if (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) {
-      // Allow if exact match, or if origin starts with FRONTEND_URL (for mobile subdomains, etc.)
-      if (isAllowed || origin.startsWith(process.env.FRONTEND_URL)) {
-        console.log(`[${new Date().toISOString()}] [CORS] ✓ Allowing origin:`, origin);
-        callback(null, true);
-      } else {
-        console.log(`[${new Date().toISOString()}] [CORS] ✓ Allowing origin (lenient):`, origin);
-        callback(null, true); // Temporarily allow all to fix mobile issue
-      }
-    } else {
-      // In development or if FRONTEND_URL not set, allow the origin
-      callback(null, true);
-    }
-  },
-  credentials: true,
+// CORS configuration - WIDE OPEN (no restrictions)
+app.use(cors({
+  origin: '*', // Allow all origins
+  credentials: false, // Disable credentials requirement
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  optionsSuccessStatus: 200 // Important for mobile browsers and legacy clients
-};
-
-app.use(cors(corsOptions));
+  allowedHeaders: '*', // Allow all headers
+  exposedHeaders: '*', // Expose all headers
+  optionsSuccessStatus: 200,
+  preflightContinue: false,
+  maxAge: 86400
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
