@@ -24,11 +24,26 @@ router.post('/register', async (req, res) => {
  * @access  Public
  */
 router.post('/login', async (req, res) => {
+  const requestId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+  const timestamp = new Date().toISOString();
+  
   try {
+    // Detailed logging for production debugging
+    console.log(`[${timestamp}] [LOGIN:${requestId}] === LOGIN REQUEST ===`);
+    console.log(`[${timestamp}] [LOGIN:${requestId}] Origin:`, req.headers.origin || 'none');
+    console.log(`[${timestamp}] [LOGIN:${requestId}] User-Agent:`, req.headers['user-agent'] || 'none');
+    console.log(`[${timestamp}] [LOGIN:${requestId}] Referer:`, req.headers.referer || 'none');
+    console.log(`[${timestamp}] [LOGIN:${requestId}] IP:`, req.ip || req.connection.remoteAddress || 'unknown');
+    console.log(`[${timestamp}] [LOGIN:${requestId}] Method:`, req.method);
+    console.log(`[${timestamp}] [LOGIN:${requestId}] Path:`, req.path);
+    console.log(`[${timestamp}] [LOGIN:${requestId}] Email:`, req.body.email || 'none');
+    console.log(`[${timestamp}] [LOGIN:${requestId}] Password provided:`, req.body.password ? 'yes' : 'no');
+    
     const { email, password } = req.body;
 
     // Validation
     if (!email || !password) {
+      console.log(`[${timestamp}] [LOGIN:${requestId}] ❌ Validation failed: missing email or password`);
       return res.status(400).json({
         success: false,
         error: 'Email and password are required'
@@ -38,14 +53,18 @@ router.post('/login', async (req, res) => {
     // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
+      console.log(`[${timestamp}] [LOGIN:${requestId}] ❌ User not found:`, email.toLowerCase());
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'
       });
     }
 
+    console.log(`[${timestamp}] [LOGIN:${requestId}] ✓ User found:`, email.toLowerCase(), 'ID:', user._id);
+
     // Check if user is active
     if (!user.isActive) {
+      console.log(`[${timestamp}] [LOGIN:${requestId}] ❌ Account deactivated:`, email.toLowerCase());
       return res.status(403).json({
         success: false,
         error: 'Account has been deactivated'
@@ -55,11 +74,20 @@ router.post('/login', async (req, res) => {
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      console.log(`[${timestamp}] [LOGIN:${requestId}] ❌ Invalid password for:`, email.toLowerCase());
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'
       });
     }
+
+    console.log(`[${timestamp}] [LOGIN:${requestId}] ✓✓✓ LOGIN SUCCESSFUL for:`, email.toLowerCase());
+    console.log(`[${timestamp}] [LOGIN:${requestId}] User details:`, {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      name: user.name
+    });
 
     res.json({
       success: true,
@@ -72,7 +100,8 @@ router.post('/login', async (req, res) => {
       message: 'Login successful'
     });
   } catch (error) {
-    console.error('Error logging in:', error);
+    console.error(`[${new Date().toISOString()}] [LOGIN:${requestId}] ❌❌❌ ERROR:`, error);
+    console.error(`[${new Date().toISOString()}] [LOGIN:${requestId}] Error stack:`, error.stack);
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to login'

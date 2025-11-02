@@ -26,8 +26,17 @@ connectDB();
 // CORS configuration - allow requests from frontend and mobile browsers
 const corsOptions = {
   origin: function (origin, callback) {
+    // Log CORS check for debugging in production
+    if (process.env.NODE_ENV === 'production') {
+      console.log(`[${new Date().toISOString()}] [CORS] Checking origin:`, origin || 'none');
+      console.log(`[${new Date().toISOString()}] [CORS] FRONTEND_URL:`, process.env.FRONTEND_URL || 'not set');
+    }
+    
     // Allow requests with no origin (mobile browsers, Postman, etc.)
     if (!origin) {
+      if (process.env.NODE_ENV === 'production') {
+        console.log(`[${new Date().toISOString()}] [CORS] Allowing request with no origin`);
+      }
       return callback(null, true);
     }
     
@@ -63,8 +72,10 @@ const corsOptions = {
     if (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) {
       // Allow if exact match, or if origin starts with FRONTEND_URL (for mobile subdomains, etc.)
       if (isAllowed || origin.startsWith(process.env.FRONTEND_URL)) {
+        console.log(`[${new Date().toISOString()}] [CORS] ✓ Allowing origin:`, origin);
         callback(null, true);
       } else {
+        console.log(`[${new Date().toISOString()}] [CORS] ✓ Allowing origin (lenient):`, origin);
         callback(null, true); // Temporarily allow all to fix mobile issue
       }
     } else {
@@ -90,13 +101,20 @@ app.set('io', io);
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Request logging middleware (development)
-if (process.env.NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log(`${req.method} ${req.path}`);
-    next();
-  });
-}
+// Request logging middleware (enabled for both development and production)
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  
+  // Log more details in production for debugging
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`[${timestamp}] Origin:`, req.headers.origin || 'none');
+    console.log(`[${timestamp}] User-Agent:`, req.headers['user-agent'] || 'none');
+    console.log(`[${timestamp}] IP:`, req.ip || req.connection.remoteAddress || 'unknown');
+  }
+  
+  next();
+});
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
