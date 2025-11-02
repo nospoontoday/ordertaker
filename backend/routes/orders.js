@@ -553,6 +553,82 @@ router.post('/daily-sales/:date/validate', async (req, res) => {
 });
 
 /**
+ * @route   DELETE /api/orders/daily-sales/:date
+ * @desc    Delete a daily sales report (admin/super_admin only)
+ * @params  date - Date in YYYY-MM-DD format
+ * @access  Admin or Super Admin only
+ */
+router.delete('/daily-sales/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { userId } = req.body;
+
+    // Validate date format
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format. Must be YYYY-MM-DD'
+      });
+    }
+
+    // Validate user
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Verify user exists and is admin or super_admin
+    const dbUser = await User.findById(userId);
+    if (!dbUser || (dbUser.role !== 'admin' && dbUser.role !== 'super_admin')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized. Only admins can delete daily sales reports'
+      });
+    }
+
+    // Parse the date to get start and end timestamps for the business day
+    const [year, month, day] = date.split('-').map(Number);
+    const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+    // Delete all orders and withdrawals for this date
+    const [ordersResult, withdrawalsResult, validationResult] = await Promise.all([
+      Order.deleteMany({
+        createdAt: {
+          $gte: startDate.getTime(),
+          $lte: endDate.getTime()
+        }
+      }),
+      require('../models/Withdrawal').deleteMany({
+        createdAt: {
+          $gte: startDate.getTime(),
+          $lte: endDate.getTime()
+        }
+      }),
+      DailyReportValidation.findOneAndDelete({ date })
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Daily sales report deleted successfully',
+      data: {
+        ordersDeleted: ordersResult.deletedCount,
+        withdrawalsDeleted: withdrawalsResult.deletedCount,
+        validationDeleted: !!validationResult
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting daily sales report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete daily sales report'
+    });
+  }
+});
+
+/**
  * @route   GET /api/orders/:id
  * @desc    Get single order by ID
  * @access  Public

@@ -771,4 +771,13 @@ export const dailySalesApi = {
       body: JSON.stringify({ user }),
     });
   },
+  /**
+   * Delete a daily sales report (admin/super_admin only)
+   */
+  deleteDailyReport: async (date: string, userId: string): Promise<void> => {
+    await apiCall(`/orders/daily-sales/${date}`, {
+      method: "DELETE",
+      body: JSON.stringify({ userId }),
+    });
+  },
 };

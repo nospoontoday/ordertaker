@@ -7,7 +7,7 @@ import { dailySalesApi, type DailySalesSummary } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function SalesReportsPage() {
@@ -117,12 +117,12 @@ export default function SalesReportsPage() {
         name: user.name || "",
         role: user.role,
       })
-      
+
       toast({
         title: "Success",
         description: "Daily report marked as validated.",
       })
-      
+
       // Refresh the data to show updated validation status
       fetchDailySales(pagination.page)
     } catch (error) {
@@ -130,6 +130,41 @@ export default function SalesReportsPage() {
       toast({
         title: "Error",
         description: "Failed to validate daily report.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteReport = async (date: string) => {
+    if (!user) {
+      toast({
+        title: "Access Denied",
+        description: "You must be logged in to delete daily reports.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Show confirmation dialog
+    if (!window.confirm(`Are you sure you want to delete the sales report for ${formatDate(date)}? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      await dailySalesApi.deleteDailyReport(date, user.id)
+
+      toast({
+        title: "Success",
+        description: "Daily sales report deleted successfully.",
+      })
+
+      // Refresh the data
+      fetchDailySales(pagination.page)
+    } catch (error) {
+      console.error("Error deleting daily report:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete daily report.",
         variant: "destructive",
       })
     }
@@ -262,6 +297,20 @@ export default function SalesReportsPage() {
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           Validate
+                        </Button>
+                      )}
+                      {canAccess && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteReport(daily.date)
+                          }}
+                          className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
                         </Button>
                       )}
                       {!isLatest && (
