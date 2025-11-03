@@ -1204,6 +1204,10 @@ router.put('/:id/payment', async (req, res) => {
     if (order.isPaid && req.body.paymentMethod) {
       order.paymentMethod = req.body.paymentMethod;
 
+      // Calculate and store the paid amount (total of main order items at time of payment)
+      const mainOrderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      order.paidAmount = mainOrderTotal;
+
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
         order.cashAmount = req.body.cashAmount || 0;
@@ -1211,7 +1215,8 @@ router.put('/:id/payment', async (req, res) => {
         console.log('Saving split payment:', {
           orderId: order.id,
           cashAmount: order.cashAmount,
-          gcashAmount: order.gcashAmount
+          gcashAmount: order.gcashAmount,
+          paidAmount: order.paidAmount
         });
       } else {
         // Clear split amounts for non-split payments
@@ -1223,6 +1228,7 @@ router.put('/:id/payment', async (req, res) => {
       order.paymentMethod = null;
       order.cashAmount = undefined;
       order.gcashAmount = undefined;
+      order.paidAmount = undefined;
     }
 
     await order.save();
@@ -1303,6 +1309,10 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
     if (appendedOrder.isPaid && req.body.paymentMethod) {
       appendedOrder.paymentMethod = req.body.paymentMethod;
 
+      // Calculate and store the paid amount (total of appended order items at time of payment)
+      const appendedOrderTotal = appendedOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      appendedOrder.paidAmount = appendedOrderTotal;
+
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
         appendedOrder.cashAmount = req.body.cashAmount || 0;
@@ -1313,8 +1323,11 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
         appendedOrder.gcashAmount = undefined;
       }
     } else if (!appendedOrder.isPaid) {
-      // Clear payment method if marking as unpaid
+      // Clear payment method and amounts if marking as unpaid
       appendedOrder.paymentMethod = null;
+      appendedOrder.cashAmount = undefined;
+      appendedOrder.gcashAmount = undefined;
+      appendedOrder.paidAmount = undefined;
     }
 
     await order.save();

@@ -120,6 +120,11 @@ const appendedOrderSchema = new mongoose.Schema(
       type: Number,
       required: false,
       min: [0, 'GCash amount cannot be negative']
+    },
+    paidAmount: {
+      type: Number,
+      required: false,
+      min: [0, 'Paid amount cannot be negative']
     }
   },
   { _id: false } // Don't create _id for subdocuments
@@ -183,6 +188,11 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       required: false,
       min: [0, 'GCash amount cannot be negative']
+    },
+    paidAmount: {
+      type: Number,
+      required: false,
+      min: [0, 'Paid amount cannot be negative']
     },
     orderType: {
       type: String,
@@ -254,6 +264,32 @@ orderSchema.virtual('orderStatus').get(function() {
   } else {
     return 'pending';
   }
+});
+
+// Virtual for total paid amount (main order + appended orders)
+orderSchema.virtual('totalPaidAmount').get(function() {
+  let paidAmount = 0;
+  
+  // Add main order paid amount if paid
+  if (this.isPaid && this.paidAmount) {
+    paidAmount += this.paidAmount;
+  }
+  
+  // Add appended orders paid amounts
+  this.appendedOrders.forEach(appended => {
+    if (appended.isPaid && appended.paidAmount) {
+      paidAmount += appended.paidAmount;
+    }
+  });
+  
+  return paidAmount;
+});
+
+// Virtual for pending amount (total - paid)
+orderSchema.virtual('pendingAmount').get(function() {
+  const total = this.totalAmount || 0;
+  const paid = this.totalPaidAmount || 0;
+  return Math.max(0, total - paid);
 });
 
 // Pre-save middleware to validate and format data

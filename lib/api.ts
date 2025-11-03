@@ -55,6 +55,7 @@ export interface AppendedOrder {
   paymentMethod?: "cash" | "gcash" | "split" | null;
   cashAmount?: number;
   gcashAmount?: number;
+  paidAmount?: number;
 }
 
 export interface Withdrawal {
@@ -83,10 +84,13 @@ export interface Order {
   paymentMethod?: "cash" | "gcash" | "split" | null;
   cashAmount?: number;
   gcashAmount?: number;
+  paidAmount?: number;
   orderType: "dine-in" | "take-out";
   appendedOrders?: AppendedOrder[];
   totalAmount?: number;
   totalItems?: number;
+  totalPaidAmount?: number;
+  pendingAmount?: number;
   orderStatus?: "pending" | "in_progress" | "completed";
   allItemsServedAt?: number;
   orderTakerName?: string;

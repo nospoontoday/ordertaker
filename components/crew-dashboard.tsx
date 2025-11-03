@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronDown, Check, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2 } from "lucide-react"
+import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2 } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -46,6 +46,7 @@ interface AppendedOrder {
   paymentMethod?: "cash" | "gcash" | "split" | null
   cashAmount?: number
   gcashAmount?: number
+  paidAmount?: number
 }
 
 interface Order {
@@ -58,8 +59,12 @@ interface Order {
   paymentMethod?: "cash" | "gcash" | "split" | null
   cashAmount?: number
   gcashAmount?: number
+  paidAmount?: number
   orderType: "dine-in" | "take-out"
   appendedOrders?: AppendedOrder[]
+  totalAmount?: number
+  totalPaidAmount?: number
+  pendingAmount?: number
   allItemsServedAt?: number
   orderTakerName?: string
   orderTakerEmail?: string
@@ -137,11 +142,15 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       paymentMethod: newOrder.paymentMethod,
       cashAmount: newOrder.cashAmount,
       gcashAmount: newOrder.gcashAmount,
+      paidAmount: newOrder.paidAmount,
       orderType: newOrder.orderType || "dine-in",
       createdAt: newOrder.createdAt,
       allItemsServedAt: newOrder.allItemsServedAt,
       orderTakerName: newOrder.orderTakerName,
       orderTakerEmail: newOrder.orderTakerEmail,
+      totalAmount: newOrder.totalAmount,
+      totalPaidAmount: newOrder.totalPaidAmount,
+      pendingAmount: newOrder.pendingAmount,
       items: newOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -162,6 +171,9 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         id: appended.id,
         isPaid: appended.isPaid || false,
         paymentMethod: appended.paymentMethod,
+        cashAmount: appended.cashAmount,
+        gcashAmount: appended.gcashAmount,
+        paidAmount: appended.paidAmount,
         createdAt: appended.createdAt,
         items: appended.items.map((item: any) => ({
           id: item.id,
@@ -212,11 +224,15 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       paymentMethod: updatedOrder.paymentMethod,
       cashAmount: updatedOrder.cashAmount,
       gcashAmount: updatedOrder.gcashAmount,
+      paidAmount: updatedOrder.paidAmount,
       orderType: updatedOrder.orderType || "dine-in",
       createdAt: updatedOrder.createdAt,
       allItemsServedAt: updatedOrder.allItemsServedAt,
       orderTakerName: updatedOrder.orderTakerName,
       orderTakerEmail: updatedOrder.orderTakerEmail,
+      totalAmount: updatedOrder.totalAmount,
+      totalPaidAmount: updatedOrder.totalPaidAmount,
+      pendingAmount: updatedOrder.pendingAmount,
       items: updatedOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -237,6 +253,9 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         id: appended.id,
         isPaid: appended.isPaid || false,
         paymentMethod: appended.paymentMethod,
+        cashAmount: appended.cashAmount,
+        gcashAmount: appended.gcashAmount,
+        paidAmount: appended.paidAmount,
         createdAt: appended.createdAt,
         items: appended.items.map((item: any) => ({
           id: item.id,
@@ -1409,103 +1428,189 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex-1 min-w-0 space-y-2.5">
-                          {/* Order Number and Customer Name - Row 1 */}
-                          <div className="flex items-center gap-2 sm:gap-3">
-                            {order.orderNumber && (
-                              <span className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs sm:text-sm font-bold shadow-sm flex-shrink-0">
-                                #{order.orderNumber}
+                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                      {/* Desktop Layout: Multi-row for better spacing */}
+                      <div className="hidden sm:flex flex-col gap-3">
+                        {/* Row 1: Order Number, Customer Name, Time, Items Count */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {order.orderNumber && (
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
+                              #{order.orderNumber}
+                            </span>
+                          )}
+                          <h3 className="font-bold text-base text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
+                          <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium whitespace-nowrap">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            {formatTime(order.createdAt)}
+                          </span>
+                          <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                            {totalAppendedOrders > 0 && (
+                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Order Taker, Payment Status, and Action Buttons */}
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {getOrderTakerDisplay(order) && (
+                              <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+                                By: {getOrderTakerDisplay(order)}
                               </span>
                             )}
-                            <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate">{order.customerName}</h3>
+
+                            {/* Payment Status Badge */}
+                            {(() => {
+                              const mainTotal = getOrderTotal(order.items)
+                              const appendedTotal =
+                                order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                              const totalAmount = mainTotal + appendedTotal
+
+                              // Calculate total paid amount
+                              let totalPaidAmount = 0
+                              if (order.isPaid && order.paidAmount) {
+                                totalPaidAmount += order.paidAmount
+                              } else if (order.isPaid && !order.paidAmount) {
+                                // Legacy orders: if isPaid but no paidAmount, use main order total as fallback
+                                // This handles orders marked as paid before the paidAmount field was added
+                                totalPaidAmount += mainTotal
+                              }
+                              if (order.appendedOrders) {
+                                order.appendedOrders.forEach((a) => {
+                                  if (a.isPaid && a.paidAmount) {
+                                    totalPaidAmount += a.paidAmount
+                                  } else if (a.isPaid && !a.paidAmount) {
+                                    // Legacy appended orders
+                                    const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                    totalPaidAmount += appendedTotal
+                                  }
+                                })
+                              }
+
+                              // Calculate pending payment amount (payment is per order, not item status)
+                              const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+                              const isPartiallyPaid = totalPaidAmount > 0 && pendingPaymentAmount > 0
+                              // Fully paid if all orders are marked as paid AND no pending payment amount
+                              const allPaid = mainOrderPaid &&
+                                (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid)) &&
+                                pendingPaymentAmount === 0
+
+                              if (allPaid) {
+                                return (
+                                  <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <Badge variant="outline" className="font-bold text-xs text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 py-1">
+                                      Total: ₱{totalAmount.toFixed(2)}
+                                    </Badge>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+                                      <CheckCircle className="w-3 h-3" />
+                                      Fully Paid
+                                    </span>
+                                  </div>
+                                )
+                              }
+
+                              if (isPartiallyPaid) {
+                                return (
+                                  <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <Badge variant="outline" className="font-bold text-xs text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 py-1">
+                                      Total: ₱{totalAmount.toFixed(2)}
+                                    </Badge>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs font-semibold shadow-sm">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Partially Paid
+                                    </span>
+                                  </div>
+                                )
+                              }
+
+                              if (mainOrderPaid && !isPartiallyPaid && pendingPaymentAmount === 0) {
+                                return (
+                                  <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <Badge variant="outline" className="font-bold text-xs text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 py-1">
+                                      Total: ₱{totalAmount.toFixed(2)}
+                                    </Badge>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+                                      <Check className="w-3 h-3" />
+                                      Paid
+                                    </span>
+                                  </div>
+                                )
+                              }
+
+                              if (pendingPaymentAmount > 0 && totalPaidAmount === 0) {
+                                return (
+                                  <div className="flex items-center gap-2 whitespace-nowrap">
+                                    <Badge variant="outline" className="font-bold text-xs text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 py-1">
+                                      Total: ₱{totalAmount.toFixed(2)}
+                                    </Badge>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Unpaid
+                                    </span>
+                                  </div>
+                                )
+                              }
+
+                              return null
+                            })()}
                           </div>
 
-                          {/* Time and Items Count - Row 2 */}
-                          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs text-slate-600">
-                            <span className="flex items-center gap-1.5 font-medium">
-                              <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
-                              {formatTime(order.createdAt)}
-                            </span>
-                            <span className="text-slate-300 hidden sm:inline">•</span>
-                            <span className="font-medium">{order.items.reduce((sum, item) => sum + item.quantity, 0)} items</span>
-                            {totalAppendedOrders > 0 && (
-                              <>
-                                <span className="text-slate-300 hidden sm:inline">•</span>
-                                <span className="font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
-                              </>
-                            )}
-                          </div>
+                          {/* Right: Payment Buttons & Chevron */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {(() => {
+                              const mainTotal = getOrderTotal(order.items)
+                              const appendedTotal =
+                                order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                              const totalAmount = mainTotal + appendedTotal
 
-                          {/* Order Taker - Row 3 */}
-                          {getOrderTakerDisplay(order) && (
-                            <div className="text-xs text-slate-500">
-                              <span className="font-medium">Order by: {getOrderTakerDisplay(order)}</span>
-                            </div>
-                          )}
+                              // Calculate total paid amount (including legacy support)
+                              let totalPaidAmount = 0
+                              if (order.isPaid && order.paidAmount) {
+                                totalPaidAmount += order.paidAmount
+                              } else if (order.isPaid && !order.paidAmount) {
+                                // Legacy: if isPaid but no paidAmount, use main order total
+                                totalPaidAmount += mainTotal
+                              }
+                              if (order.appendedOrders) {
+                                order.appendedOrders.forEach((a) => {
+                                  if (a.isPaid && a.paidAmount) {
+                                    totalPaidAmount += a.paidAmount
+                                  } else if (a.isPaid && !a.paidAmount) {
+                                    // Legacy appended orders
+                                    const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                    totalPaidAmount += appendedTotal
+                                  }
+                                })
+                              }
 
-                          {/* Payment Status Badges - Row 4 */}
-                          {(mainOrderPaid || (totalAppendedOrders > 0 && appendedOrdersPaid > 0)) && (
-                            <div className="flex flex-wrap items-center gap-2">
-                              {mainOrderPaid && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
-                                  <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                                  Paid
-                                </span>
-                              )}
-                              {totalAppendedOrders > 0 && appendedOrdersPaid > 0 && (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shadow-sm">
-                                  {appendedOrdersPaid}/{totalAppendedOrders} Paid
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-2 flex-shrink-0">
-                        {(() => {
-                          const mainTotal = getOrderTotal(order.items)
-                          const appendedTotal =
-                            order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
-                          const totalAmount = mainTotal + appendedTotal
+                              // Calculate pending payment amount (payment is per order, not item status)
+                              const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
 
-                          const unpaidMainTotal = mainOrderPaid ? 0 : mainTotal
-                          const unpaidAppendedTotal =
-                            order.appendedOrders?.reduce(
-                              (sum, a) => sum + (a.isPaid ? 0 : getOrderTotal(a.items)),
-                              0,
-                            ) || 0
-                          const unpaidTotal = unpaidMainTotal + unpaidAppendedTotal
+                              // Fully paid if all orders are marked as paid AND no pending payment amount
+                              const allPaid = mainOrderPaid &&
+                                (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid)) &&
+                                pendingPaymentAmount === 0
 
-                          const allPaid = mainOrderPaid && (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid))
+                              if (allPaid) {
+                                return (
+                                  <Badge variant="outline" className="font-bold text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5 whitespace-nowrap">
+                                    ₱{totalAmount.toFixed(2)} Paid
+                                  </Badge>
+                                )
+                              }
 
-                          if (allPaid) {
-                            return (
-                              <Badge variant="outline" className="font-bold text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5">
-                                ₱{totalAmount.toFixed(2)}
-                              </Badge>
-                            )
-                          }
-
-                          // Show total amount badge and payment buttons if there's any unpaid amount
-                          if (unpaidTotal > 0) {
-                            return (
-                              <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
-                                {/* Total Amount Badge */}
-                                <Badge variant="outline" className="font-bold text-xs sm:text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
-                                  ₱{totalAmount.toFixed(2)}
-                                </Badge>
-
-                                {/* Payment Buttons */}
-                                {canManagePayments && (
-                                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                              // Show payment buttons if there's any unpaid amount
+                              if (pendingPaymentAmount > 0 && canManagePayments) {
+                                return (
+                                  <div className="flex gap-2">
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         markAllAsPaid(order.id, "cash")
                                       }}
                                       size="sm"
-                                      className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
+                                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                                     >
                                       💵 Cash
                                     </Button>
@@ -1515,7 +1620,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         markAllAsPaid(order.id, "gcash")
                                       }}
                                       size="sm"
-                                      className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
+                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                                     >
                                       Ⓖ GCash
                                     </Button>
@@ -1525,20 +1630,176 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         openSplitPaymentDialog(order.id)
                                       }}
                                       size="sm"
-                                      className="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
+                                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                                     >
-                                      🔀 Split
+                                      💳 Split
                                     </Button>
                                   </div>
-                                )}
+                                )
+                              }
+
+                              return null
+                            })()}
+                            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mobile Layout: Stacked */}
+                      <div className="sm:hidden space-y-3">
+                        {/* Row 1: Order Number and Customer Name */}
+                        <div className="flex items-center gap-3">
+                          {order.orderNumber && (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
+                              #{order.orderNumber}
+                            </span>
+                          )}
+                          <h3 className="font-bold text-sm text-slate-900 truncate">{order.customerName}</h3>
+                        </div>
+
+                        {/* Row 2: Time, Items, Order Taker */}
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {formatTime(order.createdAt)}
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="font-medium">
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                            {totalAppendedOrders > 0 && (
+                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                            )}
+                          </span>
+                          {getOrderTakerDisplay(order) && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="font-medium text-slate-500">By: {getOrderTakerDisplay(order)}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Row 3: Payment Status */}
+                        {(() => {
+                          const mainTotal = getOrderTotal(order.items)
+                          const appendedTotal =
+                            order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                          const totalAmount = mainTotal + appendedTotal
+
+                          let totalPaidAmount = 0
+                          if (order.isPaid && order.paidAmount) {
+                            totalPaidAmount += order.paidAmount
+                          } else if (order.isPaid && !order.paidAmount) {
+                            totalPaidAmount += mainTotal
+                          }
+                          if (order.appendedOrders) {
+                            order.appendedOrders.forEach((a) => {
+                              if (a.isPaid && a.paidAmount) {
+                                totalPaidAmount += a.paidAmount
+                              } else if (a.isPaid && !a.paidAmount) {
+                                totalPaidAmount += a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                              }
+                            })
+                          }
+
+                          const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+                          const isPartiallyPaid = totalPaidAmount > 0 && pendingPaymentAmount > 0
+                          const allPaid = mainOrderPaid &&
+                            (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid)) &&
+                            pendingPaymentAmount === 0
+
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                Total: ₱{totalAmount.toFixed(2)}
+                              </Badge>
+                              {allPaid ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Fully Paid
+                                </span>
+                              ) : isPartiallyPaid ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs font-semibold shadow-sm">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Partially Paid
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Unpaid
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
+
+                        {/* Row 4: Payment Buttons */}
+                        {(() => {
+                          const mainTotal = getOrderTotal(order.items)
+                          const appendedTotal =
+                            order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                          const totalAmount = mainTotal + appendedTotal
+
+                          let totalPaidAmount = 0
+                          if (order.isPaid && order.paidAmount) {
+                            totalPaidAmount += order.paidAmount
+                          } else if (order.isPaid && !order.paidAmount) {
+                            totalPaidAmount += mainTotal
+                          }
+                          if (order.appendedOrders) {
+                            order.appendedOrders.forEach((a) => {
+                              if (a.isPaid && a.paidAmount) {
+                                totalPaidAmount += a.paidAmount
+                              } else if (a.isPaid && !a.paidAmount) {
+                                totalPaidAmount += a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                              }
+                            })
+                          }
+
+                          const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+
+                          if (pendingPaymentAmount > 0 && canManagePayments) {
+                            return (
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    markAllAsPaid(order.id, "cash")
+                                  }}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  💵 Cash ₱{pendingPaymentAmount.toFixed(2)}
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    markAllAsPaid(order.id, "gcash")
+                                  }}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  Ⓖ GCash ₱{pendingPaymentAmount.toFixed(2)}
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openSplitPaymentDialog(order.id)
+                                  }}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  💳 Split ₱{pendingPaymentAmount.toFixed(2)}
+                                </Button>
                               </div>
                             )
                           }
-
                           return null
                         })()}
-                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""} self-center`} />
-                      </div>
+
+                        {/* Chevron */}
+                        <div className="flex justify-center pt-1">
+                          <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                        </div>
                       </div>
                     </div>
 
@@ -1548,9 +1809,18 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                         {(isOrderTaker || order.items.some(item => item.status !== "served")) && (
                           <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
                             <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
-                              </div>
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
+                              {order.isPaid ? (
+                                <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  Paid: ₱{(order.paidAmount || getOrderTotal(order.items)).toFixed(2)}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                  Unpaid: ₱{getOrderTotal(order.items).toFixed(2)}
+                                </Badge>
+                              )}
                             </div>
 
                             <div className="space-y-2.5">
@@ -1639,11 +1909,49 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                         {totalAppendedOrders > 0 && (
                           <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
                             <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                                  Appended Orders ({totalAppendedOrders})
-                                </p>
-                              </div>
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                                Appended Orders ({totalAppendedOrders})
+                              </p>
+                              {(() => {
+                                const totalAppendedPaid = order.appendedOrders!.reduce((sum, a) => {
+                                  if (a.isPaid) {
+                                    return sum + (a.paidAmount || getOrderTotal(a.items))
+                                  }
+                                  return sum
+                                }, 0)
+                                const totalAppendedAmount = order.appendedOrders!.reduce((sum, a) => sum + getOrderTotal(a.items), 0)
+                                const totalAppendedUnpaid = totalAppendedAmount - totalAppendedPaid
+                                const allAppendedPaid = order.appendedOrders!.every(a => a.isPaid)
+
+                                if (allAppendedPaid) {
+                                  return (
+                                    <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                      <CreditCard className="w-3.5 h-3.5" />
+                                      Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                    </Badge>
+                                  )
+                                } else if (totalAppendedPaid > 0) {
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                        <CreditCard className="w-3.5 h-3.5" />
+                                        Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                      </Badge>
+                                      <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5" />
+                                        Unpaid: ₱{totalAppendedUnpaid.toFixed(2)}
+                                      </Badge>
+                                    </div>
+                                  )
+                                } else {
+                                  return (
+                                    <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                      <AlertCircle className="w-3.5 h-3.5" />
+                                      Unpaid: ₱{totalAppendedUnpaid.toFixed(2)}
+                                    </Badge>
+                                  )
+                                }
+                              })()}
                             </div>
                             <div className="space-y-4">
                             {order.appendedOrders!.map((appended, index) => (
@@ -1656,8 +1964,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   <div className="flex items-center justify-between mb-4">
                                     <div>
                                       <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
-                                    <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
-                                  </div>
+                                      <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
+                                    </div>
                                   </div>
 
                                   <div className="space-y-2.5 mb-4">
@@ -1813,8 +2121,8 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex-1 min-w-0 space-y-2.5">
                           {/* Order Number and Customer Name - Row 1 */}
                           <div className="flex items-center gap-2 sm:gap-3">
@@ -1858,96 +2166,175 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             </div>
                           )}
 
-                          {/* Awaiting Payment Badge - Row 4 */}
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
-                            <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                            Awaiting Payment
-                          </span>
-                        </div>
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-2 flex-shrink-0">
-                        {(() => {
-                          const mainTotal = getOrderTotal(order.items)
-                          const appendedTotal =
-                            order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
-                          const totalAmount = mainTotal + appendedTotal
+                          {/* Payment Status Badge - Row 4 */}
+                          {(() => {
+                            const mainTotal = getOrderTotal(order.items)
+                            const appendedTotal =
+                              order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                            const totalAmount = mainTotal + appendedTotal
 
-                          const unpaidMainTotal = mainOrderPaid ? 0 : mainTotal
-                          const unpaidAppendedTotal =
-                            order.appendedOrders?.reduce(
-                              (sum, a) => sum + (a.isPaid ? 0 : getOrderTotal(a.items)),
-                              0,
-                            ) || 0
-                          const unpaidTotal = unpaidMainTotal + unpaidAppendedTotal
+                            // Calculate total paid amount
+                            let totalPaidAmount = 0
+                            if (order.isPaid && order.paidAmount) {
+                              totalPaidAmount += order.paidAmount
+                            } else if (order.isPaid && !order.paidAmount) {
+                              // Legacy orders: if isPaid but no paidAmount, use main order total as fallback
+                              // This handles orders marked as paid before the paidAmount field was added
+                              totalPaidAmount += mainTotal
+                            }
+                            if (order.appendedOrders) {
+                              order.appendedOrders.forEach((a) => {
+                                if (a.isPaid && a.paidAmount) {
+                                  totalPaidAmount += a.paidAmount
+                                } else if (a.isPaid && !a.paidAmount) {
+                                  // Legacy appended orders
+                                  const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                  totalPaidAmount += appendedTotal
+                                }
+                              })
+                            }
 
-                          const allPaid = mainOrderPaid && (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid))
+                            // Calculate pending payment amount (payment is per order, not item status)
+                            const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+                            const isPartiallyPaid = totalPaidAmount > 0 && pendingPaymentAmount > 0
+                            // Fully paid if all orders are marked as paid AND no pending payment amount
+                            const allPaid = mainOrderPaid && 
+                              (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid)) && 
+                              pendingPaymentAmount === 0
 
-                          if (allPaid) {
-                            return (
-                              <Badge variant="outline" className="font-bold text-xs sm:text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
-                                ₱{totalAmount.toFixed(2)}
-                              </Badge>
-                            )
-                          }
-
-                          // Show payment buttons if there's any unpaid amount and user can manage payments
-                          if (unpaidTotal > 0 && canManagePayments) {
-                            return (
-                              <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
-                                {/* Total Amount Badge */}
-                                <Badge variant="outline" className="font-bold text-xs sm:text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
-                                  ₱{unpaidTotal.toFixed(2)}
-                                </Badge>
-
-                                {/* Payment Buttons */}
-                                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      markAllAsPaid(order.id, "cash")
-                                    }}
-                                    size="sm"
-                                    className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
-                                  >
-                                    💵 Cash
-                                  </Button>
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      markAllAsPaid(order.id, "gcash")
-                                    }}
-                                    size="sm"
-                                    className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
-                                  >
-                                    Ⓖ GCash
-                                  </Button>
-                                  <Button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      openSplitPaymentDialog(order.id)
-                                    }}
-                                    size="sm"
-                                    className="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
-                                  >
-                                    🔀 Split
-                                  </Button>
+                            if (allPaid) {
+                              return (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                    Total: ₱{totalAmount.toFixed(2)}
+                                  </Badge>
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+                                    <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                    Fully Paid
+                                  </span>
                                 </div>
+                              )
+                            }
+
+                            if (isPartiallyPaid) {
+                              return (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                    Total: ₱{totalAmount.toFixed(2)}
+                                  </Badge>
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs font-semibold shadow-sm">
+                                    <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                    Partially Paid
+                                  </span>
+                                </div>
+                              )
+                            }
+
+                            return (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                  Total: ₱{totalAmount.toFixed(2)}
+                                </Badge>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
+                                  <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                  Awaiting Payment
+                                </span>
                               </div>
                             )
-                          }
+                          })()}
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 sm:ml-6">
+                          {(() => {
+                            const mainTotal = getOrderTotal(order.items)
+                            const appendedTotal =
+                              order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                            const totalAmount = mainTotal + appendedTotal
 
-                          // Show unpaid badge for users who cannot manage payments (crew only)
-                          if (unpaidTotal > 0) {
-                            return (
-                              <Badge variant="outline" className="font-bold text-xs sm:text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
-                                ₱{unpaidTotal.toFixed(2)}
-                              </Badge>
-                            )
-                          }
+                            // Calculate total paid amount
+                            let totalPaidAmount = 0
+                            if (order.isPaid && order.paidAmount) {
+                              totalPaidAmount += order.paidAmount
+                            }
+                            if (order.appendedOrders) {
+                              order.appendedOrders.forEach((a) => {
+                                if (a.isPaid && a.paidAmount) {
+                                  totalPaidAmount += a.paidAmount
+                                }
+                              })
+                            }
 
-                          return null
-                        })()}
-                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""} self-center`} />
-                      </div>
+                            // Calculate pending payment amount (payment is per order, not item status)
+                            const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+                            const isPartiallyPaid = totalPaidAmount > 0 && pendingPaymentAmount > 0
+                            // Fully paid if all orders are marked as paid AND no pending payment amount
+                            const allPaid = mainOrderPaid && 
+                              (!order.appendedOrders || order.appendedOrders.every((a) => a.isPaid)) && 
+                              pendingPaymentAmount === 0
+
+                            if (allPaid) {
+                              return (
+                                <Badge variant="outline" className="font-bold text-sm text-emerald-700 border-2 border-emerald-200 bg-emerald-50 px-3 py-1.5">
+                                  ₱{totalAmount.toFixed(2)} Paid
+                                </Badge>
+                              )
+                            }
+
+                            // Show payment buttons if there's any unpaid amount and user can manage payments
+                            if (pendingPaymentAmount > 0 && canManagePayments) {
+                              return (
+                                <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto">
+                                  {/* Payment Summary */}
+                                  {totalPaidAmount > 0 && (
+                                    <div className="flex flex-col items-start sm:items-end gap-1 text-xs w-full sm:w-auto">
+                                      <div className="text-emerald-700 font-medium">
+                                        Paid: ₱{totalPaidAmount.toFixed(2)}
+                                      </div>
+                                      <Badge variant="outline" className="font-bold text-xs sm:text-sm text-amber-700 border-2 border-amber-200 bg-amber-50 px-2.5 sm:px-3 py-1 sm:py-1.5">
+                                        Pending: ₱{pendingPaymentAmount.toFixed(2)}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                  {/* Payment Buttons */}
+                                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        markAllAsPaid(order.id, "cash")
+                                      }}
+                                      size="sm"
+                                      className="flex-1 sm:flex-none bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      💵 Cash
+                                    </Button>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        markAllAsPaid(order.id, "gcash")
+                                      }}
+                                      size="sm"
+                                      className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      Ⓖ GCash
+                                    </Button>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openSplitPaymentDialog(order.id)
+                                      }}
+                                      size="sm"
+                                      className="flex-1 sm:flex-none bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      🔀 Split
+                                    </Button>
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            return null
+                          })()}
+                          <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
+                        </div>
                       </div>
                     </div>
 
@@ -1956,9 +2343,18 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                         {/* Main Order Section */}
                         <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
                           <div className="flex items-center justify-between mb-4">
-                            <div>
-                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
-                            </div>
+                            <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
+                            {order.isPaid ? (
+                              <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                <CreditCard className="w-3.5 h-3.5" />
+                                Paid: ₱{(order.paidAmount || getOrderTotal(order.items)).toFixed(2)}
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                Unpaid: ₱{getOrderTotal(order.items).toFixed(2)}
+                              </Badge>
+                            )}
                           </div>
 
                           <div className="space-y-2">
@@ -2020,11 +2416,49 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                         {totalAppendedOrders > 0 && (
                           <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
                             <div className="flex items-center justify-between mb-4">
-                              <div>
-                                <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                                  Appended Orders ({totalAppendedOrders})
-                                </p>
-                              </div>
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                                Appended Orders ({totalAppendedOrders})
+                              </p>
+                              {(() => {
+                                const totalAppendedPaid = order.appendedOrders!.reduce((sum, a) => {
+                                  if (a.isPaid) {
+                                    return sum + (a.paidAmount || getOrderTotal(a.items))
+                                  }
+                                  return sum
+                                }, 0)
+                                const totalAppendedAmount = order.appendedOrders!.reduce((sum, a) => sum + getOrderTotal(a.items), 0)
+                                const totalAppendedUnpaid = totalAppendedAmount - totalAppendedPaid
+                                const allAppendedPaid = order.appendedOrders!.every(a => a.isPaid)
+
+                                if (allAppendedPaid) {
+                                  return (
+                                    <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                      <CreditCard className="w-3.5 h-3.5" />
+                                      Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                    </Badge>
+                                  )
+                                } else if (totalAppendedPaid > 0) {
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                        <CreditCard className="w-3.5 h-3.5" />
+                                        Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                      </Badge>
+                                      <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5" />
+                                        Unpaid: ₱{totalAppendedUnpaid.toFixed(2)}
+                                      </Badge>
+                                    </div>
+                                  )
+                                } else {
+                                  return (
+                                    <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                      <AlertCircle className="w-3.5 h-3.5" />
+                                      Unpaid: ₱{totalAppendedUnpaid.toFixed(2)}
+                                    </Badge>
+                                  )
+                                }
+                              })()}
                             </div>
                             <div className="space-y-3">
                             {order.appendedOrders!.map((appended, index) => (
