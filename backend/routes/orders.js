@@ -397,6 +397,9 @@ router.get('/daily-sales', async (req, res) => {
       const johnNetTotal = daily.salesByOwner.john - johnTotalDeductions;
       const elwinNetTotal = daily.salesByOwner.elwin - elwinTotalDeductions;
 
+      // Calculate cash received: total sales - (total purchases + total withdrawals) - gcash received
+      const calculatedTotalCash = daily.totalSales - (daily.totalPurchases + daily.totalWithdrawals) - daily.totalGcash;
+
       return {
         date: daily.date,
         dateTimestamp: daily.dateTimestamp,
@@ -404,7 +407,7 @@ router.get('/daily-sales', async (req, res) => {
         withdrawals: daily.withdrawals,
         purchases: daily.purchases,
         totalSales: daily.totalSales,
-        totalCash: daily.totalCash,
+        totalCash: calculatedTotalCash,
         totalGcash: daily.totalGcash,
         totalWithdrawals: daily.totalWithdrawals,
         totalPurchases: daily.totalPurchases,
