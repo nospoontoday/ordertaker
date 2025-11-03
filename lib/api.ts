@@ -37,6 +37,7 @@ export interface OrderItem {
   quantity: number;
   status: "pending" | "preparing" | "ready" | "served";
   itemType?: "dine-in" | "take-out";
+  note?: string;
   preparingAt?: number;
   readyAt?: number;
   servedAt?: number;

@@ -19,6 +19,7 @@ interface OrderItem {
   quantity: number
   status?: "pending" | "preparing" | "ready" | "served"
   itemType?: "dine-in" | "take-out"
+  note?: string
 }
 
 interface AppendedOrder {
@@ -379,6 +380,7 @@ export function OrderTaker({
         }
 
         console.log('Creating order with type:', currentOrderType)
+        console.log('Order items before submit:', newOrder.items)
 
         try {
           // Try to save to API first
@@ -1062,6 +1064,19 @@ export function OrderTaker({
                             🥡 Take Out
                           </button>
                         </div>
+                        <div className="mt-2">
+                          <Input
+                            value={item.note || ""}
+                            onChange={(e) => {
+                              const updated = newItems.map((i) =>
+                                i.id === item.id ? { ...i, note: e.target.value } : i
+                              )
+                              setNewItems(updated)
+                            }}
+                            placeholder="Add note (optional)"
+                            className="w-full text-xs border-slate-200 focus:border-slate-400"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1150,6 +1165,19 @@ export function OrderTaker({
                         >
                           🥡 Take Out
                         </button>
+                      </div>
+                      <div className="mt-2">
+                        <Input
+                          value={item.note || ""}
+                          onChange={(e) => {
+                            const updated = currentOrder.map((i) =>
+                              i.id === item.id ? { ...i, note: e.target.value } : i
+                            )
+                            setCurrentOrder(updated)
+                          }}
+                          placeholder="Add note (optional)"
+                          className="w-full text-xs border-slate-200 focus:border-slate-400"
+                        />
                       </div>
                     </div>
                   ))

@@ -28,6 +28,7 @@ interface OrderItem {
   quantity: number
   status: "pending" | "preparing" | "ready" | "served"
   itemType?: "dine-in" | "take-out"
+  note?: string
   preparingAt?: number
   readyAt?: number
   servedAt?: number
@@ -125,6 +126,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   // WebSocket real-time event handlers
   const handleOrderCreated = (newOrder: any) => {
     console.log('WebSocket: Order created', newOrder)
+    console.log('WebSocket: Order items with notes:', newOrder.items.map((i: any) => ({ name: i.name, note: i.note })))
 
     // Transform and add the new order
     const transformedOrder: Order = {
@@ -147,6 +149,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         quantity: item.quantity || 1,
         status: item.status || "pending",
         itemType: item.itemType || "dine-in",
+        note: item.note,
         preparingAt: item.preparingAt,
         readyAt: item.readyAt,
         servedAt: item.servedAt,
@@ -167,6 +170,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           quantity: item.quantity || 1,
           status: item.status || "pending",
           itemType: item.itemType || "dine-in",
+          note: item.note,
           preparingAt: item.preparingAt,
           readyAt: item.readyAt,
           servedAt: item.servedAt,
@@ -220,6 +224,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         quantity: item.quantity || 1,
         status: item.status || "pending",
         itemType: item.itemType || "dine-in",
+        note: item.note,
         preparingAt: item.preparingAt,
         readyAt: item.readyAt,
         servedAt: item.servedAt,
@@ -240,6 +245,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           quantity: item.quantity || 1,
           status: item.status || "pending",
           itemType: item.itemType || "dine-in",
+          note: item.note,
           preparingAt: item.preparingAt,
           readyAt: item.readyAt,
           servedAt: item.servedAt,
@@ -342,6 +348,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           quantity: item.quantity || 1,
           status: item.status || "pending",
           itemType: item.itemType || "dine-in",
+          note: item.note,
           preparingAt: item.preparingAt,
           readyAt: item.readyAt,
           servedAt: item.servedAt,
@@ -364,6 +371,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
             quantity: item.quantity || 1,
             status: item.status || "pending",
             itemType: item.itemType || "dine-in",
+            note: item.note,
             preparingAt: item.preparingAt,
             readyAt: item.readyAt,
             servedAt: item.servedAt,
@@ -1546,7 +1554,9 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             </div>
 
                             <div className="space-y-2.5">
-                              {order.items.filter(item => isOrderTaker || item.status !== "served").map((item) => (
+                              {order.items.filter(item => isOrderTaker || item.status !== "served").map((item) => {
+                                console.log('Rendering item:', item.name, 'note:', item.note)
+                                return (
                               <div
                                 key={item.id}
                                 className="flex items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
@@ -1567,6 +1577,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                     </Badge>
                                   </div>
+                                  {item.note && (
+                                    <p className="text-xs text-slate-600 mt-1 italic">
+                                      Note: {item.note}
+                                    </p>
+                                  )}
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
                                       {getStatusIcon(item.status)}
@@ -1615,7 +1630,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   )}
                                 </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         </div>
                         )}
@@ -1667,6 +1682,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                             {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                           </Badge>
                                         </div>
+                                        {item.note && (
+                                          <p className="text-xs text-slate-600 mt-1 italic">
+                                            Note: {item.note}
+                                          </p>
+                                        )}
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
                                             {getStatusIcon(item.status)}
@@ -1963,6 +1983,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                     </Badge>
                                   </div>
+                                  {item.note && (
+                                    <p className="text-xs text-slate-600 mt-1 italic">
+                                      Note: {item.note}
+                                    </p>
+                                  )}
                                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                                     <Badge className={`${getStatusColor(item.status)}`}>
                                       <span className="mr-1">{getStatusIcon(item.status)}</span>
@@ -2036,6 +2061,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                             {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                           </Badge>
                                         </div>
+                                        {item.note && (
+                                          <p className="text-xs text-slate-600 mt-1 italic">
+                                            Note: {item.note}
+                                          </p>
+                                        )}
                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                                           <Badge className={`text-xs ${getStatusColor(item.status)}`}>
                                             <span className="mr-1">{getStatusIcon(item.status)}</span>
@@ -2161,6 +2191,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             >
                               {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                             </Badge>
+                            {item.note && (
+                              <span className="text-xs text-slate-600 italic">
+                                Note: {item.note}
+                              </span>
+                            )}
                             {order.paymentMethod && order.paymentMethod !== "split" && (
                               <Badge
                                 className={`text-xs font-bold px-2 py-0.5 rounded-md border shadow-sm ${
@@ -2213,6 +2248,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       >
                                         {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
                                       </Badge>
+                                      {item.note && (
+                                        <span className="text-xs text-slate-600 italic">
+                                          Note: {item.note}
+                                        </span>
+                                      )}
                                       {appended.paymentMethod && appended.paymentMethod !== "split" && (
                                         <Badge
                                           className={`text-xs font-bold px-2 py-0.5 rounded-md border shadow-sm ${

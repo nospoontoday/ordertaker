@@ -36,6 +36,12 @@ const orderItemSchema = new mongoose.Schema(
       enum: ['dine-in', 'take-out'],
       default: 'dine-in'
     },
+    note: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: [500, 'Note cannot be more than 500 characters']
+    },
     preparingAt: {
       type: Number,
       required: false
