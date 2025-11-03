@@ -81,7 +81,7 @@ echo ""
 
 echo "Step 4: Starting updated containers..."
 echo "=========================================="
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d
 if [ $? -eq 0 ]; then
     echo "✓ Containers started with updated images"
 else

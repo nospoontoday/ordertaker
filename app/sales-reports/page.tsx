@@ -268,35 +268,35 @@ export default function SalesReportsPage() {
               return (
               <Card key={daily.date} className="bg-white border border-slate-200/80 shadow-sm">
                 {/* Date Header - Clickable for toggle */}
-                <div 
-                  className={`flex items-center justify-between p-6 cursor-pointer hover:bg-slate-50 transition-colors ${expanded || isLatest ? 'border-b border-slate-200' : ''}`}
+                <div
+                  className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-6 cursor-pointer hover:bg-slate-50 transition-colors ${expanded || isLatest ? 'border-b border-slate-200' : ''}`}
                   onClick={() => !isLatest && toggleDate(daily.date)}
                 >
-                  <div className="flex items-center gap-3">
-                    <Calendar className="h-5 w-5 text-slate-500" />
-                    <h2 className="text-xl font-bold text-slate-900">{formatDate(daily.date)}</h2>
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500 flex-shrink-0" />
+                    <h2 className="text-base sm:text-xl font-bold text-slate-900 truncate">{formatDate(daily.date)}</h2>
                     {isLatest && (
-                      <Badge className="bg-blue-600 text-white font-bold text-xs px-2 py-1 rounded-md">
+                      <Badge className="bg-blue-600 text-white font-bold text-xs px-2 py-1 rounded-md flex-shrink-0">
                         Latest
                       </Badge>
                     )}
                     {daily.isValidated && (
-                      <Badge className="bg-emerald-600 text-white font-bold text-xs px-2 py-1 rounded-md flex items-center gap-1">
+                      <Badge className="bg-emerald-600 text-white font-bold text-xs px-2 py-1 rounded-md flex items-center gap-1 flex-shrink-0">
                         <CheckCircle2 className="h-3 w-3" />
                         Validated
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-xs text-slate-500 uppercase tracking-wide font-semibold mb-1">
+                  <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wide font-semibold mb-0.5 sm:mb-1 whitespace-nowrap">
                         Net Sales
                       </div>
-                      <div className={`text-2xl font-bold ${daily.netSales >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <div className={`text-base sm:text-2xl font-bold ${daily.netSales >= 0 ? 'text-emerald-600' : 'text-red-600'} whitespace-nowrap`}>
                         ₱{daily.netSales.toFixed(2)}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-auto">
                       {isSuperAdmin && !daily.isValidated && (
                         <Button
                           variant="outline"
