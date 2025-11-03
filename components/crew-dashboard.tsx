@@ -1612,7 +1612,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       size="sm"
                                       className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                                     >
-                                      💵 Cash
+                                      💵 Cash ₱{pendingPaymentAmount.toFixed(2)}
                                     </Button>
                                     <Button
                                       onClick={(e) => {
@@ -1622,7 +1622,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       size="sm"
                                       className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                                     >
-                                      Ⓖ GCash
+                                      Ⓖ GCash ₱{pendingPaymentAmount.toFixed(2)}
                                     </Button>
                                     <Button
                                       onClick={(e) => {
@@ -1632,7 +1632,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       size="sm"
                                       className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                                     >
-                                      💳 Split
+                                      💳 Split ₱{pendingPaymentAmount.toFixed(2)}
                                     </Button>
                                   </div>
                                 )
