@@ -2129,9 +2129,10 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                     </Badge>
                                   </div>
                                   {item.note && (
-                                    <p className="text-xs text-slate-600 mt-1 italic">
-                                      Note: {item.note}
-                                    </p>
+                                    <div className="mt-2.5 mb-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 p-2.5 rounded-r-md shadow-sm">
+                                      <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">📝 Special Note:</p>
+                                      <p className="text-sm font-semibold text-amber-800 leading-relaxed">{item.note}</p>
+                                    </div>
                                   )}
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
@@ -2272,9 +2273,10 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                           </Badge>
                                         </div>
                                         {item.note && (
-                                          <p className="text-xs text-slate-600 mt-1 italic">
-                                            Note: {item.note}
-                                          </p>
+                                          <div className="mt-2.5 mb-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 p-2.5 rounded-r-md shadow-sm">
+                                            <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">📝 Special Note:</p>
+                                            <p className="text-sm font-semibold text-amber-800 leading-relaxed">{item.note}</p>
+                                          </div>
                                         )}
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
