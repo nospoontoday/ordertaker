@@ -831,10 +831,33 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     const appendedTotal = order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
     const totalAmount = mainTotal + appendedTotal
 
+    // Calculate total paid amount
+    let totalPaidAmount = 0
+    if (order.isPaid && order.paidAmount) {
+      totalPaidAmount += order.paidAmount
+    } else if (order.isPaid && !order.paidAmount) {
+      // Legacy orders: if isPaid but no paidAmount, use main order total as fallback
+      totalPaidAmount += mainTotal
+    }
+    if (order.appendedOrders) {
+      order.appendedOrders.forEach((a) => {
+        if (a.isPaid && a.paidAmount) {
+          totalPaidAmount += a.paidAmount
+        } else if (a.isPaid && !a.paidAmount) {
+          // Legacy appended orders
+          const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+          totalPaidAmount += appendedTotal
+        }
+      })
+    }
+
+    // Calculate pending payment amount (amount still to be paid)
+    const pendingAmount = Math.max(0, totalAmount - totalPaidAmount)
+
     setSplitPaymentDialog({
       open: true,
       orderId,
-      totalAmount,
+      totalAmount: pendingAmount,
       orderNumber: order.orderNumber,
       customerName: order.customerName,
     })
