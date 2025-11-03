@@ -139,10 +139,10 @@ export default function SalesReportsPage() {
   }
 
   const handleDeleteReport = async (date: string) => {
-    if (!user) {
+    if (!user || !isSuperAdmin) {
       toast({
         title: "Access Denied",
-        description: "You must be logged in to delete daily reports.",
+        description: "Only super admin can delete daily reports.",
         variant: "destructive",
       })
       return
@@ -174,6 +174,14 @@ export default function SalesReportsPage() {
   }
 
   const handleEditReport = (date: string) => {
+    if (!user || !isSuperAdmin) {
+      toast({
+        title: "Access Denied",
+        description: "Only super admin can edit daily reports.",
+        variant: "destructive",
+      })
+      return
+    }
     setEditingDate(date)
     setEditDialogOpen(true)
   }
@@ -311,7 +319,7 @@ export default function SalesReportsPage() {
                           Validate
                         </Button>
                       )}
-                      {canAccess && (
+                      {isSuperAdmin && (
                         <>
                           <Button
                             variant="outline"
