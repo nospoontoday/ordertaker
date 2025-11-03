@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2 } from "lucide-react"
+import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -49,6 +49,14 @@ interface AppendedOrder {
   paidAmount?: number
 }
 
+interface OrderNote {
+  id: string
+  content: string
+  createdAt: number
+  createdBy?: string
+  createdByEmail?: string
+}
+
 interface Order {
   id: string
   orderNumber?: number
@@ -68,6 +76,7 @@ interface Order {
   allItemsServedAt?: number
   orderTakerName?: string
   orderTakerEmail?: string
+  notes?: OrderNote[]
 }
 
 type ItemStatus = "pending" | "preparing" | "ready" | "served"
@@ -113,6 +122,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     appendedOrderId: null,
   })
   const [deleteReason, setDeleteReason] = useState("")
+  const [newNotes, setNewNotes] = useState<Record<string, string>>({})
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -151,6 +161,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       totalAmount: newOrder.totalAmount,
       totalPaidAmount: newOrder.totalPaidAmount,
       pendingAmount: newOrder.pendingAmount,
+      notes: newOrder.notes || [],
       items: newOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -233,6 +244,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       totalAmount: updatedOrder.totalAmount,
       totalPaidAmount: updatedOrder.totalPaidAmount,
       pendingAmount: updatedOrder.pendingAmount,
+      notes: updatedOrder.notes || [],
       items: updatedOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -360,6 +372,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         allItemsServedAt: order.allItemsServedAt,
         orderTakerName: order.orderTakerName,
         orderTakerEmail: order.orderTakerEmail,
+        notes: order.notes || [],
         items: order.items.map((item: any) => ({
           id: item.id,
           name: item.name,
@@ -1073,6 +1086,73 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
       toast({
         title: "Error",
         description: "Failed to delete item.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const addNoteToOrder = async (orderId: string, noteContent: string) => {
+    if (!noteContent.trim()) {
+      toast({
+        title: "Empty Note",
+        description: "Please enter a note before submitting.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return
+
+    const newNote: OrderNote = {
+      id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      content: noteContent.trim(),
+      createdAt: Date.now(),
+      createdBy: user?.name,
+      createdByEmail: user?.email,
+    }
+
+    // Update local state immediately
+    const updatedNotes = [...(order.notes || []), newNote]
+    setOrders(
+      orders.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              notes: updatedNotes,
+            }
+          : o,
+      ),
+    )
+
+    // Clear the input field
+    setNewNotes({ ...newNotes, [orderId]: "" })
+
+    // Sync to API
+    try {
+      await ordersApi.update(orderId, { notes: updatedNotes })
+      setIsOnline(true)
+      toast({
+        title: "Note Added",
+        description: "Your note has been added to the order.",
+      })
+    } catch (error) {
+      console.error("Error adding note:", error)
+      setIsOnline(false)
+      // Revert local state on error
+      setOrders(
+        orders.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                notes: order.notes || [],
+              }
+            : o,
+        ),
+      )
+      toast({
+        title: "Error",
+        description: "Failed to add note. Will sync when online.",
         variant: "destructive",
       })
     }
@@ -2091,6 +2171,72 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             </div>
                           </div>
                         )}
+
+                        {/* Notes Section */}
+                         <div className="pt-4 border-t border-slate-200">
+                           <div className="flex items-center gap-2 mb-4 ml-1">
+                             <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
+                               <MessageSquare className="w-4 h-4 text-blue-600" />
+                             </div>
+                             <div className="flex-1">
+                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
+                               {order.notes && order.notes.length > 0 && (
+                                 <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
+                               )}
+                             </div>
+                           </div>
+
+                           {/* Display existing notes */}
+                           {order.notes && order.notes.length > 0 && (
+                             <div className="space-y-2.5 mb-5 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+                               {order.notes.map((note) => {
+                                 const noteAuthor = note.createdBy || (note.createdByEmail ? note.createdByEmail.split('@')[0] : 'Unknown')
+                                 return (
+                                   <div
+                                     key={note.id}
+                                     className="bg-gradient-to-br from-blue-50/50 to-white p-3.5 rounded-lg border border-blue-200/60 shadow-sm hover:shadow-md hover:border-blue-300 transition-all"
+                                   >
+                                     <p className="text-sm text-slate-900 leading-relaxed mb-2 break-words">{note.content}</p>
+                                     <div className="flex items-center gap-2 text-xs text-slate-500">
+                                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                       <span className="font-semibold text-slate-600">{noteAuthor}</span>
+                                       <span className="text-slate-300">•</span>
+                                       <span className="text-slate-500">{formatTime(note.createdAt)}</span>
+                                     </div>
+                                   </div>
+                                 )
+                               })}
+                             </div>
+                           )}
+
+                           {/* Add new note */}
+                           <div className="space-y-2.5 bg-gradient-to-br from-slate-50/50 to-white p-4 rounded-lg border border-slate-200/80 shadow-sm">
+                             <div className="flex gap-2">
+                               <Textarea
+                                 value={newNotes[order.id] || ""}
+                                 onChange={(e) => setNewNotes({ ...newNotes, [order.id]: e.target.value })}
+                                 placeholder="Add a note... (e.g., Customer paid 100, we still have to give her 50 pesos change)"
+                                 className="flex-1 min-h-[80px] resize-none text-sm"
+                                 onKeyDown={(e) => {
+                                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                     e.preventDefault()
+                                     addNoteToOrder(order.id, newNotes[order.id] || "")
+                                   }
+                                 }}
+                               />
+                               <Button
+                                 onClick={() => addNoteToOrder(order.id, newNotes[order.id] || "")}
+                                 disabled={!newNotes[order.id]?.trim()}
+                                 className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-4 shadow-sm hover:shadow-md transition-all self-end h-fit"
+                               >
+                                 <Send className="w-4 h-4" />
+                               </Button>
+                             </div>
+                             <p className="text-xs text-slate-500 font-medium">
+                               💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Ctrl+Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Cmd+Enter</kbd> to submit
+                             </p>
+                           </div>
+                         </div>
 
                         {/* Action Buttons */}
                         {canAppendItems && (

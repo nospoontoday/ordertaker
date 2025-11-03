@@ -219,6 +219,36 @@ const orderSchema = new mongoose.Schema(
       required: false,
       trim: true,
       maxlength: [255, 'Order taker email cannot be more than 255 characters']
+    },
+    notes: {
+      type: [{
+        id: {
+          type: String,
+          required: true
+        },
+        content: {
+          type: String,
+          required: [true, 'Note content is required'],
+          trim: true,
+          maxlength: [500, 'Note cannot be more than 500 characters']
+        },
+        createdAt: {
+          type: Number,
+          required: true,
+          default: Date.now
+        },
+        createdBy: {
+          type: String,
+          required: false,
+          trim: true
+        },
+        createdByEmail: {
+          type: String,
+          required: false,
+          trim: true
+        }
+      }],
+      default: []
     }
   },
   {

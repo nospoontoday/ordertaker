@@ -73,6 +73,14 @@ export interface Withdrawal {
   chargedTo?: "john" | "elwin" | "all";
 }
 
+export interface OrderNote {
+  id: string;
+  content: string;
+  createdAt: number;
+  createdBy?: string;
+  createdByEmail?: string;
+}
+
 export interface Order {
   _id?: string;
   id: string;
@@ -95,6 +103,7 @@ export interface Order {
   allItemsServedAt?: number;
   orderTakerName?: string;
   orderTakerEmail?: string;
+  notes?: OrderNote[];
 }
 
 export interface ApiResponse<T> {
