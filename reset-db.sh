@@ -24,6 +24,37 @@ fi
 echo "Proceeding with database reset..."
 echo ""
 
+# Navigate to app directory first for backup
+cd /opt/ordertakerapp
+
+# Create backup before resetting
+echo "Creating backup before reset..."
+echo "=========================================="
+mkdir -p backups
+BACKUP_DATE=$(date +"%Y%m%d_%H%M%S")
+BACKUP_FILE="backups/mongodb_backup_before_reset_${BACKUP_DATE}.gz"
+
+docker exec ordertaker-mongo mongodump \
+  --username=admin \
+  --password=password123 \
+  --authenticationDatabase=admin \
+  --db=ordertaker \
+  --archive=/tmp/backup.gz \
+  --gzip
+
+if [ $? -eq 0 ]; then
+    docker cp ordertaker-mongo:/tmp/backup.gz "$BACKUP_FILE"
+    if [ $? -eq 0 ]; then
+        echo "✓ Backup created: $BACKUP_FILE"
+        docker exec ordertaker-mongo rm /tmp/backup.gz
+    else
+        echo "⚠️  Warning: Could not create backup"
+    fi
+else
+    echo "⚠️  Warning: Backup failed"
+fi
+echo ""
+
 # Navigate to backend directory
 cd /opt/ordertakerapp/backend
 
