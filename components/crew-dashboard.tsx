@@ -163,6 +163,21 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     appendedOrderId: null,
   })
 
+  // Payment confirmation dialog state
+  const [paymentConfirmDialog, setPaymentConfirmDialog] = useState<{
+    open: boolean
+    orderId: string | null
+    paymentMethod: "cash" | "gcash" | null
+    amount: number
+    orderNumber?: number
+    customerName?: string
+  }>({
+    open: false,
+    orderId: null,
+    paymentMethod: null,
+    amount: 0,
+  })
+
   const [newNotes, setNewNotes] = useState<Record<string, string>>({})
 
   const { toast } = useToast()
@@ -786,8 +801,58 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
      }
    }
 
+   const openPaymentConfirmDialog = (orderId: string, paymentMethod: "cash" | "gcash") => {
+     const order = orders.find((o) => o.id === orderId)
+     if (!order) return
 
-  const deleteAppendedOrder = async (orderId: string, appendedOrderId: string) => {
+     const mainTotal = getOrderTotal(order.items)
+     const appendedTotal = order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+     const totalAmount = mainTotal + appendedTotal
+
+     // Calculate total paid amount
+     let totalPaidAmount = 0
+     if (order.isPaid && order.paidAmount) {
+       totalPaidAmount += order.paidAmount
+     } else if (order.isPaid && !order.paidAmount) {
+       totalPaidAmount += mainTotal
+     }
+     if (order.appendedOrders) {
+       order.appendedOrders.forEach((a) => {
+         if (a.isPaid && a.paidAmount) {
+           totalPaidAmount += a.paidAmount
+         } else if (a.isPaid && !a.paidAmount) {
+           const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+           totalPaidAmount += appendedTotal
+         }
+       })
+     }
+
+     const pendingAmount = Math.max(0, totalAmount - totalPaidAmount)
+
+     setPaymentConfirmDialog({
+       open: true,
+       orderId,
+       paymentMethod,
+       amount: pendingAmount,
+       orderNumber: order.orderNumber,
+       customerName: order.customerName,
+     })
+   }
+
+   const confirmPayment = async () => {
+     if (!paymentConfirmDialog.orderId || !paymentConfirmDialog.paymentMethod) return
+
+     setPaymentConfirmDialog({
+       open: false,
+       orderId: null,
+       paymentMethod: null,
+       amount: 0,
+     })
+
+     await markAllAsPaid(paymentConfirmDialog.orderId, paymentConfirmDialog.paymentMethod)
+   }
+
+   const deleteAppendedOrder = async (orderId: string, appendedOrderId: string) => {
     // Update local state immediately
     setOrders(
       orders.map((order) =>
@@ -1823,7 +1888,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        markAllAsPaid(order.id, "cash")
+                                        openPaymentConfirmDialog(order.id, "cash")
                                       }}
                                       size="sm"
                                       className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
@@ -1833,7 +1898,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                     <Button
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        markAllAsPaid(order.id, "gcash")
+                                        openPaymentConfirmDialog(order.id, "gcash")
                                       }}
                                       size="sm"
                                       className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
@@ -1979,7 +2044,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                 <Button
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    markAllAsPaid(order.id, "cash")
+                                    openPaymentConfirmDialog(order.id, "cash")
                                   }}
                                   size="sm"
                                   className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
@@ -1989,7 +2054,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                 <Button
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    markAllAsPaid(order.id, "gcash")
+                                    openPaymentConfirmDialog(order.id, "gcash")
                                   }}
                                   size="sm"
                                   className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
@@ -2695,6 +2760,104 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
               onClick={confirmDeleteItemDirect}
             >
               Delete Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Confirmation Dialog */}
+      <Dialog
+        open={paymentConfirmDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPaymentConfirmDialog({
+              open: false,
+              orderId: null,
+              paymentMethod: null,
+              amount: 0,
+            })
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-emerald-600 flex items-center gap-2">
+              <CreditCard className="w-5 h-5" />
+              Confirm Payment
+            </DialogTitle>
+            <DialogDescription>
+              Please confirm the payment details before proceeding.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+              {paymentConfirmDialog.orderNumber && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-600">Order #:</span>
+                  <span className="text-sm font-bold text-slate-900">{paymentConfirmDialog.orderNumber}</span>
+                </div>
+              )}
+              {paymentConfirmDialog.customerName && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-600">Customer:</span>
+                  <span className="text-sm font-bold text-slate-900">{paymentConfirmDialog.customerName}</span>
+                </div>
+              )}
+              <div className="border-t border-slate-200 pt-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-600">Amount:</span>
+                  <span className="text-lg font-bold text-emerald-600">₱{paymentConfirmDialog.amount.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <div className="flex items-center gap-2">
+                  {paymentConfirmDialog.paymentMethod === "cash" ? (
+                    <>
+                      <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm">
+                        💵 Cash
+                      </Badge>
+                      <span className="text-xs text-slate-600">Payment Method</span>
+                    </>
+                  ) : (
+                    <>
+                      <Badge className="bg-blue-500 border border-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm">
+                        Ⓖ GCash
+                      </Badge>
+                      <span className="text-xs text-slate-600">Payment Method</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <p className="text-xs text-emerald-700 font-semibold">
+                ✓ This payment will be recorded in the system and cannot be easily reversed.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPaymentConfirmDialog({
+                  open: false,
+                  orderId: null,
+                  paymentMethod: null,
+                  amount: 0,
+                })
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmPayment}
+              className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold"
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Confirm Payment
             </Button>
           </DialogFooter>
         </DialogContent>
