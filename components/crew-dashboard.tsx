@@ -2414,7 +2414,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           </div>
         )}
 
-        {/* Served (Not Paid) - Placeholder for brevity */}
+        {/* Served (Not Paid) */}
         {sortedServedNotPaidOrders.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 mb-1">
@@ -2425,7 +2425,575 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                 {sortedServedNotPaidOrders.length}
               </span>
             </div>
-            {/* Served orders content would go here - truncated for space */}
+            <div className="space-y-3">
+              {sortedServedNotPaidOrders.map((order) => {
+                const { mainOrderPaid, appendedOrdersPaid, totalAppendedOrders } = getPaymentSummary(order)
+                const isExpanded = expandedServed.has(order.id)
+                return (
+                  <Card
+                    key={order.id}
+                    className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
+                  >
+                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                      {/* Desktop Layout: Multi-row for better spacing */}
+                      <div className="hidden sm:flex flex-col gap-3">
+                        {/* Row 1: Order Number, Customer Name, Time, Items Count */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {order.orderNumber && (
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
+                              #{order.orderNumber}
+                            </span>
+                          )}
+                          <h3 className="font-bold text-base text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
+                          <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium whitespace-nowrap">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            {formatTime(order.createdAt)}
+                          </span>
+                          <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                            {totalAppendedOrders > 0 && (
+                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Order Taker, Payment Status, and Action Buttons */}
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {getOrderTakerDisplay(order) && (
+                              <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+                                By: {getOrderTakerDisplay(order)}
+                              </span>
+                            )}
+
+                            {/* Payment Status Badge */}
+                            {(() => {
+                              const mainTotal = getOrderTotal(order.items)
+                              const appendedTotal =
+                                order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                              const totalAmount = mainTotal + appendedTotal
+
+                              // Calculate total paid amount
+                              let totalPaidAmount = 0
+                              if (order.isPaid && order.paidAmount) {
+                                totalPaidAmount += order.paidAmount
+                              } else if (order.isPaid && !order.paidAmount) {
+                                totalPaidAmount += mainTotal
+                              }
+                              if (order.appendedOrders) {
+                                order.appendedOrders.forEach((a) => {
+                                  if (a.isPaid && a.paidAmount) {
+                                    totalPaidAmount += a.paidAmount
+                                  } else if (a.isPaid && !a.paidAmount) {
+                                    const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                    totalPaidAmount += appendedTotal
+                                  }
+                                })
+                              }
+
+                              const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+                              const isPartiallyPaid = totalPaidAmount > 0 && pendingPaymentAmount > 0
+
+                              return (
+                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                  <Badge variant="outline" className="font-bold text-xs text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 py-1">
+                                    Total: ₱{totalAmount.toFixed(2)}
+                                  </Badge>
+                                  {isPartiallyPaid ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs font-semibold shadow-sm">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Partially Paid
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Unpaid
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </div>
+
+                          {/* Right: Payment Buttons & Chevron */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {(() => {
+                              const mainTotal = getOrderTotal(order.items)
+                              const appendedTotal =
+                                order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                              const totalAmount = mainTotal + appendedTotal
+
+                              let totalPaidAmount = 0
+                              if (order.isPaid && order.paidAmount) {
+                                totalPaidAmount += order.paidAmount
+                              } else if (order.isPaid && !order.paidAmount) {
+                                totalPaidAmount += mainTotal
+                              }
+                              if (order.appendedOrders) {
+                                order.appendedOrders.forEach((a) => {
+                                  if (a.isPaid && a.paidAmount) {
+                                    totalPaidAmount += a.paidAmount
+                                  } else if (a.isPaid && !a.paidAmount) {
+                                    const appendedTotal = a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                    totalPaidAmount += appendedTotal
+                                  }
+                                })
+                              }
+
+                              const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+
+                              // Show payment buttons if there's any unpaid amount
+                              if (pendingPaymentAmount > 0 && canManagePayments) {
+                                return (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openPaymentConfirmDialog(order.id, "cash")
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+                                    >
+                                      💵 Cash ₱{pendingPaymentAmount.toFixed(2)}
+                                    </Button>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openPaymentConfirmDialog(order.id, "gcash")
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+                                    >
+                                      Ⓖ GCash ₱{pendingPaymentAmount.toFixed(2)}
+                                    </Button>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openSplitPaymentDialog(order.id)
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+                                    >
+                                      💳 Split ₱{pendingPaymentAmount.toFixed(2)}
+                                    </Button>
+                                  </div>
+                                )
+                              }
+
+                              return null
+                            })()}
+                            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mobile Layout: Stacked */}
+                      <div className="sm:hidden space-y-3">
+                        {/* Row 1: Order Number and Customer Name */}
+                        <div className="flex items-center gap-3">
+                          {order.orderNumber && (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
+                              #{order.orderNumber}
+                            </span>
+                          )}
+                          <h3 className="font-bold text-sm text-slate-900 truncate">{order.customerName}</h3>
+                        </div>
+
+                        {/* Row 2: Time, Items, Order Taker */}
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {formatTime(order.createdAt)}
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="font-medium">
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                            {totalAppendedOrders > 0 && (
+                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                            )}
+                          </span>
+                          {getOrderTakerDisplay(order) && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="font-medium text-slate-500">By: {getOrderTakerDisplay(order)}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Row 3: Payment Status */}
+                        {(() => {
+                          const mainTotal = getOrderTotal(order.items)
+                          const appendedTotal =
+                            order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                          const totalAmount = mainTotal + appendedTotal
+
+                          let totalPaidAmount = 0
+                          if (order.isPaid && order.paidAmount) {
+                            totalPaidAmount += order.paidAmount
+                          } else if (order.isPaid && !order.paidAmount) {
+                            totalPaidAmount += mainTotal
+                          }
+                          if (order.appendedOrders) {
+                            order.appendedOrders.forEach((a) => {
+                              if (a.isPaid && a.paidAmount) {
+                                totalPaidAmount += a.paidAmount
+                              } else if (a.isPaid && !a.paidAmount) {
+                                totalPaidAmount += a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                              }
+                            })
+                          }
+
+                          const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+                          const isPartiallyPaid = totalPaidAmount > 0 && pendingPaymentAmount > 0
+
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                Total: ₱{totalAmount.toFixed(2)}
+                              </Badge>
+                              {isPartiallyPaid ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs font-semibold shadow-sm">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Partially Paid
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold shadow-sm">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Unpaid
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
+
+                        {/* Row 4: Payment Buttons */}
+                        {(() => {
+                          const mainTotal = getOrderTotal(order.items)
+                          const appendedTotal =
+                            order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                          const totalAmount = mainTotal + appendedTotal
+
+                          let totalPaidAmount = 0
+                          if (order.isPaid && order.paidAmount) {
+                            totalPaidAmount += order.paidAmount
+                          } else if (order.isPaid && !order.paidAmount) {
+                            totalPaidAmount += mainTotal
+                          }
+                          if (order.appendedOrders) {
+                            order.appendedOrders.forEach((a) => {
+                              if (a.isPaid && a.paidAmount) {
+                                totalPaidAmount += a.paidAmount
+                              } else if (a.isPaid && !a.paidAmount) {
+                                totalPaidAmount += a.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                              }
+                            })
+                          }
+
+                          const pendingPaymentAmount = Math.max(0, totalAmount - totalPaidAmount)
+
+                          if (pendingPaymentAmount > 0 && canManagePayments) {
+                            return (
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openPaymentConfirmDialog(order.id, "cash")
+                                  }}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  💵 Cash ₱{pendingPaymentAmount.toFixed(2)}
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openPaymentConfirmDialog(order.id, "gcash")
+                                  }}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  Ⓖ GCash ₱{pendingPaymentAmount.toFixed(2)}
+                                </Button>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openSplitPaymentDialog(order.id)
+                                  }}
+                                  size="sm"
+                                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all"
+                                >
+                                  💳 Split ₱{pendingPaymentAmount.toFixed(2)}
+                                </Button>
+                              </div>
+                            )
+                          }
+                          return null
+                        })()}
+
+                        {/* Chevron */}
+                        <div className="flex justify-center pt-1">
+                          <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 px-4 sm:px-5 pb-4">
+                        {/* Main Order Section */}
+                        <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
+                            {order.isPaid ? (
+                              <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                <CreditCard className="w-3.5 h-3.5" />
+                                Paid: ₱{(order.paidAmount || getOrderTotal(order.items)).toFixed(2)}
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                Unpaid: ₱{getOrderTotal(order.items).toFixed(2)}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="space-y-2.5">
+                            {order.items.map((item) => {
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="flex items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                      <p className="font-semibold text-sm text-slate-900">{item.name}</p>
+                                      <Badge variant="outline" className="text-xs font-bold border-slate-300">
+                                        x{item.quantity}
+                                      </Badge>
+                                      <Badge
+                                        className={`text-xs font-bold px-2 py-0.5 ${
+                                          item.itemType === "dine-in"
+                                            ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                            : "bg-orange-600 hover:bg-orange-700 text-white"
+                                        }`}
+                                      >
+                                        {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
+                                      </Badge>
+                                    </div>
+                                    {item.note && (
+                                      <div className="mt-2.5 mb-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 p-2.5 rounded-r-md shadow-sm">
+                                        <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">📝 Special Note:</p>
+                                        <p className="text-sm font-semibold text-amber-800 leading-relaxed">{item.note}</p>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                        {getStatusIcon(item.status)}
+                                        {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                      </Badge>
+                                      {getCrewDisplay(item, 'prepared') && (
+                                        <span className="text-xs text-slate-600">
+                                          Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                        </span>
+                                      )}
+                                      {getCrewDisplay(item, 'served') && (
+                                        <span className="text-xs text-slate-600">
+                                          Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Appended Orders Section */}
+                        {totalAppendedOrders > 0 && (
+                          <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                                Appended Orders ({totalAppendedOrders})
+                              </p>
+                              {(() => {
+                                const totalAppendedPaid = order.appendedOrders!.reduce((sum, a) => {
+                                  if (a.isPaid) {
+                                    return sum + (a.paidAmount || getOrderTotal(a.items))
+                                  }
+                                  return sum
+                                }, 0)
+                                const totalAppendedAmount = order.appendedOrders!.reduce((sum, a) => sum + getOrderTotal(a.items), 0)
+                                const totalAppendedUnpaid = totalAppendedAmount - totalAppendedPaid
+                                const allAppendedPaid = order.appendedOrders!.every(a => a.isPaid)
+
+                                if (allAppendedPaid) {
+                                  return (
+                                    <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                      <CreditCard className="w-3.5 h-3.5" />
+                                      Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                    </Badge>
+                                  )
+                                } else if (totalAppendedPaid > 0) {
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                        <CreditCard className="w-3.5 h-3.5" />
+                                        Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                      </Badge>
+                                      <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5" />
+                                        Unpaid: ₱{totalAppendedUnpaid.toFixed(2)}
+                                      </Badge>
+                                    </div>
+                                  )
+                                } else {
+                                  return (
+                                    <Badge className="bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                      <AlertCircle className="w-3.5 h-3.5" />
+                                      Unpaid: ₱{totalAppendedUnpaid.toFixed(2)}
+                                    </Badge>
+                                  )
+                                }
+                              })()}
+                            </div>
+                            <div className="space-y-4">
+                              {order.appendedOrders!.map((appended, index) => (
+                                <div
+                                  key={appended.id}
+                                  className="rounded-xl p-5 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                >
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
+                                      <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2.5 mb-4">
+                                    {appended.items.map((item) => (
+                                      <div
+                                        key={item.id}
+                                        className="flex items-center justify-between gap-4 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                            <p className="font-semibold text-sm text-slate-900">{item.name}</p>
+                                            <Badge variant="outline" className="text-xs font-bold border-slate-300">
+                                              x{item.quantity}
+                                            </Badge>
+                                            <Badge
+                                              className={`text-xs font-bold px-2 py-0.5 ${
+                                                item.itemType === "dine-in"
+                                                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                                  : "bg-orange-600 hover:bg-orange-700 text-white"
+                                              }`}
+                                            >
+                                              {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
+                                            </Badge>
+                                          </div>
+                                          {item.note && (
+                                            <div className="mt-2.5 mb-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 p-2.5 rounded-r-md shadow-sm">
+                                              <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">📝 Special Note:</p>
+                                              <p className="text-sm font-semibold text-amber-800 leading-relaxed">{item.note}</p>
+                                            </div>
+                                          )}
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                              {getStatusIcon(item.status)}
+                                              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                            </Badge>
+                                            {getCrewDisplay(item, 'prepared') && (
+                                              <span className="text-xs text-slate-600">
+                                                Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                              </span>
+                                            )}
+                                            {getCrewDisplay(item, 'served') && (
+                                              <span className="text-xs text-slate-600">
+                                                Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notes Section */}
+                        <div className="pt-4 border-t border-slate-200">
+                          <div className="flex items-center gap-2 mb-4 ml-1">
+                            <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
+                              <MessageSquare className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
+                              {order.notes && order.notes.length > 0 && (
+                                <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Display existing notes */}
+                          {order.notes && order.notes.length > 0 && (
+                            <div className="space-y-2.5 mb-5 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+                              {order.notes.map((note) => {
+                                const noteAuthor = note.createdBy || (note.createdByEmail ? note.createdByEmail.split('@')[0] : 'Unknown')
+                                return (
+                                  <div
+                                    key={note.id}
+                                    className="bg-gradient-to-br from-blue-50/50 to-white p-3.5 rounded-lg border border-blue-200/60 shadow-sm hover:shadow-md hover:border-blue-300 transition-all"
+                                  >
+                                    <p className="text-sm text-slate-900 leading-relaxed mb-2 break-words">{note.content}</p>
+                                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                      <span className="font-semibold text-slate-600">{noteAuthor}</span>
+                                      <span className="text-slate-300">•</span>
+                                      <span className="text-slate-500">{formatTime(note.createdAt)}</span>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Add new note */}
+                          <div className="space-y-2.5 bg-gradient-to-br from-slate-50/50 to-white p-4 rounded-lg border border-slate-200/80 shadow-sm">
+                            <div className="flex gap-2">
+                              <Textarea
+                                value={newNotes[order.id] || ""}
+                                onChange={(e) => setNewNotes({ ...newNotes, [order.id]: e.target.value })}
+                                placeholder="Add a note... (e.g., Customer paid 100, we still have to give her 50 pesos change)"
+                                className="flex-1 min-h-[80px] resize-none text-sm"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                    e.preventDefault()
+                                    addNoteToOrder(order.id, newNotes[order.id] || "")
+                                  }
+                                }}
+                              />
+                              <Button
+                                onClick={() => addNoteToOrder(order.id, newNotes[order.id] || "")}
+                                disabled={!newNotes[order.id]?.trim()}
+                                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-4 shadow-sm hover:shadow-md transition-all self-end h-fit"
+                              >
+                                <Send className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium">
+                              💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Ctrl+Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Cmd+Enter</kbd> to submit
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
           </div>
         )}
 
