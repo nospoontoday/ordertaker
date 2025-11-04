@@ -108,14 +108,12 @@ export default function Home() {
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-xs sm:text-sm text-muted-foreground truncate min-w-0 flex-shrink">{user.email}</span>
-          {/* Show Kitchen button for order takers, order taker + crew, and admin/super admin */}
-          {(isOrderTaker || isOrderTakerCrew || canAccessAdmin) && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/kitchen")} className="text-xs sm:text-sm">
-              <ChefHat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Kitchen</span>
-              <span className="sm:hidden">Kitchen</span>
-            </Button>
-          )}
+          {/* Show Kitchen button for all user types */}
+          <Button variant="outline" size="sm" onClick={() => router.push("/kitchen")} className="text-xs sm:text-sm">
+            <ChefHat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Kitchen</span>
+            <span className="sm:hidden">Kitchen</span>
+          </Button>
           {/* Show Sales Reports button for all roles except crew */}
           {!isCrew && (
             <Button variant="outline" size="sm" onClick={() => router.push("/sales-reports")} className="text-xs sm:text-sm">
