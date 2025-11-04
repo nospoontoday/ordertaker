@@ -306,10 +306,16 @@ export function KitchenView() {
       }
     })
 
-    // Convert to array and sort by FIFO (oldest first)
-    return Array.from(grouped.values()).sort(
-      (a, b) => a.oldestCreatedAt - b.oldestCreatedAt
-    )
+    // Convert to array and sort by status priority first (pending > preparing > ready),
+    // then by FIFO (oldest first) within each status
+    const statusPriority = { pending: 0, preparing: 1, ready: 2 }
+    return Array.from(grouped.values()).sort((a, b) => {
+      // First sort by status priority
+      const statusDiff = statusPriority[a.status] - statusPriority[b.status]
+      if (statusDiff !== 0) return statusDiff
+      // Then sort by FIFO (oldest first)
+      return a.oldestCreatedAt - b.oldestCreatedAt
+    })
   }, [orders, menuItemMap])
 
   // Separate food and drinks
@@ -485,19 +491,59 @@ export function KitchenView() {
     }
   }
 
+  // Calculate waiting time for pending items
+  const getWaitingTime = (createdAt: number): number => {
+    return Date.now() - createdAt
+  }
+
+  // Get urgency level based on waiting time
+  const getUrgencyLevel = (waitingTime: number): "normal" | "urgent" | "critical" => {
+    const minutes = Math.floor(waitingTime / 60000)
+    if (minutes >= 15) return "critical"
+    if (minutes >= 10) return "urgent"
+    return "normal"
+  }
+
   const renderItemGroup = (groupedItem: GroupedItem) => {
     const nextStatus = getNextStatus(groupedItem.status)
     const canUpdate = nextStatus !== "served"
+    
+    // Calculate waiting time and urgency for pending items
+    const waitingTime = groupedItem.status === "pending" 
+      ? getWaitingTime(groupedItem.oldestCreatedAt)
+      : 0
+    const urgencyLevel = groupedItem.status === "pending"
+      ? getUrgencyLevel(waitingTime)
+      : "normal"
+    
+    // Visual styling based on urgency and status
+    const getCardStyle = () => {
+      if (groupedItem.status === "pending") {
+        if (urgencyLevel === "critical") {
+          return "border-red-500 border-4 bg-red-50 shadow-lg"
+        } else if (urgencyLevel === "urgent") {
+          return "border-orange-500 border-4 bg-orange-50 shadow-md"
+        }
+        return "border-amber-400 border-2 bg-amber-50"
+      }
+      return "border-2 hover:shadow-lg transition-shadow"
+    }
 
     return (
       <Card
-        key={groupedItem.name}
-        className="p-4 mb-4 border-2 hover:shadow-lg transition-shadow"
+        key={`${groupedItem.name}-${groupedItem.status}-${groupedItem.instances[0]?.itemType}`}
+        className={`p-4 mb-4 ${getCardStyle()}`}
       >
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className={`text-lg font-bold ${
+                groupedItem.status === "pending" && urgencyLevel === "critical"
+                  ? "text-red-900"
+                  : groupedItem.status === "pending" && urgencyLevel === "urgent"
+                  ? "text-orange-900"
+                  : "text-slate-900"
+              }`}>
                 {groupedItem.name}
               </h3>
               <Badge
@@ -515,6 +561,20 @@ export function KitchenView() {
                 {groupedItem.status.charAt(0).toUpperCase() +
                   groupedItem.status.slice(1)}
               </Badge>
+              {/* Waiting time indicator for pending items */}
+              {groupedItem.status === "pending" && waitingTime > 0 && (
+                <Badge
+                  className={`text-xs font-bold px-2.5 py-1 ${
+                    urgencyLevel === "critical"
+                      ? "bg-red-600 text-white"
+                      : urgencyLevel === "urgent"
+                      ? "bg-orange-600 text-white"
+                      : "bg-amber-500 text-white"
+                  }`}
+                >
+                  ⏱️ Waiting: {formatDuration(waitingTime)}
+                </Badge>
+              )}
             </div>
 
             {/* Order Sources */}
@@ -638,9 +698,22 @@ export function KitchenView() {
     <div className="p-4">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Kitchen Display</h1>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 mb-3">
           Batch preparation view - items grouped by type and sorted FIFO
         </p>
+        {/* FIFO reminder banner */}
+        <div className="bg-blue-600 text-white p-3 rounded-lg shadow-md mb-4 border-l-4 border-blue-800">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <p className="font-bold text-sm mb-1">⚠️ IMPORTANT: Work from Top to Bottom</p>
+              <p className="text-xs opacity-90">
+                Items are sorted by priority (Pending → Preparing → Ready) and FIFO order. 
+                Always start with the first item at the top. Older orders are at the top - work them first to keep customers happy!
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="food" className="w-full">
