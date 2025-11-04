@@ -48,12 +48,22 @@ export function KitchenView() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const [currentTime, setCurrentTime] = useState(Date.now())
   const { toast } = useToast()
   const { user } = useAuth()
 
   // Fetch orders and menu items
   useEffect(() => {
     fetchData()
+  }, [])
+
+  // Update current time every second to refresh waiting time calculations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 1000) // Update every second
+
+    return () => clearInterval(interval)
   }, [])
 
   const fetchData = async () => {
@@ -493,7 +503,7 @@ export function KitchenView() {
 
   // Calculate waiting time for pending items
   const getWaitingTime = (createdAt: number): number => {
-    return Date.now() - createdAt
+    return currentTime - createdAt
   }
 
   // Get urgency level based on waiting time
