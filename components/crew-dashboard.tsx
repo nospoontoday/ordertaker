@@ -3019,6 +3019,19 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             </p>
                           </div>
                         </div>
+
+                        {/* Action Buttons */}
+                        {canAppendItems && (
+                          <div className="pt-4 px-2 flex gap-2 flex-wrap">
+                            <Button
+                              onClick={() => onAppendItems(order.id)}
+                              className="flex-1 min-w-32 font-bold bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white shadow-sm hover:shadow-md"
+                            >
+                              <Plus className="w-4 h-4 mr-1.5" />
+                              Append Items
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -3377,6 +3390,19 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                             </div>
                           )}
                         </div>
+
+                        {/* Action Buttons */}
+                        {canAppendItems && (
+                          <div className="pt-4 px-2 flex gap-2 flex-wrap">
+                            <Button
+                              onClick={() => onAppendItems(order.id)}
+                              className="flex-1 min-w-32 font-bold bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white shadow-sm hover:shadow-md"
+                            >
+                              <Plus className="w-4 h-4 mr-1.5" />
+                              Append Items
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>
