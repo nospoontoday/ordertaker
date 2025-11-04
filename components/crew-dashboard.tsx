@@ -1636,6 +1636,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
 
   const sortedActiveOrders = [...activeOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
   const sortedServedNotPaidOrders = [...servedNotPaidOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
+  const sortedCompletedOrders = [...completedOrders].sort((a, b) => getLatestOrderTimestamp(b) - getLatestOrderTimestamp(a))
+
+  const toggleCompletedExpanded = (orderId: string) => {
+    setExpandedCompleted(expandedCompleted === orderId ? null : orderId)
+  }
 
   const getPaymentSummary = (order: Order) => {
     const mainOrderPaid = order.isPaid
@@ -2997,18 +3002,361 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
           </div>
         )}
 
-        {/* Completed Orders - Placeholder for brevity */}
-        {completedOrders.length > 0 && (
+        {/* Completed Orders */}
+        {sortedCompletedOrders.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 mb-1">
               <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
               <h2 className="text-base font-bold tracking-wide uppercase text-slate-800">Completed Orders</h2>
               <div className="flex-1 h-[1px] bg-gradient-to-r from-slate-200 to-transparent" />
               <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-                {completedOrders.length}
+                {sortedCompletedOrders.length}
               </span>
             </div>
-            {/* Completed orders content would go here - truncated for space */}
+            <div className="space-y-3">
+              {sortedCompletedOrders.map((order) => {
+                const { mainOrderPaid, appendedOrdersPaid, totalAppendedOrders } = getPaymentSummary(order)
+                const isExpanded = expandedCompleted === order.id
+                return (
+                  <Card
+                    key={order.id}
+                    className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
+                  >
+                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                      {/* Desktop Layout: Multi-row for better spacing */}
+                      <div className="hidden sm:flex flex-col gap-3">
+                        {/* Row 1: Order Number, Customer Name, Time, Items Count */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {order.orderNumber && (
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
+                              #{order.orderNumber}
+                            </span>
+                          )}
+                          <h3 className="font-bold text-base text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
+                          <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium whitespace-nowrap">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            {formatTime(order.createdAt)}
+                          </span>
+                          <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                            {totalAppendedOrders > 0 && (
+                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                            )}
+                          </span>
+                          {order.notes && order.notes.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shadow-sm">
+                              <MessageSquare className="w-3 h-3" />
+                              {order.notes.length} note{order.notes.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Row 2: Order Taker, Payment Status, and Chevron */}
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {getOrderTakerDisplay(order) && (
+                              <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+                                By: {getOrderTakerDisplay(order)}
+                              </span>
+                            )}
+
+                            {/* Payment Status Badge - Always fully paid for completed orders */}
+                            {(() => {
+                              const mainTotal = getOrderTotal(order.items)
+                              const appendedTotal =
+                                order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                              const totalAmount = mainTotal + appendedTotal
+
+                              return (
+                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                  <Badge variant="outline" className="font-bold text-xs text-slate-700 border-2 border-slate-200 bg-slate-50 px-2.5 py-1">
+                                    Total: ₱{totalAmount.toFixed(2)}
+                                  </Badge>
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Fully Paid
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </div>
+
+                          {/* Right: Chevron */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mobile Layout: Stacked */}
+                      <div className="sm:hidden space-y-3">
+                        {/* Row 1: Order Number and Customer Name */}
+                        <div className="flex items-center gap-3">
+                          {order.orderNumber && (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
+                              #{order.orderNumber}
+                            </span>
+                          )}
+                          <h3 className="font-bold text-sm text-slate-900 truncate">{order.customerName}</h3>
+                        </div>
+
+                        {/* Row 2: Time, Items, Order Taker */}
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {formatTime(order.createdAt)}
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="font-medium">
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
+                            {totalAppendedOrders > 0 && (
+                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                            )}
+                          </span>
+                          {getOrderTakerDisplay(order) && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="font-medium text-slate-500">By: {getOrderTakerDisplay(order)}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Row 3: Payment Status and Notes */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {(() => {
+                            const mainTotal = getOrderTotal(order.items)
+                            const appendedTotal =
+                              order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+                            const totalAmount = mainTotal + appendedTotal
+
+                            return (
+                              <>
+                                <Badge variant="outline" className="font-bold text-sm text-slate-700 border-2 border-slate-200 bg-slate-50 px-3 py-1.5">
+                                  Total: ₱{totalAmount.toFixed(2)}
+                                </Badge>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Fully Paid
+                                </span>
+                                {order.notes && order.notes.length > 0 && (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold shadow-sm">
+                                    <MessageSquare className="w-3 h-3" />
+                                    {order.notes.length} note{order.notes.length !== 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </>
+                            )
+                          })()}
+                        </div>
+
+                        {/* Chevron */}
+                        <div className="flex justify-center pt-1">
+                          <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 px-4 sm:px-5 pb-4">
+                        {/* Main Order Section */}
+                        <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
+                            <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                              <CreditCard className="w-3.5 h-3.5" />
+                              Paid: ₱{(order.paidAmount || getOrderTotal(order.items)).toFixed(2)}
+                            </Badge>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            {order.items.map((item) => {
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="flex items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                      <p className="font-semibold text-sm text-slate-900">{item.name}</p>
+                                      <Badge variant="outline" className="text-xs font-bold border-slate-300">
+                                        x{item.quantity}
+                                      </Badge>
+                                      <Badge
+                                        className={`text-xs font-bold px-2 py-0.5 ${
+                                          item.itemType === "dine-in"
+                                            ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                            : "bg-orange-600 hover:bg-orange-700 text-white"
+                                        }`}
+                                      >
+                                        {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
+                                      </Badge>
+                                    </div>
+                                    {item.note && (
+                                      <div className="mt-2.5 mb-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 p-2.5 rounded-r-md shadow-sm">
+                                        <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">📝 Special Note:</p>
+                                        <p className="text-sm font-semibold text-amber-800 leading-relaxed">{item.note}</p>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                        {getStatusIcon(item.status)}
+                                        {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                      </Badge>
+                                      {getCrewDisplay(item, 'prepared') && (
+                                        <span className="text-xs text-slate-600">
+                                          Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                        </span>
+                                      )}
+                                      {getCrewDisplay(item, 'served') && (
+                                        <span className="text-xs text-slate-600">
+                                          Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Appended Orders Section */}
+                        {totalAppendedOrders > 0 && (
+                          <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                                Appended Orders ({totalAppendedOrders})
+                              </p>
+                              {(() => {
+                                const totalAppendedPaid = order.appendedOrders!.reduce((sum, a) => {
+                                  if (a.isPaid) {
+                                    return sum + (a.paidAmount || getOrderTotal(a.items))
+                                  }
+                                  return sum
+                                }, 0)
+
+                                return (
+                                  <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
+                                    <CreditCard className="w-3.5 h-3.5" />
+                                    Paid: ₱{totalAppendedPaid.toFixed(2)}
+                                  </Badge>
+                                )
+                              })()}
+                            </div>
+                            <div className="space-y-4">
+                              {order.appendedOrders!.map((appended, index) => (
+                                <div
+                                  key={appended.id}
+                                  className="rounded-xl p-5 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                >
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                      <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
+                                      <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2.5 mb-4">
+                                    {appended.items.map((item) => (
+                                      <div
+                                        key={item.id}
+                                        className="flex items-center justify-between gap-4 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                            <p className="font-semibold text-sm text-slate-900">{item.name}</p>
+                                            <Badge variant="outline" className="text-xs font-bold border-slate-300">
+                                              x{item.quantity}
+                                            </Badge>
+                                            <Badge
+                                              className={`text-xs font-bold px-2 py-0.5 ${
+                                                item.itemType === "dine-in"
+                                                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                                  : "bg-orange-600 hover:bg-orange-700 text-white"
+                                              }`}
+                                            >
+                                              {item.itemType === "dine-in" ? "🍽️ Dine In" : "🥡 Take Out"}
+                                            </Badge>
+                                          </div>
+                                          {item.note && (
+                                            <div className="mt-2.5 mb-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-l-4 border-amber-400 p-2.5 rounded-r-md shadow-sm">
+                                              <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">📝 Special Note:</p>
+                                              <p className="text-sm font-semibold text-amber-800 leading-relaxed">{item.note}</p>
+                                            </div>
+                                          )}
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                              {getStatusIcon(item.status)}
+                                              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                            </Badge>
+                                            {getCrewDisplay(item, 'prepared') && (
+                                              <span className="text-xs text-slate-600">
+                                                Prepared by: <span className="font-semibold">{getCrewDisplay(item, 'prepared')}</span>
+                                              </span>
+                                            )}
+                                            {getCrewDisplay(item, 'served') && (
+                                              <span className="text-xs text-slate-600">
+                                                Served by: <span className="font-semibold">{getCrewDisplay(item, 'served')}</span>
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notes Section - Always visible for completed orders */}
+                        <div className="pt-4 border-t border-slate-200">
+                          <div className="flex items-center gap-2 mb-4 ml-1">
+                            <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
+                              <MessageSquare className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
+                              {order.notes && order.notes.length > 0 && (
+                                <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Display existing notes */}
+                          {order.notes && order.notes.length > 0 ? (
+                            <div className="space-y-2.5 mb-5 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+                              {order.notes.map((note) => {
+                                const noteAuthor = note.createdBy || (note.createdByEmail ? note.createdByEmail.split('@')[0] : 'Unknown')
+                                return (
+                                  <div
+                                    key={note.id}
+                                    className="bg-gradient-to-br from-blue-50/50 to-white p-3.5 rounded-lg border border-blue-200/60 shadow-sm hover:shadow-md hover:border-blue-300 transition-all"
+                                  >
+                                    <p className="text-sm text-slate-900 leading-relaxed mb-2 break-words">{note.content}</p>
+                                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                      <span className="font-semibold text-slate-600">{noteAuthor}</span>
+                                      <span className="text-slate-300">•</span>
+                                      <span className="text-slate-500">{formatTime(note.createdAt)}</span>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <div className="mb-5 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                              <p className="text-sm text-slate-500 text-center italic">No notes for this order</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
           </div>
         )}
         </div>
