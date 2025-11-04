@@ -2165,21 +2165,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                       <Trash2 className="w-4 h-4" />
                                     </Button>
                                   )}
-                                  {/* Crew can change: pending → preparing, preparing → ready */}
-                                  {/* Order Taker can change: ready → served */}
-                                  {((isCrew && (item.status === "pending" || item.status === "preparing")) ||
-                                    (isOrderTaker && item.status === "ready")) && (
-                                    <Button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        updateItemStatus(order.id, item.id, getNextStatus(item.status))
-                                      }}
-                                      size="sm"
-                                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-4 py-2 shadow-sm hover:shadow-md whitespace-nowrap"
-                                    >
-                                      {getStatusButtonLabel(item.status)}
-                                    </Button>
-                                  )}
                                 </div>
                               </div>
                             )})}
@@ -2308,26 +2293,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                             className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
-                                          </Button>
-                                        )}
-                                        {/* Crew can change: pending → preparing, preparing → ready */}
-                                        {/* Order Taker can change: ready → served */}
-                                        {((isCrew && (item.status === "pending" || item.status === "preparing")) ||
-                                          (isOrderTaker && item.status === "ready")) && (
-                                          <Button
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              updateAppendedItemStatus(
-                                                order.id,
-                                                appended.id,
-                                                item.id,
-                                                getNextStatus(item.status),
-                                              )
-                                            }}
-                                            size="sm"
-                                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md whitespace-nowrap"
-                                          >
-                                            {getStatusButtonLabel(item.status)}
                                           </Button>
                                         )}
                                       </div>

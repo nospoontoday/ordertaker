@@ -7,7 +7,7 @@ import { OrderTaker } from "@/components/order-taker"
 import { CrewDashboard } from "@/components/crew-dashboard"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat } from "lucide-react"
 
 export default function Home() {
   const router = useRouter()
@@ -26,19 +26,24 @@ export default function Home() {
     setMounted(true)
   }, [])
 
+  // Redirect crew members to kitchen page
+  useEffect(() => {
+    if (mounted && !isLoading && user && isCrew) {
+      router.push("/kitchen")
+    }
+  }, [mounted, isLoading, user, isCrew, router])
+
   // Set default view based on user role
   useEffect(() => {
     if (user) {
-      if (isCrew) {
-        setView("crew")
-      } else if (isOrderTakerCrew) {
+      if (isOrderTakerCrew) {
         // For combined role, default to crew dashboard
         setView("crew")
       } else if (isOrderTaker) {
         setView("taker")
       }
     }
-  }, [user, isCrew, isOrderTaker, isOrderTakerCrew])
+  }, [user, isOrderTaker, isOrderTakerCrew])
 
   useEffect(() => {
     if (appendingOrderId) {
@@ -93,7 +98,7 @@ export default function Home() {
                 view === "crew" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              Crew Dashboard
+              Order Dashboard
             </button>
           </div>
         )}
@@ -103,6 +108,14 @@ export default function Home() {
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-xs sm:text-sm text-muted-foreground truncate min-w-0 flex-shrink">{user.email}</span>
+          {/* Show Kitchen button for order takers, order taker + crew, and admin/super admin */}
+          {(isOrderTaker || isOrderTakerCrew || canAccessAdmin) && (
+            <Button variant="outline" size="sm" onClick={() => router.push("/kitchen")} className="text-xs sm:text-sm">
+              <ChefHat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Kitchen</span>
+              <span className="sm:hidden">Kitchen</span>
+            </Button>
+          )}
           {/* Show Sales Reports button for all roles except crew */}
           {!isCrew && (
             <Button variant="outline" size="sm" onClick={() => router.push("/sales-reports")} className="text-xs sm:text-sm">
