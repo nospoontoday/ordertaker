@@ -2157,6 +2157,19 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
+                                  {item.status === "ready" && (isOrderTaker || isCrew) && (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        updateItemStatus(order.id, item.id, "served")
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+                                    >
+                                      <Check className="w-4 h-4 mr-1.5" />
+                                      Mark Served
+                                    </Button>
+                                  )}
                                   {canDeleteOrders && (
                                     <Button
                                       onClick={(e) => {
@@ -2286,6 +2299,19 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-2 flex-shrink-0">
+                                        {item.status === "ready" && (isOrderTaker || isCrew) && (
+                                          <Button
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              updateAppendedItemStatus(order.id, appended.id, item.id, "served")
+                                            }}
+                                            size="sm"
+                                            className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs px-3 py-2 shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+                                          >
+                                            <Check className="w-3.5 h-3.5 mr-1.5" />
+                                            Mark Served
+                                          </Button>
+                                        )}
                                         {canDeleteOrders && (
                                           <Button
                                             onClick={(e) => {
