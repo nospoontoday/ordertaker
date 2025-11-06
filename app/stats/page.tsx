@@ -21,10 +21,8 @@ export default function StatsPage() {
   useEffect(() => {
     const loadOrders = async () => {
       try {
-        const response = await ordersApi.getAll()
-        if (!response.success || !response.data) return
-
-        const orders = response.data
+        const orders = await ordersApi.getAll()
+        if (!orders || orders.length === 0) return
         const data: HeatmapData = {}
 
         // Initialize data structure
