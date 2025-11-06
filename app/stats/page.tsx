@@ -158,7 +158,6 @@ export default function StatsPage() {
                   <div className="w-6 h-6 rounded bg-blue-500"></div>
                   <div className="w-6 h-6 rounded bg-blue-600"></div>
                 </div>
-                <span className="text-sm text-gray-600">More</span>
               </div>
             </div>
           </div>
