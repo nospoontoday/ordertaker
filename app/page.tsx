@@ -7,7 +7,7 @@ import { OrderTaker } from "@/components/order-taker"
 import { CrewDashboard } from "@/components/crew-dashboard"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3 } from "lucide-react"
 
 export default function Home() {
   const router = useRouter()
@@ -120,6 +120,14 @@ export default function Home() {
               <FileText className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">Sales Reports</span>
               <span className="sm:hidden">Reports</span>
+            </Button>
+          )}
+          {/* Show Stats button for all roles except crew */}
+          {!isCrew && (
+            <Button variant="outline" size="sm" onClick={() => router.push("/stats")} className="text-xs sm:text-sm">
+              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Stats</span>
+              <span className="sm:hidden">Stats</span>
             </Button>
           )}
           {/* Only show Admin button for super admin */}
