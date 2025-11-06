@@ -4,36 +4,27 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-interface Order {
-  id: string
-  customerName: string
-  createdAt: number
-  isPaid: boolean
-  appendedOrders?: Array<{
-    id: string
-    createdAt: number
-  }>
-}
+import { ordersApi, Order } from "@/lib/api"
 
 interface HeatmapData {
   [day: number]: { [hour: number]: number }
 }
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const HOURS = Array.from({ length: 24 }, (_, i) => i).filter(h => h < 2 || h >= 12)
 
 export default function StatsPage() {
   const [heatmapData, setHeatmapData] = useState<HeatmapData>({})
   const [maxOrders, setMaxOrders] = useState(0)
+  const [totalOrders, setTotalOrders] = useState(0)
 
   useEffect(() => {
-    const loadOrders = () => {
+    const loadOrders = async () => {
       try {
-        const ordersData = localStorage.getItem("orders")
-        if (!ordersData) return
+        const response = await ordersApi.getAll()
+        if (!response.success || !response.data) return
 
-        const orders: Order[] = JSON.parse(ordersData)
+        const orders = response.data
         const data: HeatmapData = {}
 
         // Initialize data structure
@@ -46,6 +37,7 @@ export default function StatsPage() {
 
         // Count orders by day and hour
         let max = 0
+        let total = orders.length
         orders.forEach((order) => {
           const date = new Date(order.createdAt)
           const day = date.getDay()
@@ -56,6 +48,7 @@ export default function StatsPage() {
 
           // Count appended orders
           order.appendedOrders?.forEach((appended) => {
+            total++
             const appendedDate = new Date(appended.createdAt)
             const appendedDay = appendedDate.getDay()
             const appendedHour = appendedDate.getHours()
@@ -67,6 +60,7 @@ export default function StatsPage() {
 
         setHeatmapData(data)
         setMaxOrders(max)
+        setTotalOrders(total)
       } catch (error) {
         console.error("Error loading orders:", error)
       }
@@ -167,9 +161,14 @@ export default function StatsPage() {
             </div>
           </div>
 
-          {maxOrders === 0 && (
+          {totalOrders === 0 && (
             <div className="text-center py-8 text-gray-500">
               No order data available yet. Start taking orders to see patterns.
+            </div>
+          )}
+          {totalOrders > 0 && maxOrders === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              All {totalOrders} order{totalOrders !== 1 ? "s" : ""} fall outside the displayed time range (12am-2am, 12pm-11pm).
             </div>
           )}
         </div>
