@@ -21,6 +21,8 @@ interface ItemQuantity {
   itemName: string
   totalQuantity: number
   avgPerDay: number
+  highestPerDay: number
+  lowestPerDay: number
 }
 
 const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -209,21 +211,29 @@ export default function StatsPage() {
         const orders = await ordersApi.getAll()
         if (!orders || orders.length === 0) return
 
-        // Calculate item quantities
-        const itemMap = new Map<string, number>()
+        // Calculate item quantities per day
+        // Map of date string -> item name -> quantity
+        const dailyItemMap = new Map<string, Map<string, number>>()
 
         orders.forEach(order => {
+          const orderDate = new Date(order.createdAt).toDateString()
+
+          if (!dailyItemMap.has(orderDate)) {
+            dailyItemMap.set(orderDate, new Map())
+          }
+          const dayMap = dailyItemMap.get(orderDate)!
+
           // Count main order items
           order.items.forEach(item => {
-            const current = itemMap.get(item.name) || 0
-            itemMap.set(item.name, current + item.quantity)
+            const current = dayMap.get(item.name) || 0
+            dayMap.set(item.name, current + item.quantity)
           })
 
           // Count appended order items
           order.appendedOrders?.forEach(appended => {
             appended.items.forEach(item => {
-              const current = itemMap.get(item.name) || 0
-              itemMap.set(item.name, current + item.quantity)
+              const current = dayMap.get(item.name) || 0
+              dayMap.set(item.name, current + item.quantity)
             })
           })
         })
@@ -237,13 +247,35 @@ export default function StatsPage() {
         const days = Math.max(daysDiff, 1) // At least 1 day
         setDaysInOperation(days)
 
-        // Convert to array and calculate average
-        const itemQuantitiesArray: ItemQuantity[] = Array.from(itemMap.entries())
-          .map(([itemName, totalQuantity]) => ({
-            itemName,
-            totalQuantity,
-            avgPerDay: totalQuantity / days
-          }))
+        // Calculate total, average, highest, and lowest per item
+        const itemStatsMap = new Map<string, { total: number, dailyCounts: number[] }>()
+
+        // Collect all daily counts for each item
+        dailyItemMap.forEach((dayMap) => {
+          dayMap.forEach((quantity, itemName) => {
+            if (!itemStatsMap.has(itemName)) {
+              itemStatsMap.set(itemName, { total: 0, dailyCounts: [] })
+            }
+            const stats = itemStatsMap.get(itemName)!
+            stats.total += quantity
+            stats.dailyCounts.push(quantity)
+          })
+        })
+
+        // Convert to array and calculate stats
+        const itemQuantitiesArray: ItemQuantity[] = Array.from(itemStatsMap.entries())
+          .map(([itemName, stats]) => {
+            const highestPerDay = Math.max(...stats.dailyCounts)
+            const lowestPerDay = Math.min(...stats.dailyCounts)
+
+            return {
+              itemName,
+              totalQuantity: stats.total,
+              avgPerDay: stats.total / days,
+              highestPerDay,
+              lowestPerDay
+            }
+          })
           .sort((a, b) => b.avgPerDay - a.avgPerDay) // Sort by avg per day descending
 
         setItemQuantities(itemQuantitiesArray)
@@ -355,6 +387,8 @@ export default function StatsPage() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">Item Name</th>
                   <th className="text-right py-3 px-4 font-semibold text-gray-700">Total Sold</th>
                   <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg per Day</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Highest per Day</th>
+                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Lowest per Day</th>
                 </tr>
               </thead>
               <tbody>
@@ -366,11 +400,17 @@ export default function StatsPage() {
                       <td className="py-3 px-4 text-right font-semibold text-blue-600">
                         {item.avgPerDay.toFixed(1)}
                       </td>
+                      <td className="py-3 px-4 text-right font-semibold text-green-600">
+                        {item.highestPerDay}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-orange-600">
+                        {item.lowestPerDay}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={3} className="py-8 text-center text-gray-500">
+                    <td colSpan={5} className="py-8 text-center text-gray-500">
                       No item data available yet.
                     </td>
                   </tr>
