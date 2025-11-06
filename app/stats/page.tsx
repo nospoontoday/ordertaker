@@ -10,8 +10,9 @@ interface HeatmapData {
   [day: number]: { [hour: number]: number }
 }
 
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-const HOURS = Array.from({ length: 24 }, (_, i) => i).filter(h => h < 2 || h >= 12)
+const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const DAY_INDICES = [0, 2, 3, 4, 5, 6] // Map display index to actual day index (skipping Monday = 1)
+const HOURS = Array.from({ length: 24 }, (_, i) => i).filter(h => h >= 14 && h <= 23)
 
 export default function StatsPage() {
   const [heatmapData, setHeatmapData] = useState<HeatmapData>({})
@@ -121,27 +122,30 @@ export default function StatsPage() {
               </div>
 
               {/* Heatmap grid */}
-              {DAYS.map((day, dayIndex) => (
-                <div key={dayIndex} className="flex items-center mb-1">
-                  <div className="w-24 text-sm font-medium text-gray-700 flex-shrink-0">
-                    {day}
+              {DAYS.map((day, displayIndex) => {
+                const actualDayIndex = DAY_INDICES[displayIndex]
+                return (
+                  <div key={actualDayIndex} className="flex items-center mb-1">
+                    <div className="w-24 text-sm font-medium text-gray-700 flex-shrink-0">
+                      {day}
+                    </div>
+                    <div className="flex gap-1">
+                      {HOURS.map((hour) => {
+                        const count = heatmapData[actualDayIndex]?.[hour] || 0
+                        return (
+                          <div
+                            key={hour}
+                            className={`w-8 h-8 rounded ${getColor(count)} flex items-center justify-center text-xs font-medium transition-all hover:scale-110 cursor-pointer`}
+                            title={`${day} ${formatHour(hour)}: ${count} order${count !== 1 ? "s" : ""}`}
+                          >
+                            {count > 0 && <span className="text-white">{count}</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="flex gap-1">
-                    {HOURS.map((hour) => {
-                      const count = heatmapData[dayIndex]?.[hour] || 0
-                      return (
-                        <div
-                          key={hour}
-                          className={`w-8 h-8 rounded ${getColor(count)} flex items-center justify-center text-xs font-medium transition-all hover:scale-110 cursor-pointer`}
-                          title={`${day} ${formatHour(hour)}: ${count} order${count !== 1 ? "s" : ""}`}
-                        >
-                          {count > 0 && <span className="text-white">{count}</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
 
               {/* Legend */}
               <div className="mt-6 flex items-center gap-4">
