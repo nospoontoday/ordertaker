@@ -4,10 +4,17 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ordersApi, Order } from "@/lib/api"
+import { ordersApi, Order, menuItemsApi, MenuItem, withdrawalsApi, Withdrawal } from "@/lib/api"
 
 interface HeatmapData {
   [day: number]: { [hour: number]: number }
+}
+
+interface OwnerStats {
+  grossSales: number
+  withdrawals: number
+  purchases: number
+  net: number
 }
 
 const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -18,6 +25,8 @@ export default function StatsPage() {
   const [heatmapData, setHeatmapData] = useState<HeatmapData>({})
   const [maxOrders, setMaxOrders] = useState(0)
   const [totalOrders, setTotalOrders] = useState(0)
+  const [johnStats, setJohnStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
+  const [elwinStats, setElwinStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -68,6 +77,124 @@ export default function StatsPage() {
     loadOrders()
   }, [])
 
+  useEffect(() => {
+    const loadOwnerStats = async () => {
+      try {
+        // Fetch all data
+        const [orders, menuItems, withdrawals] = await Promise.all([
+          ordersApi.getAll(),
+          menuItemsApi.getAll(),
+          withdrawalsApi.getAll()
+        ])
+
+        // Create menu item lookup by name with owner info
+        const menuItemMap = new Map<string, MenuItem>()
+        menuItems.forEach(item => {
+          menuItemMap.set(item.name, item)
+        })
+
+        // Calculate gross sales per owner
+        let johnGross = 0
+        let elwinGross = 0
+
+        orders.forEach(order => {
+          if (!order.isPaid) return // Only count paid orders
+
+          // Calculate main order items
+          order.items.forEach(item => {
+            const menuItem = menuItemMap.get(item.name)
+            const itemTotal = item.price * item.quantity
+
+            if (menuItem?.owner === "john") {
+              johnGross += itemTotal
+            } else if (menuItem?.owner === "elwin") {
+              elwinGross += itemTotal
+            } else {
+              // If no owner specified, split 50/50
+              johnGross += itemTotal / 2
+              elwinGross += itemTotal / 2
+            }
+          })
+
+          // Calculate appended orders items
+          order.appendedOrders?.forEach(appended => {
+            if (appended.isPaid) {
+              appended.items.forEach(item => {
+                const menuItem = menuItemMap.get(item.name)
+                const itemTotal = item.price * item.quantity
+
+                if (menuItem?.owner === "john") {
+                  johnGross += itemTotal
+                } else if (menuItem?.owner === "elwin") {
+                  elwinGross += itemTotal
+                } else {
+                  // If no owner specified, split 50/50
+                  johnGross += itemTotal / 2
+                  elwinGross += itemTotal / 2
+                }
+              })
+            }
+          })
+        })
+
+        // Calculate withdrawals and purchases per owner
+        let johnWithdrawals = 0
+        let johnPurchases = 0
+        let elwinWithdrawals = 0
+        let elwinPurchases = 0
+
+        withdrawals.forEach(withdrawal => {
+          const amount = withdrawal.amount
+
+          if (withdrawal.chargedTo === "john") {
+            if (withdrawal.type === "withdrawal") {
+              johnWithdrawals += amount
+            } else {
+              johnPurchases += amount
+            }
+          } else if (withdrawal.chargedTo === "elwin") {
+            if (withdrawal.type === "withdrawal") {
+              elwinWithdrawals += amount
+            } else {
+              elwinPurchases += amount
+            }
+          } else if (withdrawal.chargedTo === "all") {
+            // Split 50/50
+            if (withdrawal.type === "withdrawal") {
+              johnWithdrawals += amount / 2
+              elwinWithdrawals += amount / 2
+            } else {
+              johnPurchases += amount / 2
+              elwinPurchases += amount / 2
+            }
+          }
+        })
+
+        // Calculate net
+        const johnNet = johnGross - johnWithdrawals - johnPurchases
+        const elwinNet = elwinGross - elwinWithdrawals - elwinPurchases
+
+        setJohnStats({
+          grossSales: johnGross,
+          withdrawals: johnWithdrawals,
+          purchases: johnPurchases,
+          net: johnNet
+        })
+
+        setElwinStats({
+          grossSales: elwinGross,
+          withdrawals: elwinWithdrawals,
+          purchases: elwinPurchases,
+          net: elwinNet
+        })
+      } catch (error) {
+        console.error("Error loading owner stats:", error)
+      }
+    }
+
+    loadOwnerStats()
+  }, [])
+
   const getColor = (count: number) => {
     if (count === 0) return "bg-gray-100"
     const intensity = Math.min((count / maxOrders) * 100, 100)
@@ -98,6 +225,59 @@ export default function StatsPage() {
           <div>
             <h1 className="text-3xl font-bold">Order Statistics</h1>
             <p className="text-gray-600 mt-1">Customer order patterns by time and day</p>
+          </div>
+        </div>
+
+        {/* Owner Financial Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* John's Stats */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-semibold mb-4 text-blue-600">John&apos;s Financial Summary</h2>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-600">Gross Sales:</span>
+                <span className="text-lg font-semibold text-green-600">₱{johnStats.grossSales.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-600">Withdrawals:</span>
+                <span className="text-lg font-semibold text-red-600">₱{johnStats.withdrawals.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-600">Purchases:</span>
+                <span className="text-lg font-semibold text-orange-600">₱{johnStats.purchases.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t-2 border-gray-300">
+                <span className="text-gray-800 font-semibold">Net Total:</span>
+                <span className={`text-xl font-bold ${johnStats.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₱{johnStats.net.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Elwin's Stats */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-semibold mb-4 text-purple-600">Elwin&apos;s Financial Summary</h2>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-600">Gross Sales:</span>
+                <span className="text-lg font-semibold text-green-600">₱{elwinStats.grossSales.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-600">Withdrawals:</span>
+                <span className="text-lg font-semibold text-red-600">₱{elwinStats.withdrawals.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="text-gray-600">Purchases:</span>
+                <span className="text-lg font-semibold text-orange-600">₱{elwinStats.purchases.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t-2 border-gray-300">
+                <span className="text-gray-800 font-semibold">Net Total:</span>
+                <span className={`text-xl font-bold ${elwinStats.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₱{elwinStats.net.toFixed(2)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
