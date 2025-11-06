@@ -113,8 +113,8 @@ export default function StatsPage() {
               <div className="flex mb-2">
                 <div className="w-24 flex-shrink-0"></div>
                 <div className="flex gap-1">
-                  {HOURS.filter((h) => h % 2 === 0).map((hour) => (
-                    <div key={hour} className="w-8 text-xs text-center text-gray-600" style={{ marginRight: "4px" }}>
+                  {HOURS.map((hour) => (
+                    <div key={hour} className="w-8 text-xs text-center text-gray-600">
                       {formatHour(hour)}
                     </div>
                   ))}
