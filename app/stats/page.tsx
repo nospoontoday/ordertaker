@@ -288,7 +288,7 @@ export default function StatsPage() {
             }
           })
           .filter(item => {
-            // Exclude items in "misc" or "add-on" categories (regardless of avgPerDay)
+            // First, exclude items in "misc" or "add-on" categories (regardless of avgPerDay)
             const menuItem = menuItemMap.get(item.itemName)
             if (menuItem) {
               const category = menuItem.category.toLowerCase().trim()
@@ -297,7 +297,7 @@ export default function StatsPage() {
               }
             }
 
-            // Exclude items with average per day below 1
+            // Then, exclude items with average per day below 1
             if (item.avgPerDay < 1) {
               return false
             }
