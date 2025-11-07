@@ -46,7 +46,7 @@ echo "=========================================="
 echo "Step 1: Building backend image..."
 echo "=========================================="
 cd backend
-docker build -t ${DOCKERHUB_USERNAME}/ordertaker-backend:${TAG} .
+docker build --no-cache -t ${DOCKERHUB_USERNAME}/ordertaker-backend:${TAG} .
 docker tag ${DOCKERHUB_USERNAME}/ordertaker-backend:${TAG} ${DOCKERHUB_USERNAME}/ordertaker-backend:latest
 echo "✓ Backend image built successfully"
 cd ..
@@ -55,7 +55,7 @@ echo ""
 echo "=========================================="
 echo "Step 2: Building frontend image..."
 echo "=========================================="
-docker build -t ${DOCKERHUB_USERNAME}/ordertaker-app:${TAG} .
+docker build --no-cache -t ${DOCKERHUB_USERNAME}/ordertaker-app:${TAG} .
 docker tag ${DOCKERHUB_USERNAME}/ordertaker-app:${TAG} ${DOCKERHUB_USERNAME}/ordertaker-app:latest
 echo "✓ Frontend image built successfully"
 
