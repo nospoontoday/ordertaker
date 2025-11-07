@@ -208,8 +208,18 @@ export default function StatsPage() {
   useEffect(() => {
     const loadItemQuantities = async () => {
       try {
-        const orders = await ordersApi.getAll()
+        const [orders, menuItems] = await Promise.all([
+          ordersApi.getAll(),
+          menuItemsApi.getAll()
+        ])
+
         if (!orders || orders.length === 0) return
+
+        // Create menu item lookup for categories
+        const menuItemMap = new Map<string, MenuItem>()
+        menuItems.forEach(item => {
+          menuItemMap.set(item.name, item)
+        })
 
         // Calculate item quantities per day
         // Map of date string -> item name -> quantity
@@ -276,7 +286,21 @@ export default function StatsPage() {
               lowestPerDay
             }
           })
-          .filter(item => item.avgPerDay >= 1) // Only show items with at least 1 order average
+          .filter(item => {
+            // Only show items with at least 1 order average
+            if (item.avgPerDay < 1) return false
+
+            // Exclude items in "misc" or "add-on" categories
+            const menuItem = menuItemMap.get(item.itemName)
+            if (menuItem) {
+              const category = menuItem.category.toLowerCase()
+              if (category === "misc" || category === "add-on" || category === "add-ons") {
+                return false
+              }
+            }
+
+            return true
+          })
           .sort((a, b) => b.avgPerDay - a.avgPerDay) // Sort by avg per day descending
 
         setItemQuantities(itemQuantitiesArray)
