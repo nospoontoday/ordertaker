@@ -276,6 +276,7 @@ export default function StatsPage() {
               lowestPerDay
             }
           })
+          .filter(item => item.avgPerDay >= 1) // Only show items with at least 1 order average
           .sort((a, b) => b.avgPerDay - a.avgPerDay) // Sort by avg per day descending
 
         setItemQuantities(itemQuantitiesArray)
