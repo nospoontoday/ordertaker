@@ -17,14 +17,6 @@ interface OwnerStats {
   net: number
 }
 
-interface ItemQuantity {
-  itemName: string
-  totalQuantity: number
-  avgPerDay: number
-  highestPerDay: number
-  lowestPerDay: number
-}
-
 const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const DAY_INDICES = [0, 2, 3, 4, 5, 6] // Map display index to actual day index (skipping Monday = 1)
 const HOURS = Array.from({ length: 24 }, (_, i) => i).filter(h => h >= 14 && h <= 23)
@@ -35,8 +27,6 @@ export default function StatsPage() {
   const [totalOrders, setTotalOrders] = useState(0)
   const [johnStats, setJohnStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
   const [elwinStats, setElwinStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
-  const [itemQuantities, setItemQuantities] = useState<ItemQuantity[]>([])
-  const [daysInOperation, setDaysInOperation] = useState(0)
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -205,115 +195,6 @@ export default function StatsPage() {
     loadOwnerStats()
   }, [])
 
-  useEffect(() => {
-    const loadItemQuantities = async () => {
-      try {
-        const [orders, menuItems] = await Promise.all([
-          ordersApi.getAll(),
-          menuItemsApi.getAll()
-        ])
-
-        if (!orders || orders.length === 0) return
-
-        // Create menu item lookup for categories
-        const menuItemMap = new Map<string, MenuItem>()
-        menuItems.forEach(item => {
-          menuItemMap.set(item.name, item)
-        })
-
-        // Calculate item quantities per day
-        // Map of date string -> item name -> quantity
-        const dailyItemMap = new Map<string, Map<string, number>>()
-
-        orders.forEach(order => {
-          const orderDate = new Date(order.createdAt).toDateString()
-
-          if (!dailyItemMap.has(orderDate)) {
-            dailyItemMap.set(orderDate, new Map())
-          }
-          const dayMap = dailyItemMap.get(orderDate)!
-
-          // Count main order items
-          order.items.forEach(item => {
-            const current = dayMap.get(item.name) || 0
-            dayMap.set(item.name, current + item.quantity)
-          })
-
-          // Count appended order items
-          order.appendedOrders?.forEach(appended => {
-            appended.items.forEach(item => {
-              const current = dayMap.get(item.name) || 0
-              dayMap.set(item.name, current + item.quantity)
-            })
-          })
-        })
-
-        // Calculate days in operation
-        const oldestOrder = orders.reduce((oldest, order) => {
-          return order.createdAt < oldest ? order.createdAt : oldest
-        }, Date.now())
-
-        const daysDiff = Math.ceil((Date.now() - oldestOrder) / (1000 * 60 * 60 * 24))
-        const days = Math.max(daysDiff, 1) // At least 1 day
-        setDaysInOperation(days)
-
-        // Calculate total, average, highest, and lowest per item
-        const itemStatsMap = new Map<string, { total: number, dailyCounts: number[] }>()
-
-        // Collect all daily counts for each item
-        dailyItemMap.forEach((dayMap) => {
-          dayMap.forEach((quantity, itemName) => {
-            if (!itemStatsMap.has(itemName)) {
-              itemStatsMap.set(itemName, { total: 0, dailyCounts: [] })
-            }
-            const stats = itemStatsMap.get(itemName)!
-            stats.total += quantity
-            stats.dailyCounts.push(quantity)
-          })
-        })
-
-        // Convert to array and calculate stats
-        const itemQuantitiesArray: ItemQuantity[] = Array.from(itemStatsMap.entries())
-          .map(([itemName, stats]) => {
-            const highestPerDay = Math.max(...stats.dailyCounts)
-            const lowestPerDay = Math.min(...stats.dailyCounts)
-            const avgPerDay = stats.total / days
-
-            return {
-              itemName,
-              totalQuantity: stats.total,
-              avgPerDay,
-              highestPerDay,
-              lowestPerDay
-            }
-          })
-          .filter(item => {
-            // First, exclude items in "misc" or "add-on" categories (regardless of avgPerDay)
-            const menuItem = menuItemMap.get(item.itemName)
-            if (menuItem) {
-              const category = menuItem.category.toLowerCase().trim()
-              if (category === "misc" || category === "add-on" || category === "add-ons") {
-                return false
-              }
-            }
-
-            // Then, exclude items with average per day below 1
-            if (item.avgPerDay < 1) {
-              return false
-            }
-
-            return true
-          })
-          .sort((a, b) => b.avgPerDay - a.avgPerDay) // Sort by avg per day descending
-
-        setItemQuantities(itemQuantitiesArray)
-      } catch (error) {
-        console.error("Error loading item quantities:", error)
-      }
-    }
-
-    loadItemQuantities()
-  }, [])
 
   const getColor = (count: number) => {
     if (count === 0) return "bg-gray-100"
@@ -398,53 +279,6 @@ export default function StatsPage() {
                 </span>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Item Quantities Stats */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-2">Average Item Quantities per Day</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Based on {daysInOperation} day{daysInOperation !== 1 ? 's' : ''} of operation. Use this to prepare stock levels.
-          </p>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b-2 border-gray-300">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Item Name</th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Total Sold</th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg per Day</th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Highest per Day</th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-700">Lowest per Day</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itemQuantities.length > 0 ? (
-                  itemQuantities.map((item, index) => (
-                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-gray-800">{item.itemName}</td>
-                      <td className="py-3 px-4 text-right text-gray-800">{item.totalQuantity}</td>
-                      <td className="py-3 px-4 text-right font-semibold text-blue-600">
-                        {item.avgPerDay.toFixed(1)}
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-green-600">
-                        {item.highestPerDay}
-                      </td>
-                      <td className="py-3 px-4 text-right font-semibold text-orange-600">
-                        {item.lowestPerDay}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">
-                      No item data available yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
 
