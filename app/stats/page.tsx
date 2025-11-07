@@ -277,24 +277,30 @@ export default function StatsPage() {
           .map(([itemName, stats]) => {
             const highestPerDay = Math.max(...stats.dailyCounts)
             const lowestPerDay = Math.min(...stats.dailyCounts)
+            const avgPerDay = stats.total / days
 
             return {
               itemName,
               totalQuantity: stats.total,
-              avgPerDay: stats.total / days,
+              avgPerDay,
               highestPerDay,
               lowestPerDay
             }
           })
           .filter(item => {
             // Only show items with at least 1 order average
-            if (item.avgPerDay < 1) return false
+            if (item.avgPerDay < 1) {
+              console.log(`Filtering out ${item.itemName}: avgPerDay = ${item.avgPerDay}`)
+              return false
+            }
 
             // Exclude items in "misc" or "add-on" categories
             const menuItem = menuItemMap.get(item.itemName)
             if (menuItem) {
               const category = menuItem.category.toLowerCase()
+              console.log(`Item: ${item.itemName}, Category: ${category}`)
               if (category === "misc" || category === "add-on" || category === "add-ons") {
+                console.log(`Filtering out ${item.itemName}: category = ${category}`)
                 return false
               }
             }
