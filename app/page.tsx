@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { OrderTaker } from "@/components/order-taker"
 import { CrewDashboard } from "@/components/crew-dashboard"
+import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
 import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3 } from "lucide-react"
@@ -12,7 +13,7 @@ import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3 } from "lucide
 export default function Home() {
   const router = useRouter()
   const { user, isLoading, logout } = useAuth()
-  const [view, setView] = useState<"taker" | "crew">("crew")
+  const [view, setView] = useState<"taker" | "crew" | "past">("crew")
   const [mounted, setMounted] = useState(false)
   const [appendingOrderId, setAppendingOrderId] = useState<string | null>(null)
 
@@ -20,6 +21,7 @@ export default function Home() {
   const isCrew = user?.role === "crew"
   const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew"
   const canAccessAdmin = user?.role === "super_admin"
+  const canAccessPastOrders = user?.role === "admin" || user?.role === "super_admin"
   const isOrderTakerCrew = user?.role === "order_taker_crew"
 
   useEffect(() => {
@@ -100,6 +102,16 @@ export default function Home() {
             >
               Order Dashboard
             </button>
+            {canAccessPastOrders && (
+              <button
+                onClick={() => setView("past")}
+                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
+                  view === "past" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                Past Orders
+              </button>
+            )}
           </div>
         )}
 
@@ -157,6 +169,9 @@ export default function Home() {
 
       {/* Show Crew Dashboard for crew users or when view is crew */}
       {(isCrew || view === "crew") && <CrewDashboard onAppendItems={(orderId) => setAppendingOrderId(orderId)} />}
+
+      {/* Show Past Orders only for admins and super_admins */}
+      {canAccessPastOrders && view === "past" && <PastOrders />}
     </div>
   )
 }
