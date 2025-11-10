@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ordersApi, Order, menuItemsApi, MenuItem, withdrawalsApi, Withdrawal } from "@/lib/api"
 
 interface HeatmapData {
-  [day: number]: { [hour: number]: number }
+  [day: number]: { [hour: number]: { total: number; dates: Set<string> } }
 }
 
 interface OwnerStats {
@@ -39,20 +39,21 @@ export default function StatsPage() {
         for (let day = 0; day < 7; day++) {
           data[day] = {}
           for (let hour = 0; hour < 24; hour++) {
-            data[day][hour] = 0
+            data[day][hour] = { total: 0, dates: new Set<string>() }
           }
         }
 
-        // Count orders by day and hour
+        // Count orders by day and hour, tracking unique dates
         let max = 0
         let total = orders.length
         orders.forEach((order) => {
           const date = new Date(order.createdAt)
           const day = date.getDay()
           const hour = date.getHours()
+          const dateKey = date.toISOString().split('T')[0] // YYYY-MM-DD
 
-          data[day][hour]++
-          if (data[day][hour] > max) max = data[day][hour]
+          data[day][hour].total++
+          data[day][hour].dates.add(dateKey)
 
           // Count appended orders
           order.appendedOrders?.forEach((appended) => {
@@ -60,11 +61,21 @@ export default function StatsPage() {
             const appendedDate = new Date(appended.createdAt)
             const appendedDay = appendedDate.getDay()
             const appendedHour = appendedDate.getHours()
+            const appendedDateKey = appendedDate.toISOString().split('T')[0]
 
-            data[appendedDay][appendedHour]++
-            if (data[appendedDay][appendedHour] > max) max = data[appendedDay][appendedHour]
+            data[appendedDay][appendedHour].total++
+            data[appendedDay][appendedHour].dates.add(appendedDateKey)
           })
         })
+
+        // Calculate max average
+        for (let day = 0; day < 7; day++) {
+          for (let hour = 0; hour < 24; hour++) {
+            const { total, dates } = data[day][hour]
+            const avg = dates.size > 0 ? total / dates.size : 0
+            if (avg > max) max = avg
+          }
+        }
 
         setHeatmapData(data)
         setMaxOrders(max)
@@ -312,14 +323,16 @@ export default function StatsPage() {
                     </div>
                     <div className="flex gap-1">
                       {HOURS.map((hour) => {
-                        const count = heatmapData[actualDayIndex]?.[hour] || 0
+                        const cell = heatmapData[actualDayIndex]?.[hour]
+                        const avg = cell && cell.dates.size > 0 ? cell.total / cell.dates.size : 0
+                        const displayValue = avg > 0 ? avg.toFixed(1) : ""
                         return (
                           <div
                             key={hour}
-                            className={`w-8 h-8 rounded ${getColor(count)} flex items-center justify-center text-xs font-medium transition-all hover:scale-110 cursor-pointer`}
-                            title={`${day} ${formatHour(hour)}: ${count} order${count !== 1 ? "s" : ""}`}
+                            className={`w-8 h-8 rounded ${getColor(avg)} flex items-center justify-center text-xs font-medium transition-all hover:scale-110 cursor-pointer`}
+                            title={`${day} ${formatHour(hour)}: ${avg.toFixed(1)} avg orders (${cell?.total || 0} total over ${cell?.dates.size || 0} day${cell?.dates.size !== 1 ? "s" : ""})`}
                           >
-                            {count > 0 && <span className="text-white">{count}</span>}
+                            {displayValue && <span className="text-white">{displayValue}</span>}
                           </div>
                         )
                       })}
