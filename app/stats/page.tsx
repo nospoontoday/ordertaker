@@ -358,6 +358,37 @@ export default function StatsPage() {
           </div>
         )}
 
+        {/* Combined Total Stats */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Overall Financial Summary</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <p className="text-sm text-gray-600 mb-1">Total Sales</p>
+              <p className="text-2xl font-bold text-green-600">
+                ₱{(johnStats.grossSales + elwinStats.grossSales).toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+              <p className="text-sm text-gray-600 mb-1">Total Withdrawals</p>
+              <p className="text-2xl font-bold text-red-600">
+                ₱{(johnStats.withdrawals + elwinStats.withdrawals).toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+              <p className="text-sm text-gray-600 mb-1">Total Purchases</p>
+              <p className="text-2xl font-bold text-orange-600">
+                ₱{(johnStats.purchases + elwinStats.purchases).toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <p className="text-sm text-gray-600 mb-1">Net Total</p>
+              <p className={`text-2xl font-bold ${(johnStats.net + elwinStats.net) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                ₱{(johnStats.net + elwinStats.net).toFixed(2)}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Owner Financial Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* John's Stats */}
