@@ -17,6 +17,13 @@ interface OwnerStats {
   net: number
 }
 
+interface ItemAverage {
+  name: string
+  averagePerDay: number
+  totalQuantity: number
+  totalDays: number
+}
+
 const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const DAY_INDICES = [0, 2, 3, 4, 5, 6] // Map display index to actual day index (skipping Monday = 1)
 const HOURS = Array.from({ length: 24 }, (_, i) => i).filter(h => h >= 14 && h <= 23)
@@ -27,6 +34,7 @@ export default function StatsPage() {
   const [totalOrders, setTotalOrders] = useState(0)
   const [johnStats, setJohnStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
   const [elwinStats, setElwinStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
+  const [itemAverages, setItemAverages] = useState<ItemAverage[]>([])
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -206,6 +214,77 @@ export default function StatsPage() {
     loadOwnerStats()
   }, [])
 
+  useEffect(() => {
+    const calculateItemAverages = async () => {
+      try {
+        const orders = await ordersApi.getAll()
+        if (!orders || orders.length === 0) return
+
+        // Track item quantities per date
+        const itemsByDate = new Map<string, Map<string, number>>() // date -> itemName -> quantity
+        const allDates = new Set<string>()
+
+        orders.forEach(order => {
+          const dateKey = new Date(order.createdAt).toISOString().split('T')[0]
+          allDates.add(dateKey)
+
+          if (!itemsByDate.has(dateKey)) {
+            itemsByDate.set(dateKey, new Map())
+          }
+          const dateItems = itemsByDate.get(dateKey)!
+
+          // Count main order items
+          order.items.forEach(item => {
+            const currentQty = dateItems.get(item.name) || 0
+            dateItems.set(item.name, currentQty + item.quantity)
+          })
+
+          // Count appended order items
+          order.appendedOrders?.forEach(appended => {
+            appended.items.forEach(item => {
+              const currentQty = dateItems.get(item.name) || 0
+              dateItems.set(item.name, currentQty + item.quantity)
+            })
+          })
+        })
+
+        // Calculate averages for each item
+        const itemTotals = new Map<string, number>()
+        itemsByDate.forEach(dateItems => {
+          dateItems.forEach((quantity, itemName) => {
+            const current = itemTotals.get(itemName) || 0
+            itemTotals.set(itemName, current + quantity)
+          })
+        })
+
+        const totalDays = allDates.size
+        const averages: ItemAverage[] = []
+
+        itemTotals.forEach((totalQuantity, itemName) => {
+          const averagePerDay = totalQuantity / totalDays
+
+          // Only include items with average > 1 per day
+          if (averagePerDay > 1) {
+            averages.push({
+              name: itemName,
+              averagePerDay,
+              totalQuantity,
+              totalDays
+            })
+          }
+        })
+
+        // Sort by average descending
+        averages.sort((a, b) => b.averagePerDay - a.averagePerDay)
+
+        setItemAverages(averages)
+      } catch (error) {
+        console.error("Error calculating item averages:", error)
+      }
+    }
+
+    calculateItemAverages()
+  }, [])
 
   const getColor = (count: number) => {
     if (count === 0) return "bg-gray-100"
@@ -239,6 +318,45 @@ export default function StatsPage() {
             <p className="text-gray-600 mt-1">Customer order patterns by time and day</p>
           </div>
         </div>
+
+        {/* Daily Preparation Guide */}
+        {itemAverages.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Daily Preparation Guide</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Average orders per day for items with more than 1 order per day. Prepare at least these quantities to serve orders quickly.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Item Name</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg Per Day</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Total Orders</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itemAverages.map((item, index) => (
+                    <tr key={item.name} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50' : ''}`}>
+                      <td className="py-3 px-4 font-medium">{item.name}</td>
+                      <td className="py-3 px-4 text-right">
+                        <span className="inline-flex items-center justify-center min-w-[60px] px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-bold">
+                          {Math.ceil(item.averagePerDay)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-600">{item.totalQuantity}</td>
+                      <td className="py-3 px-4 text-right text-gray-600">{item.totalDays}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-500 mt-4">
+              💡 Tip: The &quot;Avg Per Day&quot; column shows the rounded-up quantity to prepare each day.
+            </p>
+          </div>
+        )}
 
         {/* Owner Financial Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
