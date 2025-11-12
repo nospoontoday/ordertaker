@@ -440,6 +440,11 @@ export default function SalesReportsPage() {
                             <div className="flex items-center gap-2 mb-1">
                               <Badge className="bg-red-600 text-white font-bold text-xs">💰 Withdrawal</Badge>
                               <span className="text-sm font-bold text-red-700">-₱{withdrawal.amount.toFixed(2)}</span>
+                              <Badge className={`text-xs font-bold ${
+                                withdrawal.paymentMethod === 'gcash' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
+                              }`}>
+                                {withdrawal.paymentMethod === 'gcash' ? 'Ⓖ GCash' : '💵 Cash'}
+                              </Badge>
                             </div>
                             <p className="text-sm text-slate-700">{withdrawal.description}</p>
                             <div className="flex items-center gap-2 mt-1">
@@ -472,6 +477,11 @@ export default function SalesReportsPage() {
                             <div className="flex items-center gap-2 mb-1">
                               <Badge className="bg-orange-500 text-white font-bold text-xs">🛒 Purchase</Badge>
                               <span className="text-sm font-bold text-orange-700">-₱{purchase.amount.toFixed(2)}</span>
+                              <Badge className={`text-xs font-bold ${
+                                purchase.paymentMethod === 'gcash' ? 'bg-blue-600 text-white' : 'bg-green-600 text-white'
+                              }`}>
+                                {purchase.paymentMethod === 'gcash' ? 'Ⓖ GCash' : '💵 Cash'}
+                              </Badge>
                             </div>
                             <p className="text-sm text-slate-700">{purchase.description}</p>
                             <div className="flex items-center gap-2 mt-1">

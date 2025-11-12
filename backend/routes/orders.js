@@ -200,6 +200,10 @@ router.get('/daily-sales', async (req, res) => {
           totalGcash: 0,
           totalWithdrawals: 0,
           totalPurchases: 0,
+          totalCashWithdrawals: 0,
+          totalGcashWithdrawals: 0,
+          totalCashPurchases: 0,
+          totalGcashPurchases: 0,
           // Owner-specific totals
           salesByOwner: {
             john: 0,
@@ -356,7 +360,15 @@ router.get('/daily-sales', async (req, res) => {
         if (withdrawal.type === 'withdrawal') {
           dailySales.withdrawals.push(withdrawal);
           dailySales.totalWithdrawals += withdrawal.amount;
-          
+
+          // Track withdrawals by payment method
+          const paymentMethod = withdrawal.paymentMethod || 'cash'; // Default to cash if not specified
+          if (paymentMethod === 'gcash') {
+            dailySales.totalGcashWithdrawals += withdrawal.amount;
+          } else {
+            dailySales.totalCashWithdrawals += withdrawal.amount;
+          }
+
           // Track withdrawals by owner
           if (chargedTo === 'all') {
             // Split equally between both owners
@@ -369,7 +381,15 @@ router.get('/daily-sales', async (req, res) => {
         } else if (withdrawal.type === 'purchase') {
           dailySales.purchases.push(withdrawal);
           dailySales.totalPurchases += withdrawal.amount;
-          
+
+          // Track purchases by payment method
+          const paymentMethod = withdrawal.paymentMethod || 'cash'; // Default to cash if not specified
+          if (paymentMethod === 'gcash') {
+            dailySales.totalGcashPurchases += withdrawal.amount;
+          } else {
+            dailySales.totalCashPurchases += withdrawal.amount;
+          }
+
           // Track purchases by owner
           if (chargedTo === 'all') {
             // Split equally between both owners
@@ -397,8 +417,9 @@ router.get('/daily-sales', async (req, res) => {
       const johnNetTotal = daily.salesByOwner.john - johnTotalDeductions;
       const elwinNetTotal = daily.salesByOwner.elwin - elwinTotalDeductions;
 
-      // Calculate cash received: total sales - (total purchases + total withdrawals) - gcash received
-      const calculatedTotalCash = daily.totalSales - (daily.totalPurchases + daily.totalWithdrawals) - daily.totalGcash;
+      // Calculate cash and gcash received after deducting withdrawals/purchases from their respective payment methods
+      const calculatedTotalCash = daily.totalCash - daily.totalCashWithdrawals - daily.totalCashPurchases;
+      const calculatedTotalGcash = daily.totalGcash - daily.totalGcashWithdrawals - daily.totalGcashPurchases;
 
       return {
         date: daily.date,
@@ -408,7 +429,7 @@ router.get('/daily-sales', async (req, res) => {
         purchases: daily.purchases,
         totalSales: daily.totalSales,
         totalCash: calculatedTotalCash,
-        totalGcash: daily.totalGcash,
+        totalGcash: calculatedTotalGcash,
         totalWithdrawals: daily.totalWithdrawals,
         totalPurchases: daily.totalPurchases,
         netSales: daily.totalSales - daily.totalWithdrawals - daily.totalPurchases,
