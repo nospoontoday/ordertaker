@@ -8,7 +8,7 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3 } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package } from "lucide-react"
 
 export default function Home() {
   const router = useRouter()
@@ -142,6 +142,12 @@ export default function Home() {
               <span className="sm:hidden">Stats</span>
             </Button>
           )}
+          {/* Show Inventory button for all users */}
+          <Button variant="outline" size="sm" onClick={() => router.push("/inventory")} className="text-xs sm:text-sm">
+            <Package className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Inventory</span>
+            <span className="sm:hidden">Inventory</span>
+          </Button>
           {/* Only show Admin button for super admin */}
           {canAccessAdmin && (
             <Button variant="outline" size="sm" onClick={() => router.push("/admin")} className="text-xs sm:text-sm">
