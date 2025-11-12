@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar } from "lucide-react"
+import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp } from "lucide-react"
 import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -758,16 +758,28 @@ export function OrderTaker({
                 </div>
               )}
               {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.location.href = '/historical-order'}
-                  className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
-                >
-                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Daily Summary</span>
-                  <span className="sm:hidden">Summary</span>
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.href = '/historical-order'}
+                    className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
+                  >
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Daily Summary</span>
+                    <span className="sm:hidden">Summary</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.location.href = '/monthly-report'}
+                    className="gap-1 sm:gap-2 border-slate-200 hover:border-slate-300 hover:shadow-md transition-all text-xs sm:text-sm"
+                  >
+                    <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Monthly Report</span>
+                    <span className="sm:hidden">Monthly</span>
+                  </Button>
+                </>
               )}
               {canWithdraw && (
                 <Button
