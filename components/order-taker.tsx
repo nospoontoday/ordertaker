@@ -32,6 +32,14 @@ interface AppendedOrder {
   gcashAmount?: number
 }
 
+interface OrderNote {
+  id: string
+  content: string
+  createdAt: number
+  createdBy?: string
+  createdByEmail?: string
+}
+
 interface Order {
   id: string
   customerName: string
@@ -43,6 +51,7 @@ interface Order {
   gcashAmount?: number
   orderType?: "dine-in" | "take-out"
   appendedOrders?: AppendedOrder[]
+  notes?: OrderNote[]
 }
 
 interface MenuItem {
@@ -109,6 +118,7 @@ export function OrderTaker({
 }: { appendingOrderId: string | null; onAppendComplete: () => void }) {
   const [customerName, setCustomerName] = useState("")
   const [orderType, setOrderType] = useState<"dine-in" | "take-out">("dine-in")
+  const [orderNote, setOrderNote] = useState("")
   const [currentOrder, setCurrentOrder] = useState<OrderItem[]>([])
   const [newItems, setNewItems] = useState<OrderItem[]>([])
   const [orders, setOrders] = useState<Order[]>([])
@@ -369,6 +379,7 @@ export function OrderTaker({
       } else {
         // Create new order
         const currentOrderType = orderType; // Capture current value before any state changes
+        const currentOrderNote = orderNote.trim(); // Capture current note value
         const newOrder: Order = {
           id: `order-${Date.now()}`,
           customerName: customerName.trim(),
@@ -377,6 +388,13 @@ export function OrderTaker({
           isPaid: false,
           orderType: currentOrderType,
           appendedOrders: [],
+          notes: currentOrderNote ? [{
+            id: `note-${Date.now()}`,
+            content: currentOrderNote,
+            createdAt: Date.now(),
+            createdBy: user?.name,
+            createdByEmail: user?.email,
+          }] : [],
         }
 
         console.log('Creating order with type:', currentOrderType)
@@ -395,6 +413,7 @@ export function OrderTaker({
             isPaid: newOrder.isPaid,
             orderType: newOrder.orderType || "dine-in",
             appendedOrders: [],
+            notes: newOrder.notes,
             orderTakerName: user?.name,
             orderTakerEmail: user?.email,
           })
@@ -424,6 +443,7 @@ export function OrderTaker({
         setCustomerName("")
         setCurrentOrder([])
         setOrderType("dine-in")
+        setOrderNote("")
       }
     } catch (error) {
       console.error("Error submitting order:", error)
@@ -962,6 +982,17 @@ export function OrderTaker({
               />
             </div>
 
+            {!isAppending && (
+              <div className="mb-5">
+                <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
+                <Input
+                  value={orderNote}
+                  onChange={(e) => setOrderNote(e.target.value)}
+                  placeholder="Add a note for this order"
+                  className="w-full border-slate-200 focus:border-slate-400"
+                />
+              </div>
+            )}
 
             {isAppending && appendingOrder && (
               <div className="mb-5 pb-5 border-b border-slate-200/80">
