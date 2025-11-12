@@ -2,45 +2,16 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { MonthlySalesReport } from "@/components/monthly-sales-report"
-import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 
 export default function MonthlyReportPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date()
     return { month: now.getMonth(), year: now.getFullYear() }
   })
-
-  // Check if user has access (super_admin only)
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
-        <div className="text-slate-600">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    router.push("/login")
-    return null
-  }
-
-  if (user.role !== "super_admin") {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
-        <Card className="p-8 max-w-md">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">Access Denied</h1>
-          <p className="text-slate-600 mb-6">You don't have permission to view monthly reports.</p>
-          <Button onClick={() => router.push("/")}>Go to Dashboard</Button>
-        </Card>
-      </div>
-    )
-  }
 
   const goToPreviousMonth = () => {
     setSelectedDate((prev) => {
