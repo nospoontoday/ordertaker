@@ -513,6 +513,14 @@ export function OrderTaker({
     return menuItems.filter((item) => item.isBestSeller)
   }
 
+  // Get the total quantity of an item in the current order
+  const getItemQuantityInCart = (itemId: string): number => {
+    const orderToCheck = isAppending ? newItems : currentOrder
+    return orderToCheck
+      .filter(orderItem => orderItem.id === itemId)
+      .reduce((total, orderItem) => total + orderItem.quantity, 0)
+  }
+
   // Calculate daily sales from completed orders (fully paid)
   // Operating hours: 8AM to 12AM (midnight) + 1 hour grace period (8AM today to 1AM tomorrow)
   const calculateDailySales = () => {
@@ -1037,6 +1045,14 @@ export function OrderTaker({
                         className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
                                    group-hover:scale-105 transition-transform duration-200"
                       />
+                      {/* Quantity Counter Badge (top-left) */}
+                      {getItemQuantityInCart(item.id) > 0 && (
+                        <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
+                                         text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
+                                         min-w-[28px] flex items-center justify-center">
+                          {getItemQuantityInCart(item.id)}
+                        </Badge>
+                      )}
                       {item.isBestSeller && (
                         <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
                                          text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
