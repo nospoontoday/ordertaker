@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X, TrendingUp, DollarSign } from "lucide-react"
+import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -1745,7 +1745,7 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
         )}
 
         {/* Summary Metrics Dashboard */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
             <div className="px-4 py-3">
               <div className="flex items-center justify-between">
@@ -1788,27 +1788,6 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
                 </div>
                 <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
                   <CreditCard className="w-5 h-5 text-emerald-600" />
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Total Revenue</p>
-                  <p className="text-2xl font-bold text-purple-600 mt-1">
-                    ₱{orders.reduce((sum, o) => {
-                      const mainTotal = o.items.reduce((s, i) => s + (i.price * i.quantity), 0)
-                      const appendedTotal = o.appendedOrders?.reduce((s, a) =>
-                        s + a.items.reduce((is, i) => is + (i.price * i.quantity), 0), 0) || 0
-                      return sum + mainTotal + appendedTotal
-                    }, 0).toFixed(2)}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-purple-600" />
                 </div>
               </div>
             </div>

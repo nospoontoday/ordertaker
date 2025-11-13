@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical } from "lucide-react"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -212,12 +213,11 @@ export default function Home() {
                     size="sm"
                     onClick={() => {
                       if (view === "taker") setView("crew")
-                      else if (view === "crew" && canAccessPastOrders) setView("past")
                       else setView("taker")
                     }}
                     className="min-h-[44px] px-4"
                   >
-                    {view === "taker" ? "Dashboard" : view === "crew" && canAccessPastOrders ? "Past Orders" : "Order Taker"}
+                    {view === "taker" ? "Dashboard" : "Order Taker"}
                   </Button>
                 )}
 
@@ -272,6 +272,18 @@ export default function Home() {
                             Inventory
                           </Button>
                         </>
+                      )}
+                      {canAccessPastOrders && (
+                        <SheetClose asChild>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => setView("past")}
+                          >
+                            <FileText className="h-5 w-5 mr-3" />
+                            Past Orders
+                          </Button>
+                        </SheetClose>
                       )}
                       {canAccessAdmin && (
                         <Button
