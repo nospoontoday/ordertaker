@@ -234,6 +234,74 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
+ * @route   PATCH /api/inventory/:id
+ * @desc    Update an inventory item (partial update)
+ * @access  Public
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const { name, quantity, unit, category, lowStockThreshold, notes } = req.body;
+
+    let item = await Inventory.findById(req.params.id);
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inventory item not found'
+      });
+    }
+
+    // Check if updating name to one that already exists
+    if (name && name.trim() !== item.name) {
+      const existingItem = await Inventory.findOne({ name: name.trim() });
+      if (existingItem) {
+        return res.status(400).json({
+          success: false,
+          error: 'An item with this name already exists'
+        });
+      }
+    }
+
+    // Update only provided fields
+    if (name !== undefined) item.name = name;
+    if (quantity !== undefined) item.quantity = quantity;
+    if (unit !== undefined) item.unit = unit;
+    if (category !== undefined) item.category = category;
+    if (lowStockThreshold !== undefined) item.lowStockThreshold = lowStockThreshold;
+    if (notes !== undefined) item.notes = notes;
+
+    await item.save();
+
+    // Emit socket event for real-time update
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('inventory:updated', item);
+    }
+
+    res.json({
+      success: true,
+      data: item
+    });
+  } catch (error) {
+    console.error('Error updating inventory item:', error);
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        error: messages.join(', ')
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: 'Server error while updating inventory item'
+    });
+  }
+});
+
+/**
  * @route   PATCH /api/inventory/:id/quantity
  * @desc    Update quantity of an inventory item (add or subtract)
  * @access  Public

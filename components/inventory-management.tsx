@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Plus,
   Minus,
@@ -19,6 +21,17 @@ import {
   Filter
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { formatDistanceToNow } from "date-fns"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 // API base URL
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
@@ -82,6 +95,7 @@ export function InventoryManagement() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const { toast } = useToast()
 
   // New item form state
@@ -93,6 +107,10 @@ export function InventoryManagement() {
     lowStockThreshold: 10,
     notes: ""
   })
+
+  // Edit form state for comprehensive editing
+  const [editForm, setEditForm] = useState<Partial<InventoryItem>>({})
+
 
   // Load items from API
   useEffect(() => {
@@ -262,11 +280,11 @@ export function InventoryManagement() {
     }
   }
 
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this item?")) return
+  const handleDeleteItem = async () => {
+    if (!deleteId) return
 
     try {
-      const response = await fetch(`${API_URL}/inventory/${id}`, {
+      const response = await fetch(`${API_URL}/inventory/${deleteId}`, {
         method: 'DELETE',
       })
 
@@ -275,6 +293,7 @@ export function InventoryManagement() {
       }
 
       await loadItems()
+      setDeleteId(null)
 
       toast({
         title: "Deleted",
@@ -287,7 +306,59 @@ export function InventoryManagement() {
         description: "Failed to delete item.",
         variant: "destructive",
       })
+      setDeleteId(null)
     }
+  }
+
+  const handleStartEdit = (item: InventoryItem) => {
+    setEditingId(item._id)
+    setEditForm({
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      category: item.category,
+      lowStockThreshold: item.lowStockThreshold,
+      notes: item.notes || ""
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editForm) return
+
+    try {
+      const response = await fetch(`${API_URL}/inventory/${editingId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editForm),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update item')
+      }
+
+      await loadItems()
+      setEditingId(null)
+      setEditForm({})
+
+      toast({
+        title: "Updated",
+        description: "Item updated successfully.",
+      })
+    } catch (error) {
+      console.error("Failed to update item:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update item.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditForm({})
   }
 
   const getStockStatus = (item: InventoryItem) => {
@@ -440,8 +511,8 @@ export function InventoryManagement() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-          <Card className="p-4 bg-gradient-to-br from-blue-50 to-white border border-slate-200 shadow-sm">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <Card className="p-4 sm:p-5 bg-gradient-to-br from-blue-50 to-white border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">Total Items</p>
@@ -450,7 +521,7 @@ export function InventoryManagement() {
               <Package className="w-8 h-8 text-blue-600" />
             </div>
           </Card>
-          <Card className="p-4 bg-gradient-to-br from-emerald-50 to-white border border-slate-200 shadow-sm">
+          <Card className="p-4 sm:p-5 bg-gradient-to-br from-emerald-50 to-white border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">In Stock</p>
@@ -459,7 +530,7 @@ export function InventoryManagement() {
               <CheckCircle className="w-8 h-8 text-emerald-600" />
             </div>
           </Card>
-          <Card className="p-4 bg-gradient-to-br from-amber-50 to-white border border-slate-200 shadow-sm">
+          <Card className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-white border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">Low Stock</p>
@@ -468,7 +539,7 @@ export function InventoryManagement() {
               <AlertTriangle className="w-8 h-8 text-amber-600" />
             </div>
           </Card>
-          <Card className="p-4 bg-gradient-to-br from-red-50 to-white border border-slate-200 shadow-sm">
+          <Card className="p-4 sm:p-5 bg-gradient-to-br from-red-50 to-white border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">Out of Stock</p>
@@ -530,105 +601,229 @@ export function InventoryManagement() {
               const isEditing = editingId === item._id
 
               return (
-                <Card key={item._id} className="p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-slate-900 truncate">{item.name}</h3>
-                      <p className="text-xs text-slate-500 font-medium">{item.category}</p>
-                    </div>
-                    <Badge className={`${stockStatus.color} font-bold text-xs px-2 py-1 rounded-md shadow-sm flex items-center gap-1`}>
-                      {getStockIcon(stockStatus.status)}
-                      {stockStatus.label}
-                    </Badge>
-                  </div>
+                <Card
+                  key={item._id}
+                  className={`p-6 border-2 shadow-sm hover:shadow-md transition-all ${isEditing ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'}`}
+                >
+                  {isEditing ? (
+                    // EDIT MODE - All fields editable
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-blue-900">Edit Item</h3>
+                        <Badge className={`${stockStatus.color} font-bold text-xs px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1`}>
+                          {getStockIcon(stockStatus.status)}
+                          {stockStatus.label}
+                        </Badge>
+                      </div>
 
-                  {item.notes && (
-                    <p className="text-xs text-slate-600 mb-3 italic">"{item.notes}"</p>
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor={`name-${item._id}`} className="text-sm font-semibold text-slate-700">Item Name</Label>
+                          <Input
+                            id={`name-${item._id}`}
+                            value={editForm.name || ""}
+                            onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                            className="mt-1"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor={`category-${item._id}`} className="text-sm font-semibold text-slate-700">Category</Label>
+                            <Select
+                              value={editForm.category}
+                              onValueChange={(value) => setEditForm({...editForm, category: value})}
+                            >
+                              <SelectTrigger id={`category-${item._id}`} className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {CATEGORIES.map(cat => (
+                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label htmlFor={`unit-${item._id}`} className="text-sm font-semibold text-slate-700">Unit</Label>
+                            <Select
+                              value={editForm.unit}
+                              onValueChange={(value) => setEditForm({...editForm, unit: value})}
+                            >
+                              <SelectTrigger id={`unit-${item._id}`} className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {UNITS.map(unit => (
+                                  <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor={`quantity-${item._id}`} className="text-sm font-semibold text-slate-700">Current Quantity</Label>
+                            <Input
+                              id={`quantity-${item._id}`}
+                              type="number"
+                              min="0"
+                              value={editForm.quantity || 0}
+                              onChange={(e) => setEditForm({...editForm, quantity: parseInt(e.target.value) || 0})}
+                              className="mt-1"
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor={`threshold-${item._id}`} className="text-sm font-semibold text-slate-700">Low Stock Threshold</Label>
+                            <Input
+                              id={`threshold-${item._id}`}
+                              type="number"
+                              min="0"
+                              value={editForm.lowStockThreshold || 0}
+                              onChange={(e) => setEditForm({...editForm, lowStockThreshold: parseInt(e.target.value) || 0})}
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`notes-${item._id}`} className="text-sm font-semibold text-slate-700">Notes (Optional)</Label>
+                          <Textarea
+                            id={`notes-${item._id}`}
+                            value={editForm.notes || ""}
+                            onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
+                            className="mt-1 min-h-[80px]"
+                            placeholder="Add any notes about this item..."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-4 border-t">
+                        <Button
+                          onClick={handleSaveEdit}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          Save Changes
+                        </Button>
+                        <Button
+                          onClick={handleCancelEdit}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    // VIEW MODE - Display only
+                    <>
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-xl font-bold text-slate-900 truncate mb-1">{item.name}</h3>
+                          <p className="text-sm text-slate-500 font-medium">{item.category}</p>
+                        </div>
+                        <Badge className={`${stockStatus.color} font-bold text-xs px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1.5`}>
+                          {getStockIcon(stockStatus.status)}
+                          {stockStatus.label}
+                        </Badge>
+                      </div>
+
+                      {item.notes && (
+                        <div className="bg-slate-50 p-3 rounded-lg mb-4">
+                          <p className="text-xs text-slate-600 italic">"{item.notes}"</p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl font-bold text-slate-900">{item.quantity}</span>
+                          <span className="text-sm font-medium text-slate-600">{item.unit}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleStartEdit(item)}
+                          className="h-11 w-11 sm:h-9 sm:w-9 p-0 hover:bg-blue-50 hover:text-blue-600"
+                          aria-label="Edit item"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center gap-3 mb-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUpdateQuantity(item._id, -1)}
+                          className="flex-1 h-11 sm:h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold"
+                          aria-label="Remove one unit"
+                        >
+                          <Minus className="w-4 h-4 mr-1.5" />
+                          Remove
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUpdateQuantity(item._id, 1)}
+                          className="flex-1 h-11 sm:h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold"
+                          aria-label="Add one unit"
+                        >
+                          <Plus className="w-4 h-4 mr-1.5" />
+                          Add
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                        <div className="text-xs text-slate-600">
+                          <span className="font-semibold">Low stock alert:</span> {item.lowStockThreshold} {item.unit}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeleteId(item._id)}
+                          className="h-11 w-11 sm:h-9 sm:w-9 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          aria-label="Delete item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="text-xs text-slate-400 mt-3">
+                        {item.updatedAt ? `Updated ${formatDistanceToNow(new Date(item.updatedAt), { addSuffix: true })}` : 'Never updated'}
+                      </div>
+                    </>
                   )}
-
-                  <div className="flex items-center justify-between mb-4">
-                    {isEditing ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          defaultValue={item.quantity}
-                          onBlur={(e) => {
-                            handleSetQuantity(item._id, parseInt(e.target.value) || 0)
-                            setEditingId(null)
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleSetQuantity(item._id, parseInt(e.currentTarget.value) || 0)
-                              setEditingId(null)
-                            } else if (e.key === "Escape") {
-                              setEditingId(null)
-                            }
-                          }}
-                          className="w-24 h-8 text-center font-bold"
-                          autoFocus
-                        />
-                        <span className="text-sm font-medium text-slate-600">{item.unit}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold text-slate-900">{item.quantity}</span>
-                        <span className="text-sm font-medium text-slate-600">{item.unit}</span>
-                      </div>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingId(isEditing ? null : item._id)}
-                      className="h-8 w-8 p-0"
-                    >
-                      {isEditing ? <Save className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center gap-2 mb-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleUpdateQuantity(item._id, -1)}
-                      className="flex-1 border-red-200 hover:bg-red-50 text-red-600"
-                    >
-                      <Minus className="w-4 h-4 mr-1" />
-                      Remove
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleUpdateQuantity(item._id, 1)}
-                      className="flex-1 border-emerald-200 hover:bg-emerald-50 text-emerald-600"
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                    <div className="text-xs text-slate-500">
-                      <span className="font-semibold">Low stock alert:</span> {item.lowStockThreshold} {item.unit}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteItem(item._id)}
-                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="text-xs text-slate-400 mt-2">
-                    Last updated: {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'N/A'}
-                  </div>
                 </Card>
               )
             })}
           </div>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete this item from your inventory.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteItem}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )
