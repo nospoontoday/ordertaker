@@ -503,7 +503,10 @@ export function KitchenView() {
 
   // Calculate waiting time for pending items
   const getWaitingTime = (createdAt: number): number => {
-    return currentTime - createdAt
+    // Normalize timestamp to milliseconds (timestamps < year 2100 in seconds)
+    // Fix for incorrect waiting time calculations showing "866h 52m"
+    const normalizedCreatedAt = createdAt < 10000000000 ? createdAt * 1000 : createdAt
+    return currentTime - normalizedCreatedAt
   }
 
   // Get urgency level based on waiting time
@@ -530,24 +533,25 @@ export function KitchenView() {
     const getCardStyle = () => {
       if (groupedItem.status === "pending") {
         if (urgencyLevel === "critical") {
-          return "border-red-500 border-4 bg-red-50 shadow-lg"
+          return "border-red-600 border-4 bg-white shadow-2xl ring-4 ring-red-200 animate-pulse"
         } else if (urgencyLevel === "urgent") {
-          return "border-orange-500 border-4 bg-orange-50 shadow-md"
+          return "border-orange-500 border-3 bg-white shadow-xl ring-2 ring-orange-200"
         }
-        return "border-amber-400 border-2 bg-amber-50"
+        return "border-amber-400 border-2 bg-amber-50/30"
       }
-      return "border-2 hover:shadow-lg transition-shadow"
+      // Muted styling for preparing/ready items
+      return "border-2 border-slate-300 bg-slate-50/50 opacity-90 hover:shadow-lg transition-shadow"
     }
 
     return (
       <Card
         key={`${groupedItem.name}-${groupedItem.status}-${groupedItem.instances[0]?.itemType}`}
-        className={`p-4 mb-4 ${getCardStyle()}`}
+        className={`p-6 mb-6 ${getCardStyle()}`}
       >
-        <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="flex items-start justify-between gap-6 mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <h3 className={`text-lg font-bold ${
+              <h3 className={`text-2xl font-bold ${
                 groupedItem.status === "pending" && urgencyLevel === "critical"
                   ? "text-red-900"
                   : groupedItem.status === "pending" && urgencyLevel === "urgent"
@@ -681,8 +685,8 @@ export function KitchenView() {
           {canUpdate && (
             <Button
               onClick={() => updateGroupedItemStatus(groupedItem, nextStatus)}
-              size="sm"
-              className="flex-shrink-0"
+              size="lg"
+              className="flex-shrink-0 h-14 px-6 text-base font-bold min-w-[140px]"
             >
               {nextStatus === "preparing"
                 ? "Start Preparing"
@@ -725,6 +729,67 @@ export function KitchenView() {
           </div>
         </div>
       </div>
+
+      {/* Summary Metrics Dashboard */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Card className="p-4 bg-gradient-to-br from-red-50 to-white border-red-300">
+          <div className="text-sm font-semibold text-red-700 uppercase tracking-wide">Pending</div>
+          <div className="text-3xl font-bold text-red-900 mt-1">
+            {groupedItems.filter(i => i.status === 'pending').length}
+          </div>
+          <div className="text-xs text-red-600 mt-1">
+            {groupedItems.filter(i => i.status === 'pending').length > 0 && (
+              <>
+                Oldest: {formatDuration(getWaitingTime(
+                  Math.min(...groupedItems.filter(i => i.status === 'pending')
+                    .map(i => i.oldestCreatedAt))
+                ))}
+              </>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-gradient-to-br from-orange-50 to-white border-orange-300">
+          <div className="text-sm font-semibold text-orange-700 uppercase tracking-wide">Preparing</div>
+          <div className="text-3xl font-bold text-orange-900 mt-1">
+            {groupedItems.filter(i => i.status === 'preparing').length}
+          </div>
+          <div className="text-xs text-orange-600 mt-1">
+            {groupedItems.filter(i => i.status === 'preparing').reduce((sum, i) => sum + i.totalQuantity, 0)} items
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-gradient-to-br from-emerald-50 to-white border-emerald-300">
+          <div className="text-sm font-semibold text-emerald-700 uppercase tracking-wide">Ready</div>
+          <div className="text-3xl font-bold text-emerald-900 mt-1">
+            {groupedItems.filter(i => i.status === 'ready').length}
+          </div>
+          <div className="text-xs text-emerald-600 mt-1">
+            {groupedItems.filter(i => i.status === 'ready').reduce((sum, i) => sum + i.totalQuantity, 0)} items
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-gradient-to-br from-blue-50 to-white border-blue-300">
+          <div className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Total Items</div>
+          <div className="text-3xl font-bold text-blue-900 mt-1">
+            {groupedItems.reduce((sum, i) => sum + i.totalQuantity, 0)}
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            {groupedItems.length} groups
+          </div>
+        </Card>
+      </div>
+
+      {/* Critical Items Alert Banner */}
+      {groupedItems.some(item => item.status === 'pending' && getUrgencyLevel(getWaitingTime(item.oldestCreatedAt)) === 'critical') && (
+        <div className="bg-red-600 text-white p-4 rounded-lg mb-6 flex items-center gap-3 animate-pulse shadow-lg">
+          <AlertCircle className="w-8 h-8 flex-shrink-0" />
+          <div>
+            <p className="font-bold text-lg">🚨 URGENT: Items waiting 15+ minutes!</p>
+            <p className="text-sm opacity-90">Prioritize red-bordered items immediately</p>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="food" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-4">
