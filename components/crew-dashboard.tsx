@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send } from "lucide-react"
+import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X, TrendingUp, DollarSign } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -89,6 +89,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   const [todayDate, setTodayDate] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<"all" | "paid" | "unpaid" | "partial">("all")
+  const [filterOrderType, setFilterOrderType] = useState<"all" | "dine-in" | "take-out">("all")
 
   // Split payment dialog state
   const [splitPaymentDialog, setSplitPaymentDialog] = useState<{
@@ -1634,8 +1639,55 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
     return latestTimestamp
   }
 
-  const sortedActiveOrders = [...activeOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
-  const sortedServedNotPaidOrders = [...servedNotPaidOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
+  // Filter function for search and filters
+  const filterOrders = (ordersList: Order[]) => {
+    return ordersList.filter(order => {
+      // Search filter
+      const matchesSearch = !searchQuery ||
+        order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.orderNumber?.toString().includes(searchQuery)
+
+      // Payment status filter
+      const allPaid = areAllItemsPaid(order)
+      const mainTotal = getOrderTotal(order.items)
+      const appendedTotal = order.appendedOrders?.reduce((sum, a) => sum + getOrderTotal(a.items), 0) || 0
+      const totalAmount = mainTotal + appendedTotal
+
+      let totalPaidAmount = 0
+      if (order.isPaid && order.paidAmount) {
+        totalPaidAmount += order.paidAmount
+      } else if (order.isPaid && !order.paidAmount) {
+        totalPaidAmount += mainTotal
+      }
+      if (order.appendedOrders) {
+        order.appendedOrders.forEach((a) => {
+          if (a.isPaid && a.paidAmount) {
+            totalPaidAmount += a.paidAmount
+          } else if (a.isPaid && !a.paidAmount) {
+            totalPaidAmount += getOrderTotal(a.items)
+          }
+        })
+      }
+      const isPartiallyPaid = totalPaidAmount > 0 && totalPaidAmount < totalAmount
+
+      const matchesPayment = filterPaymentStatus === "all" ||
+        (filterPaymentStatus === "paid" && allPaid) ||
+        (filterPaymentStatus === "unpaid" && totalPaidAmount === 0) ||
+        (filterPaymentStatus === "partial" && isPartiallyPaid)
+
+      // Order type filter
+      const matchesOrderType = filterOrderType === "all" ||
+        order.orderType === filterOrderType
+
+      return matchesSearch && matchesPayment && matchesOrderType
+    })
+  }
+
+  const filteredActiveOrders = filterOrders(activeOrders)
+  const filteredServedNotPaidOrders = filterOrders(servedNotPaidOrders)
+
+  const sortedActiveOrders = [...filteredActiveOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
+  const sortedServedNotPaidOrders = [...filteredServedNotPaidOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
   const sortedCompletedOrders = [...completedOrders].sort((a, b) => getLatestOrderTimestamp(b) - getLatestOrderTimestamp(a))
 
   const toggleCompletedExpanded = (orderId: string) => {
@@ -1691,6 +1743,166 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
             <p className="text-base font-medium text-slate-500">Loading orders...</p>
           </div>
         )}
+
+        {/* Summary Metrics Dashboard */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Active Orders</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{activeOrders.length}</p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Pending Items</p>
+                  <p className="text-2xl font-bold text-amber-600 mt-1">
+                    {orders.reduce((sum, o) =>
+                      sum + o.items.filter(i => i.status === 'pending').length +
+                      (o.appendedOrders?.reduce((aSum, a) =>
+                        aSum + a.items.filter(i => i.status === 'pending').length, 0) || 0), 0)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Awaiting Payment</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{servedNotPaidOrders.length}</p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-emerald-600" />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Total Revenue</p>
+                  <p className="text-2xl font-bold text-purple-600 mt-1">
+                    ₱{orders.reduce((sum, o) => {
+                      const mainTotal = o.items.reduce((s, i) => s + (i.price * i.quantity), 0)
+                      const appendedTotal = o.appendedOrders?.reduce((s, a) =>
+                        s + a.items.reduce((is, i) => is + (i.price * i.quantity), 0), 0) || 0
+                      return sum + mainTotal + appendedTotal
+                    }, 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-purple-600" />
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Search and Filter Bar */}
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by customer name or order #..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Payment Filter */}
+            <select
+              value={filterPaymentStatus}
+              onChange={(e) => setFilterPaymentStatus(e.target.value as any)}
+              className="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Payments</option>
+              <option value="paid">Fully Paid</option>
+              <option value="partial">Partially Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+
+            {/* Order Type Filter */}
+            <select
+              value={filterOrderType}
+              onChange={(e) => setFilterOrderType(e.target.value as any)}
+              className="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Types</option>
+              <option value="dine-in">Dine In</option>
+              <option value="take-out">Take Out</option>
+            </select>
+          </div>
+
+          {/* Active Filters Display */}
+          {(searchQuery || filterPaymentStatus !== "all" || filterOrderType !== "all") && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-slate-600">Active filters:</span>
+              {searchQuery && (
+                <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700">
+                  Search: "{searchQuery}"
+                  <button onClick={() => setSearchQuery("")} className="ml-1.5">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterPaymentStatus !== "all" && (
+                <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700">
+                  {filterPaymentStatus}
+                  <button onClick={() => setFilterPaymentStatus("all")} className="ml-1.5">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              )}
+              {filterOrderType !== "all" && (
+                <Badge variant="outline" className="bg-purple-50 border-purple-200 text-purple-700">
+                  {filterOrderType}
+                  <button onClick={() => setFilterOrderType("all")} className="ml-1.5">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              )}
+              <button
+                onClick={() => {
+                  setSearchQuery("")
+                  setFilterPaymentStatus("all")
+                  setFilterOrderType("all")
+                }}
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 underline"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Active Orders */}
