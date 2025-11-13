@@ -50,6 +50,11 @@ const inventorySchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [500, 'Notes cannot be more than 500 characters']
+    },
+    image: {
+      type: String,
+      trim: true,
+      default: ''
     }
   },
   {

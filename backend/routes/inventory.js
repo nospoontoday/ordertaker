@@ -108,7 +108,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, quantity, unit, category, lowStockThreshold, notes } = req.body;
+    const { name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
 
     // Validate required fields
     if (!name || !unit || !category) {
@@ -133,7 +133,8 @@ router.post('/', async (req, res) => {
       unit,
       category,
       lowStockThreshold: lowStockThreshold || 10,
-      notes
+      notes,
+      image: image || ''
     });
 
     // Emit socket event for real-time update
@@ -172,7 +173,7 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    const { name, quantity, unit, category, lowStockThreshold, notes } = req.body;
+    const { name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
 
     let item = await Inventory.findById(req.params.id);
 
@@ -201,6 +202,7 @@ router.put('/:id', async (req, res) => {
     if (category !== undefined) item.category = category;
     if (lowStockThreshold !== undefined) item.lowStockThreshold = lowStockThreshold;
     if (notes !== undefined) item.notes = notes;
+    if (image !== undefined) item.image = image;
 
     await item.save();
 
@@ -240,7 +242,7 @@ router.put('/:id', async (req, res) => {
  */
 router.patch('/:id', async (req, res) => {
   try {
-    const { name, quantity, unit, category, lowStockThreshold, notes } = req.body;
+    const { name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
 
     let item = await Inventory.findById(req.params.id);
 
@@ -269,6 +271,7 @@ router.patch('/:id', async (req, res) => {
     if (category !== undefined) item.category = category;
     if (lowStockThreshold !== undefined) item.lowStockThreshold = lowStockThreshold;
     if (notes !== undefined) item.notes = notes;
+    if (image !== undefined) item.image = image;
 
     await item.save();
 

@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Search,
-  Filter
+  Filter,
+  ImagePlus,
+  Image as ImageIcon
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow } from "date-fns"
@@ -45,6 +47,7 @@ interface InventoryItem {
   category: string
   lowStockThreshold: number
   notes?: string
+  image?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -111,6 +114,10 @@ export function InventoryManagement() {
   // Edit form state for comprehensive editing
   const [editForm, setEditForm] = useState<Partial<InventoryItem>>({})
 
+  // Image upload state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>("")
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   // Load items from API
   useEffect(() => {
@@ -158,6 +165,77 @@ export function InventoryManagement() {
     }
   }
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid File",
+          description: "Please select an image file.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File Too Large",
+          description: "Image must be less than 5MB.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      setSelectedImage(file)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleUploadImage = async (): Promise<string | null> => {
+    if (!selectedImage) return null
+
+    try {
+      setUploadingImage(true)
+      const formData = new FormData()
+      formData.append('image', selectedImage)
+
+      const response = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to upload image')
+      }
+
+      const result = await response.json()
+      return result.data.path
+    } catch (error) {
+      console.error("Failed to upload image:", error)
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload image.",
+        variant: "destructive",
+      })
+      return null
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null)
+    setImagePreview("")
+  }
+
   const handleAddItem = async () => {
     if (!newItem.name.trim()) {
       toast({
@@ -169,6 +247,12 @@ export function InventoryManagement() {
     }
 
     try {
+      // Upload image first if selected
+      let imagePath = null
+      if (selectedImage) {
+        imagePath = await handleUploadImage()
+      }
+
       const response = await fetch(`${API_URL}/inventory`, {
         method: 'POST',
         headers: {
@@ -180,7 +264,8 @@ export function InventoryManagement() {
           unit: newItem.unit,
           category: newItem.category,
           lowStockThreshold: newItem.lowStockThreshold,
-          notes: newItem.notes.trim() || undefined
+          notes: newItem.notes.trim() || undefined,
+          image: imagePath || undefined
         })
       })
 
@@ -200,6 +285,7 @@ export function InventoryManagement() {
         lowStockThreshold: 10,
         notes: ""
       })
+      handleRemoveImage()
       setIsAddDialogOpen(false)
 
       toast({
@@ -318,20 +404,37 @@ export function InventoryManagement() {
       unit: item.unit,
       category: item.category,
       lowStockThreshold: item.lowStockThreshold,
-      notes: item.notes || ""
+      notes: item.notes || "",
+      image: item.image || ""
     })
+    // Set existing image as preview
+    if (item.image) {
+      setImagePreview(item.image)
+    }
   }
 
   const handleSaveEdit = async () => {
     if (!editingId || !editForm) return
 
     try {
+      // Upload new image if selected
+      let imagePath = editForm.image
+      if (selectedImage) {
+        const uploadedPath = await handleUploadImage()
+        if (uploadedPath) {
+          imagePath = uploadedPath
+        }
+      }
+
       const response = await fetch(`${API_URL}/inventory/${editingId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({
+          ...editForm,
+          image: imagePath
+        }),
       })
 
       if (!response.ok) {
@@ -341,6 +444,7 @@ export function InventoryManagement() {
       await loadItems()
       setEditingId(null)
       setEditForm({})
+      handleRemoveImage()
 
       toast({
         title: "Updated",
@@ -359,6 +463,7 @@ export function InventoryManagement() {
   const handleCancelEdit = () => {
     setEditingId(null)
     setEditForm({})
+    handleRemoveImage()
   }
 
   const getStockStatus = (item: InventoryItem) => {
@@ -495,11 +600,52 @@ export function InventoryManagement() {
                       className="w-full"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Item Image (Optional)</label>
+                    <div className="space-y-3">
+                      {imagePreview ? (
+                        <div className="relative w-full h-48 border-2 border-slate-200 rounded-lg overflow-hidden">
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleRemoveImage}
+                            className="absolute top-2 right-2"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-300 rounded-lg hover:border-slate-400 transition-colors cursor-pointer bg-slate-50">
+                          <label htmlFor="add-image-input" className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
+                            <ImagePlus className="w-12 h-12 text-slate-400 mb-2" />
+                            <p className="text-sm text-slate-600 font-medium">Click to upload image</p>
+                            <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
+                          </label>
+                          <input
+                            id="add-image-input"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageSelect}
+                            className="hidden"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex gap-2 pt-4">
-                    <Button onClick={handleAddItem} className="flex-1">
-                      Add Item
+                    <Button onClick={handleAddItem} className="flex-1" disabled={uploadingImage}>
+                      {uploadingImage ? "Uploading..." : "Add Item"}
                     </Button>
-                    <Button onClick={() => setIsAddDialogOpen(false)} variant="outline" className="flex-1">
+                    <Button onClick={() => {
+                      setIsAddDialogOpen(false)
+                      handleRemoveImage()
+                    }} variant="outline" className="flex-1">
                       Cancel
                     </Button>
                   </div>
@@ -699,6 +845,45 @@ export function InventoryManagement() {
                             placeholder="Add any notes about this item..."
                           />
                         </div>
+
+                        <div>
+                          <Label className="text-sm font-semibold text-slate-700">Item Image (Optional)</Label>
+                          <div className="mt-1 space-y-3">
+                            {imagePreview ? (
+                              <div className="relative w-full h-40 border-2 border-slate-200 rounded-lg overflow-hidden">
+                                <img
+                                  src={imagePreview.startsWith('/') ? `${API_URL.replace('/api', '')}${imagePreview}` : imagePreview}
+                                  alt="Preview"
+                                  className="w-full h-full object-cover"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={handleRemoveImage}
+                                  className="absolute top-2 right-2"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-lg hover:border-slate-400 transition-colors cursor-pointer bg-slate-50">
+                                <label htmlFor={`edit-image-${item._id}`} className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
+                                  <ImagePlus className="w-10 h-10 text-slate-400 mb-2" />
+                                  <p className="text-sm text-slate-600 font-medium">Click to upload image</p>
+                                  <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
+                                </label>
+                                <input
+                                  id={`edit-image-${item._id}`}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleImageSelect}
+                                  className="hidden"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <div className="flex gap-3 pt-4 border-t">
@@ -722,6 +907,20 @@ export function InventoryManagement() {
                   ) : (
                     // VIEW MODE - Display only
                     <>
+                      {/* Image Display */}
+                      {item.image && (
+                        <div className="mb-4 -mx-6 -mt-6">
+                          <div className="relative w-full h-40 lg:h-48 overflow-hidden rounded-t-lg">
+                            <img
+                              src={`${API_URL.replace('/api', '')}${item.image}`}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1 min-w-0">
                           <h3 className="text-xl font-bold text-slate-900 truncate mb-1">{item.name}</h3>
