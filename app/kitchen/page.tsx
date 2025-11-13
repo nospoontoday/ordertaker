@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { KitchenView } from "@/components/kitchen-view"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, LayoutDashboard, LogOut, KeyRound, Settings, ChefHat, Menu } from "lucide-react"
+import { ArrowLeft, LayoutDashboard, LogOut, KeyRound, Settings, ChefHat, Menu, ShoppingCart } from "lucide-react"
 import {
   Sheet,
   SheetClose,
@@ -25,7 +25,7 @@ export default function KitchenPage() {
 
   // Role-based permission checks
   const isCrew = user?.role === "crew"
-  const isOrderTaker = user?.role === "order_taker"
+  const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew"
   const isOrderTakerCrew = user?.role === "order_taker_crew"
   const isSuperAdmin = user?.role === "super_admin"
   const canAccessKitchen = isCrew || isOrderTaker || isOrderTakerCrew || isSuperAdmin
@@ -75,6 +75,16 @@ export default function KitchenPage() {
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center justify-between">
             <div className="flex gap-2">
+              {isOrderTaker && (
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/?view=taker")}
+                  className="min-h-[44px]"
+                >
+                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  Take Order
+                </Button>
+              )}
               {canAccessOrderDashboard && (
                 <Button
                   variant="outline"
@@ -117,6 +127,18 @@ export default function KitchenPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Take Order Button */}
+                {isOrderTaker && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/?view=taker")}
+                    className="min-h-[44px] px-4"
+                  >
+                    Take Order
+                  </Button>
+                )}
+
                 {/* Dashboard Button */}
                 {canAccessOrderDashboard && (
                   <Button
