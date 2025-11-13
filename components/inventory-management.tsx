@@ -18,8 +18,23 @@ import {
   Search,
   Filter
 } from "lucide-react"
-import { inventoryDB, type InventoryItem } from "@/lib/inventory-db"
 import { useToast } from "@/hooks/use-toast"
+
+// API base URL
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+
+// InventoryItem interface
+interface InventoryItem {
+  _id: string
+  name: string
+  quantity: number
+  unit: string
+  category: string
+  lowStockThreshold: number
+  notes?: string
+  createdAt?: string
+  updatedAt?: string
+}
 import {
   Dialog,
   DialogContent,
@@ -79,7 +94,7 @@ export function InventoryManagement() {
     notes: ""
   })
 
-  // Load items from IndexedDB
+  // Load items from API
   useEffect(() => {
     loadItems()
   }, [])
@@ -107,13 +122,17 @@ export function InventoryManagement() {
   const loadItems = async () => {
     try {
       setIsLoading(true)
-      const loadedItems = await inventoryDB.getAllItems()
-      setItems(loadedItems)
+      const response = await fetch(`${API_URL}/inventory`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch inventory items')
+      }
+      const result = await response.json()
+      setItems(result.data || [])
     } catch (error) {
       console.error("Failed to load inventory items:", error)
       toast({
         title: "Error",
-        description: "Failed to load inventory items.",
+        description: "Failed to load inventory items. Make sure the backend is running.",
         variant: "destructive",
       })
     } finally {
@@ -132,18 +151,26 @@ export function InventoryManagement() {
     }
 
     try {
-      const item: InventoryItem = {
-        id: `inv-${Date.now()}`,
-        name: newItem.name.trim(),
-        quantity: newItem.quantity,
-        unit: newItem.unit,
-        category: newItem.category,
-        lowStockThreshold: newItem.lowStockThreshold,
-        lastUpdated: Date.now(),
-        notes: newItem.notes.trim() || undefined
+      const response = await fetch(`${API_URL}/inventory`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newItem.name.trim(),
+          quantity: newItem.quantity,
+          unit: newItem.unit,
+          category: newItem.category,
+          lowStockThreshold: newItem.lowStockThreshold,
+          notes: newItem.notes.trim() || undefined
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to add item')
       }
 
-      await inventoryDB.saveItem(item)
       await loadItems()
 
       // Reset form
@@ -165,7 +192,7 @@ export function InventoryManagement() {
       console.error("Failed to add item:", error)
       toast({
         title: "Error",
-        description: "Failed to add item.",
+        description: error instanceof Error ? error.message : "Failed to add item.",
         variant: "destructive",
       })
     }
@@ -173,17 +200,24 @@ export function InventoryManagement() {
 
   const handleUpdateQuantity = async (id: string, delta: number) => {
     try {
-      const item = items.find(i => i.id === id)
+      const item = items.find(i => i._id === id)
       if (!item) return
 
-      const newQuantity = Math.max(0, item.quantity + delta)
-      const updatedItem: InventoryItem = {
-        ...item,
-        quantity: newQuantity,
-        lastUpdated: Date.now()
+      const response = await fetch(`${API_URL}/inventory/${id}/quantity`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ delta })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update quantity')
       }
 
-      await inventoryDB.saveItem(updatedItem)
+      const result = await response.json()
+      const newQuantity = result.data.quantity
+
       await loadItems()
 
       toast({
@@ -202,16 +236,21 @@ export function InventoryManagement() {
 
   const handleSetQuantity = async (id: string, quantity: number) => {
     try {
-      const item = items.find(i => i.id === id)
+      const item = items.find(i => i._id === id)
       if (!item) return
 
-      const updatedItem: InventoryItem = {
-        ...item,
-        quantity: Math.max(0, quantity),
-        lastUpdated: Date.now()
+      const response = await fetch(`${API_URL}/inventory/${id}/quantity`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newQuantity: Math.max(0, quantity) })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update quantity')
       }
 
-      await inventoryDB.saveItem(updatedItem)
       await loadItems()
     } catch (error) {
       console.error("Failed to set quantity:", error)
@@ -227,7 +266,14 @@ export function InventoryManagement() {
     if (!confirm("Are you sure you want to delete this item?")) return
 
     try {
-      await inventoryDB.deleteItem(id)
+      const response = await fetch(`${API_URL}/inventory/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete item')
+      }
+
       await loadItems()
 
       toast({
@@ -481,10 +527,10 @@ export function InventoryManagement() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredItems.map(item => {
               const stockStatus = getStockStatus(item)
-              const isEditing = editingId === item.id
+              const isEditing = editingId === item._id
 
               return (
-                <Card key={item.id} className="p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                <Card key={item._id} className="p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-bold text-slate-900 truncate">{item.name}</h3>
@@ -508,12 +554,12 @@ export function InventoryManagement() {
                           min="0"
                           defaultValue={item.quantity}
                           onBlur={(e) => {
-                            handleSetQuantity(item.id, parseInt(e.target.value) || 0)
+                            handleSetQuantity(item._id, parseInt(e.target.value) || 0)
                             setEditingId(null)
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              handleSetQuantity(item.id, parseInt(e.currentTarget.value) || 0)
+                              handleSetQuantity(item._id, parseInt(e.currentTarget.value) || 0)
                               setEditingId(null)
                             } else if (e.key === "Escape") {
                               setEditingId(null)
@@ -533,7 +579,7 @@ export function InventoryManagement() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setEditingId(isEditing ? null : item.id)}
+                      onClick={() => setEditingId(isEditing ? null : item._id)}
                       className="h-8 w-8 p-0"
                     >
                       {isEditing ? <Save className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
@@ -544,7 +590,7 @@ export function InventoryManagement() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleUpdateQuantity(item.id, -1)}
+                      onClick={() => handleUpdateQuantity(item._id, -1)}
                       className="flex-1 border-red-200 hover:bg-red-50 text-red-600"
                     >
                       <Minus className="w-4 h-4 mr-1" />
@@ -553,7 +599,7 @@ export function InventoryManagement() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleUpdateQuantity(item.id, 1)}
+                      onClick={() => handleUpdateQuantity(item._id, 1)}
                       className="flex-1 border-emerald-200 hover:bg-emerald-50 text-emerald-600"
                     >
                       <Plus className="w-4 h-4 mr-1" />
@@ -568,7 +614,7 @@ export function InventoryManagement() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteItem(item.id)}
+                      onClick={() => handleDeleteItem(item._id)}
                       className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -576,7 +622,7 @@ export function InventoryManagement() {
                   </div>
 
                   <div className="text-xs text-slate-400 mt-2">
-                    Last updated: {new Date(item.lastUpdated).toLocaleString()}
+                    Last updated: {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'N/A'}
                   </div>
                 </Card>
               )
