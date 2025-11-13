@@ -1372,7 +1372,12 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   }
 
   const canDeleteOrder = (order: Order): boolean => {
-    // Check if all items in main order are still pending
+    // Super admins can delete any order
+    if (user?.role === "super_admin") {
+      return true
+    }
+
+    // For other users, check if all items in main order are still pending
     const mainItemsPending = order.items.every((item) => item.status === "pending")
 
     // Check if all items in appended orders are still pending
@@ -1385,6 +1390,11 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   }
 
   const canDeleteAppendedOrder = (appendedOrder: AppendedOrder): boolean => {
+    // Super admins can delete any appended order
+    if (user?.role === "super_admin") {
+      return true
+    }
+
     return appendedOrder.items.every((item) => item.status === "pending")
   }
 
