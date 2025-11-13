@@ -6,7 +6,17 @@ import { useAuth } from "@/contexts/auth-context"
 import { KitchenView } from "@/components/kitchen-view"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, LayoutDashboard, LogOut, KeyRound, Settings } from "lucide-react"
+import { ArrowLeft, LayoutDashboard, LogOut, KeyRound, Settings, ChefHat, Menu } from "lucide-react"
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { Separator } from "@/components/ui/separator"
 
 export default function KitchenPage() {
   const router = useRouter()
@@ -60,45 +70,116 @@ export default function KitchenPage() {
   return (
     <div className="min-h-screen bg-background">
       <OfflineIndicator />
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-2 p-3 sm:p-4 border-b border-border">
-        <div className="flex gap-2 flex-wrap">
-          {canAccessOrderDashboard && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/")}
-              className="text-xs sm:text-sm"
-            >
-              <LayoutDashboard className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Order Dashboard</span>
-              <span className="sm:hidden">Dashboard</span>
-            </Button>
-          )}
-        </div>
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-4 py-3">
+          {/* Desktop Navigation */}
+          <div className="hidden lg:flex items-center justify-between">
+            <div className="flex gap-2">
+              {canAccessOrderDashboard && (
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/?view=crew")}
+                  className="min-h-[44px]"
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Order Dashboard
+                </Button>
+              )}
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-xs sm:text-sm text-muted-foreground truncate min-w-0 flex-shrink">
-            {user.email}
-          </span>
-          {/* Only show Admin button for super admin */}
-          {canAccessAdmin && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/admin")} className="text-xs sm:text-sm">
-              <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              Admin
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => router.push("/change-password")} className="text-xs sm:text-sm">
-            <KeyRound className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Change Password</span>
-            <span className="sm:hidden">Password</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs sm:text-sm">
-            <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Logout</span>
-            <span className="sm:hidden">Out</span>
-          </Button>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-600">{user.email}</span>
+              <div className="h-6 w-px bg-slate-300" />
+
+              {canAccessAdmin && (
+                <Button variant="outline" onClick={() => router.push("/admin")}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => router.push("/change-password")}>
+                <KeyRound className="h-4 w-4 mr-2" />
+                Change Password
+              </Button>
+              <Button variant="outline" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile Navigation */}
+          <div className="lg:hidden">
+            <div className="flex items-center justify-between">
+              {/* Logo Icon */}
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
+                <ChefHat className="h-6 w-6 text-white" />
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Dashboard Button */}
+                {canAccessOrderDashboard && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/?view=crew")}
+                    className="min-h-[44px] px-4"
+                  >
+                    Dashboard
+                  </Button>
+                )}
+
+                {/* Hamburger Menu */}
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="icon" className="min-h-[44px] min-w-[44px]">
+                      <Menu className="h-5 w-5" />
+                      <span className="sr-only">Open menu</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                    <SheetHeader>
+                      <SheetTitle>Menu</SheetTitle>
+                      <SheetDescription className="text-xs">
+                        {user?.email}
+                      </SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-8 space-y-2">
+                      {canAccessAdmin && (
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start h-12"
+                          onClick={() => router.push("/admin")}
+                        >
+                          <Settings className="h-5 w-5 mr-3" />
+                          Admin Panel
+                        </Button>
+                      )}
+                      <Separator className="my-4" />
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start h-12"
+                        onClick={() => router.push("/change-password")}
+                      >
+                        <KeyRound className="h-5 w-5 mr-3" />
+                        Change Password
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start h-12 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={handleLogout}
+                      >
+                        <LogOut className="h-5 w-5 mr-3" />
+                        Logout
+                      </Button>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
       <KitchenView />
     </div>
   )

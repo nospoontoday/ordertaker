@@ -45,6 +45,17 @@ export default function Home() {
     setMounted(true)
   }, [])
 
+  // Check for view query parameter on mount
+  useEffect(() => {
+    if (mounted) {
+      const params = new URLSearchParams(window.location.search)
+      const viewParam = params.get('view')
+      if (viewParam === 'crew' || viewParam === 'taker' || viewParam === 'past') {
+        setView(viewParam)
+      }
+    }
+  }, [mounted])
+
   // Redirect crew members to kitchen page
   useEffect(() => {
     if (mounted && !isLoading && user && isCrew) {
@@ -52,17 +63,22 @@ export default function Home() {
     }
   }, [mounted, isLoading, user, isCrew, router])
 
-  // Set default view based on user role
+  // Set default view based on user role (only if no query param was set)
   useEffect(() => {
-    if (user) {
-      if (isOrderTakerCrew) {
-        // For combined role, default to crew dashboard
-        setView("crew")
-      } else if (isOrderTaker) {
-        setView("taker")
+    if (user && mounted) {
+      const params = new URLSearchParams(window.location.search)
+      const hasViewParam = params.has('view')
+
+      if (!hasViewParam) {
+        if (isOrderTakerCrew) {
+          // For combined role, default to crew dashboard
+          setView("crew")
+        } else if (isOrderTaker) {
+          setView("taker")
+        }
       }
     }
-  }, [user, isOrderTaker, isOrderTakerCrew])
+  }, [user, isOrderTaker, isOrderTakerCrew, mounted])
 
   useEffect(() => {
     if (appendingOrderId) {
@@ -199,10 +215,9 @@ export default function Home() {
           {/* Mobile Navigation */}
           <div className="lg:hidden">
             <div className="flex items-center justify-between">
-              {/* Logo/Title */}
-              <div>
-                <h1 className="text-lg font-bold text-slate-900">OrderTaker</h1>
-                <p className="text-xs text-slate-500">{user?.email}</p>
+              {/* Logo Icon */}
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
+                <ChefHat className="h-6 w-6 text-white" />
               </div>
 
               <div className="flex items-center gap-2">
@@ -220,6 +235,16 @@ export default function Home() {
                     {view === "taker" ? "Dashboard" : "Order Taker"}
                   </Button>
                 )}
+
+                {/* Kitchen Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push("/kitchen")}
+                  className="min-h-[44px] px-4"
+                >
+                  Kitchen
+                </Button>
 
                 {/* Hamburger Menu */}
                 <Sheet>

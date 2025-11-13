@@ -22,7 +22,7 @@ interface ItemInstance {
   status: "pending" | "preparing" | "ready" | "served"
   itemType: "dine-in" | "take-out"
   note?: string
-  createdAt: number // When item was added to order
+  createdAt: number
   preparingAt?: number
   readyAt?: number
   preparedBy?: string
@@ -36,8 +36,8 @@ interface GroupedItem {
   category: string
   itemType: "food" | "drinks"
   totalQuantity: number
-  status: "pending" | "preparing" | "ready" // Never "served" (filtered out)
-  oldestCreatedAt: number // For FIFO sorting
+  status: "pending" | "preparing" | "ready"
+  oldestCreatedAt: number
   instances: ItemInstance[]
 }
 
@@ -52,17 +52,14 @@ export function KitchenView() {
   const { toast } = useToast()
   const { user } = useAuth()
 
-  // Fetch orders and menu items
   useEffect(() => {
     fetchData()
   }, [])
 
-  // Update current time every second to refresh waiting time calculations
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Date.now())
-    }, 1000) // Update every second
-
+    }, 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -73,7 +70,6 @@ export function KitchenView() {
         ordersApi.getAll(),
         menuItemsApi.getAll(),
       ])
-
       setOrders(ordersData)
       setMenuItems(menuItemsData)
       setIsOnline(true)
@@ -90,7 +86,6 @@ export function KitchenView() {
     }
   }
 
-  // WebSocket real-time updates
   const handleOrderUpdated = (updatedOrder: any) => {
     setOrders((prevOrders) =>
       prevOrders.map((order) =>
@@ -216,7 +211,6 @@ export function KitchenView() {
 
   useOrderEvents(handleOrderCreated, handleOrderUpdated)
 
-  // Create menu item map for quick category lookup
   const menuItemMap = useMemo(() => {
     const map = new Map<string, MenuItem>()
     menuItems.forEach((item) => {
@@ -225,13 +219,11 @@ export function KitchenView() {
     return map
   }, [menuItems])
 
-  // Extract and group items
+  // Group items by name and status for batch preparation
   const groupedItems = useMemo(() => {
-    // Extract all items from orders (main + appended), excluding served items
     const allInstances: ItemInstance[] = []
 
     orders.forEach((order) => {
-      // Main order items
       order.items
         .filter((item) => item.status !== "served")
         .forEach((item) => {
@@ -245,7 +237,7 @@ export function KitchenView() {
             status: item.status,
             itemType: item.itemType || "dine-in",
             note: item.note,
-            createdAt: order.createdAt, // When main order was created
+            createdAt: order.createdAt,
             preparingAt: item.preparingAt,
             readyAt: item.readyAt,
             preparedBy: item.preparedBy,
@@ -254,7 +246,6 @@ export function KitchenView() {
           })
         })
 
-      // Appended order items
       order.appendedOrders?.forEach((appended) => {
         appended.items
           .filter((item) => item.status !== "served")
@@ -269,7 +260,7 @@ export function KitchenView() {
               status: item.status,
               itemType: item.itemType || "dine-in",
               note: item.note,
-              createdAt: appended.createdAt, // When appended order was created
+              createdAt: appended.createdAt,
               preparingAt: item.preparingAt,
               readyAt: item.readyAt,
               preparedBy: item.preparedBy,
@@ -281,13 +272,9 @@ export function KitchenView() {
       })
     })
 
-    // Group by item name AND status AND item type (dine-in/take-out) (case-insensitive)
-    // This ensures pending items are separate from preparing/ready items
-    // and dine-in items are separate from take-out items
     const grouped = new Map<string, GroupedItem>()
 
     allInstances.forEach((instance) => {
-      // Group key includes name, status, and item type
       const nameKey = instance.name.toLowerCase().trim()
       const groupKey = `${nameKey}-${instance.status}-${instance.itemType}`
       const menuItem = menuItemMap.get(nameKey)
@@ -296,11 +283,11 @@ export function KitchenView() {
 
       if (!grouped.has(groupKey)) {
         grouped.set(groupKey, {
-          name: instance.name, // Use original case from first instance
+          name: instance.name,
           category,
           itemType,
           totalQuantity: 0,
-          status: instance.status, // All items in group have same status
+          status: instance.status,
           oldestCreatedAt: instance.createdAt,
           instances: [],
         })
@@ -310,59 +297,30 @@ export function KitchenView() {
       group.totalQuantity += instance.quantity
       group.instances.push(instance)
 
-      // Update oldest created at for FIFO
       if (instance.createdAt < group.oldestCreatedAt) {
         group.oldestCreatedAt = instance.createdAt
       }
     })
 
-    // Convert to array and sort by status priority first (pending > preparing > ready),
-    // then by FIFO (oldest first) within each status
     const statusPriority = { pending: 0, preparing: 1, ready: 2 }
     return Array.from(grouped.values()).sort((a, b) => {
-      // First sort by status priority
       const statusDiff = statusPriority[a.status] - statusPriority[b.status]
       if (statusDiff !== 0) return statusDiff
-      // Then sort by FIFO (oldest first)
       return a.oldestCreatedAt - b.oldestCreatedAt
     })
   }, [orders, menuItemMap])
 
-  // Separate food and drinks
   const foodItems = groupedItems.filter((item) => item.itemType === "food")
   const drinkItems = groupedItems.filter((item) => item.itemType === "drinks")
 
-  // Update item status
   const updateItemStatus = async (
     instance: ItemInstance,
     newStatus: ItemStatus
   ) => {
     if (!user) return
 
-    // Validation: Only crew who prepared the item can update it (unless order taker)
-    const isOrderTaker =
-      user.role === "order_taker" ||
-      user.role === "super_admin" ||
-      user.role === "order_taker_crew"
-
-    if (
-      !isOrderTaker &&
-      instance.preparedByEmail &&
-      instance.preparedByEmail !== user.email
-    ) {
-      toast({
-        title: "Permission Denied",
-        description:
-          "Only the crew member who prepared this item can update its status.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Prepare updated item with crew tracking
     const updatedItem: Partial<OrderItem> = { status: newStatus }
 
-    // When moving to "preparing", assign the crew member
     if (newStatus === "preparing" && !instance.preparedBy && !instance.preparedByEmail) {
       updatedItem.preparedBy = user.name
       updatedItem.preparedByEmail = user.email
@@ -371,19 +329,16 @@ export function KitchenView() {
       updatedItem.readyAt = Date.now()
     }
 
-    // Update local state optimistically
     setOrders((prevOrders) =>
       prevOrders.map((order) => {
         if (order.id !== instance.orderId) return order
 
-        // Update main items
         const updatedMainItems = order.items.map((item) =>
           !instance.isAppended && item.id === instance.itemId
             ? { ...item, ...updatedItem }
             : item
         )
 
-        // Update appended items
         const updatedAppendedOrders = order.appendedOrders?.map((appended) =>
           instance.isAppended && appended.id === instance.appendedOrderId
             ? {
@@ -405,7 +360,6 @@ export function KitchenView() {
       })
     )
 
-    // Sync to API
     try {
       if (instance.isAppended && instance.appendedOrderId) {
         await ordersApi.updateAppendedItemStatus(
@@ -435,16 +389,13 @@ export function KitchenView() {
     }
   }
 
-  // Update all instances of a grouped item
   const updateGroupedItemStatus = async (
     groupedItem: GroupedItem,
     newStatus: ItemStatus
   ) => {
-    // Update all instances
     const updatePromises = groupedItem.instances.map((instance) =>
       updateItemStatus(instance, newStatus)
     )
-
     await Promise.all(updatePromises)
   }
 
@@ -487,29 +438,23 @@ export function KitchenView() {
 
   const formatDuration = (milliseconds: number): string => {
     if (!milliseconds || milliseconds <= 0) return ""
-
     const seconds = Math.floor(milliseconds / 1000)
     const minutes = Math.floor(seconds / 60)
     const hours = Math.floor(minutes / 60)
-
     if (hours > 0) {
       return `${hours}h ${minutes % 60}m`
     } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`
+      return `${minutes}m`
     } else {
       return `${seconds}s`
     }
   }
 
-  // Calculate waiting time for pending items
   const getWaitingTime = (createdAt: number): number => {
-    // Normalize timestamp to milliseconds (timestamps < year 2100 in seconds)
-    // Fix for incorrect waiting time calculations showing "866h 52m"
     const normalizedCreatedAt = createdAt < 10000000000 ? createdAt * 1000 : createdAt
     return currentTime - normalizedCreatedAt
   }
 
-  // Get urgency level based on waiting time
   const getUrgencyLevel = (waitingTime: number): "normal" | "urgent" | "critical" => {
     const minutes = Math.floor(waitingTime / 60000)
     if (minutes >= 15) return "critical"
@@ -520,16 +465,14 @@ export function KitchenView() {
   const renderItemGroup = (groupedItem: GroupedItem) => {
     const nextStatus = getNextStatus(groupedItem.status)
     const canUpdate = nextStatus !== "served"
-    
-    // Calculate waiting time and urgency for pending items
-    const waitingTime = groupedItem.status === "pending" 
+
+    const waitingTime = groupedItem.status === "pending"
       ? getWaitingTime(groupedItem.oldestCreatedAt)
       : 0
     const urgencyLevel = groupedItem.status === "pending"
       ? getUrgencyLevel(waitingTime)
       : "normal"
-    
-    // Visual styling based on urgency and status
+
     const getCardStyle = () => {
       if (groupedItem.status === "pending") {
         if (urgencyLevel === "critical") {
@@ -539,19 +482,18 @@ export function KitchenView() {
         }
         return "border-amber-400 border-2 bg-amber-50/30"
       }
-      // Muted styling for preparing/ready items
       return "border-2 border-slate-300 bg-slate-50/50 opacity-90 hover:shadow-lg transition-shadow"
     }
 
     return (
       <Card
         key={`${groupedItem.name}-${groupedItem.status}-${groupedItem.instances[0]?.itemType}`}
-        className={`p-6 mb-6 ${getCardStyle()}`}
+        className={`p-4 sm:p-6 mb-4 sm:mb-6 ${getCardStyle()}`}
       >
-        <div className="flex items-start justify-between gap-6 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <h3 className={`text-2xl font-bold ${
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className={`text-xl sm:text-2xl font-bold ${
                 groupedItem.status === "pending" && urgencyLevel === "critical"
                   ? "text-red-900"
                   : groupedItem.status === "pending" && urgencyLevel === "urgent"
@@ -575,7 +517,6 @@ export function KitchenView() {
                 {groupedItem.status.charAt(0).toUpperCase() +
                   groupedItem.status.slice(1)}
               </Badge>
-              {/* Waiting time indicator for pending items */}
               {groupedItem.status === "pending" && waitingTime > 0 && (
                 <Badge
                   className={`text-xs font-bold px-2.5 py-1 ${
@@ -591,7 +532,6 @@ export function KitchenView() {
               )}
             </div>
 
-            {/* Order Sources */}
             <div className="mb-3">
               <p className="text-xs font-semibold text-slate-600 mb-1">
                 Orders:
@@ -623,7 +563,6 @@ export function KitchenView() {
               </div>
             </div>
 
-            {/* Notes */}
             {groupedItem.instances.some((i) => i.note) && (
               <div className="mb-3 space-y-1">
                 {groupedItem.instances
@@ -636,7 +575,7 @@ export function KitchenView() {
                       <p className="text-xs font-bold text-amber-900 uppercase tracking-wide mb-0.5">
                         📝 Note (Order #{instance.orderNumber || "N/A"}):
                       </p>
-                      <p className="text-sm font-semibold text-amber-800">
+                      <p className="text-xs sm:text-sm font-semibold text-amber-800">
                         {instance.note}
                       </p>
                     </div>
@@ -644,7 +583,6 @@ export function KitchenView() {
               </div>
             )}
 
-            {/* Timing Info */}
             <div className="text-xs text-slate-600 space-y-1">
               {groupedItem.instances.some((i) => i.preparingAt) && (
                 <div>
@@ -670,7 +608,7 @@ export function KitchenView() {
                   {groupedItem.instances
                     .filter((i) => i.preparedBy)
                     .map((i) => i.preparedBy)
-                    .filter((v, i, a) => a.indexOf(v) === i) // Unique
+                    .filter((v, i, a) => a.indexOf(v) === i)
                     .join(", ")}
                 </div>
               )}
@@ -681,12 +619,11 @@ export function KitchenView() {
             </div>
           </div>
 
-          {/* Status Update Button */}
           {canUpdate && (
             <Button
               onClick={() => updateGroupedItemStatus(groupedItem, nextStatus)}
               size="lg"
-              className="flex-shrink-0 h-14 px-6 text-base font-bold min-w-[140px]"
+              className="flex-shrink-0 h-12 sm:h-14 px-4 sm:px-6 text-sm sm:text-base font-bold min-w-[120px] sm:min-w-[140px] w-full sm:w-auto"
             >
               {nextStatus === "preparing"
                 ? "Start Preparing"
@@ -709,20 +646,19 @@ export function KitchenView() {
   }
 
   return (
-    <div className="p-4">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Kitchen Display</h1>
-        <p className="text-sm text-slate-600 mb-3">
+    <div className="p-2 sm:p-4">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Kitchen Display</h1>
+        <p className="text-xs sm:text-sm text-slate-600 mb-3">
           Batch preparation view - items grouped by type and sorted FIFO
         </p>
-        {/* FIFO reminder banner */}
         <div className="bg-blue-600 text-white p-3 rounded-lg shadow-md mb-4 border-l-4 border-blue-800">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <div>
-              <p className="font-bold text-sm mb-1">⚠️ IMPORTANT: Work from Top to Bottom</p>
+              <p className="font-bold text-xs sm:text-sm mb-1">⚠️ IMPORTANT: Work from Top to Bottom</p>
               <p className="text-xs opacity-90">
-                Items are sorted by priority (Pending → Preparing → Ready) and FIFO order. 
+                Items are sorted by priority (Pending → Preparing → Ready) and FIFO order.
                 Always start with the first item at the top. Older orders are at the top - work them first to keep customers happy!
               </p>
             </div>
@@ -730,11 +666,10 @@ export function KitchenView() {
         </div>
       </div>
 
-      {/* Summary Metrics Dashboard */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Card className="p-4 bg-gradient-to-br from-red-50 to-white border-red-300">
-          <div className="text-sm font-semibold text-red-700 uppercase tracking-wide">Pending</div>
-          <div className="text-3xl font-bold text-red-900 mt-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-red-50 to-white border-red-300">
+          <div className="text-xs sm:text-sm font-semibold text-red-700 uppercase tracking-wide">Pending</div>
+          <div className="text-2xl sm:text-3xl font-bold text-red-900 mt-1">
             {groupedItems.filter(i => i.status === 'pending').length}
           </div>
           <div className="text-xs text-red-600 mt-1">
@@ -749,9 +684,9 @@ export function KitchenView() {
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-br from-orange-50 to-white border-orange-300">
-          <div className="text-sm font-semibold text-orange-700 uppercase tracking-wide">Preparing</div>
-          <div className="text-3xl font-bold text-orange-900 mt-1">
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-orange-50 to-white border-orange-300">
+          <div className="text-xs sm:text-sm font-semibold text-orange-700 uppercase tracking-wide">Preparing</div>
+          <div className="text-2xl sm:text-3xl font-bold text-orange-900 mt-1">
             {groupedItems.filter(i => i.status === 'preparing').length}
           </div>
           <div className="text-xs text-orange-600 mt-1">
@@ -759,9 +694,9 @@ export function KitchenView() {
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-br from-emerald-50 to-white border-emerald-300">
-          <div className="text-sm font-semibold text-emerald-700 uppercase tracking-wide">Ready</div>
-          <div className="text-3xl font-bold text-emerald-900 mt-1">
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-emerald-50 to-white border-emerald-300">
+          <div className="text-xs sm:text-sm font-semibold text-emerald-700 uppercase tracking-wide">Ready</div>
+          <div className="text-2xl sm:text-3xl font-bold text-emerald-900 mt-1">
             {groupedItems.filter(i => i.status === 'ready').length}
           </div>
           <div className="text-xs text-emerald-600 mt-1">
@@ -769,9 +704,9 @@ export function KitchenView() {
           </div>
         </Card>
 
-        <Card className="p-4 bg-gradient-to-br from-blue-50 to-white border-blue-300">
-          <div className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Total Items</div>
-          <div className="text-3xl font-bold text-blue-900 mt-1">
+        <Card className="p-3 sm:p-4 bg-gradient-to-br from-blue-50 to-white border-blue-300">
+          <div className="text-xs sm:text-sm font-semibold text-blue-700 uppercase tracking-wide">Total Items</div>
+          <div className="text-2xl sm:text-3xl font-bold text-blue-900 mt-1">
             {groupedItems.reduce((sum, i) => sum + i.totalQuantity, 0)}
           </div>
           <div className="text-xs text-blue-600 mt-1">
@@ -780,30 +715,29 @@ export function KitchenView() {
         </Card>
       </div>
 
-      {/* Critical Items Alert Banner */}
       {groupedItems.some(item => item.status === 'pending' && getUrgencyLevel(getWaitingTime(item.oldestCreatedAt)) === 'critical') && (
-        <div className="bg-red-600 text-white p-4 rounded-lg mb-6 flex items-center gap-3 animate-pulse shadow-lg">
-          <AlertCircle className="w-8 h-8 flex-shrink-0" />
+        <div className="bg-red-600 text-white p-3 sm:p-4 rounded-lg mb-4 sm:mb-6 flex items-center gap-3 animate-pulse shadow-lg">
+          <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0" />
           <div>
-            <p className="font-bold text-lg">🚨 URGENT: Items waiting 15+ minutes!</p>
-            <p className="text-sm opacity-90">Prioritize red-bordered items immediately</p>
+            <p className="font-bold text-sm sm:text-lg">🚨 URGENT: Items waiting 15+ minutes!</p>
+            <p className="text-xs sm:text-sm opacity-90">Prioritize red-bordered items immediately</p>
           </div>
         </div>
       )}
 
       <Tabs defaultValue="food" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-4">
-          <TabsTrigger value="food">
-            Food ({foodItems.length})
+          <TabsTrigger value="food" className="text-sm sm:text-base">
+            Food Items ({foodItems.length})
           </TabsTrigger>
-          <TabsTrigger value="drinks">
-            Drinks ({drinkItems.length})
+          <TabsTrigger value="drinks" className="text-sm sm:text-base">
+            Drink Items ({drinkItems.length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="food" className="mt-4">
+        <TabsContent value="food" className="space-y-2">
           {foodItems.length === 0 ? (
-            <Card className="p-8 text-center">
+            <Card className="p-6 sm:p-8 text-center">
               <p className="text-slate-500">No food items to prepare</p>
             </Card>
           ) : (
@@ -811,9 +745,9 @@ export function KitchenView() {
           )}
         </TabsContent>
 
-        <TabsContent value="drinks" className="mt-4">
+        <TabsContent value="drinks" className="space-y-2">
           {drinkItems.length === 0 ? (
-            <Card className="p-8 text-center">
+            <Card className="p-6 sm:p-8 text-center">
               <p className="text-slate-500">No drink items to prepare</p>
             </Card>
           ) : (
@@ -824,4 +758,3 @@ export function KitchenView() {
     </div>
   )
 }
-
