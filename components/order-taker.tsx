@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sheet"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
+import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -154,6 +154,61 @@ export function OrderTaker({
   // Check if user can access withdrawal feature (all roles except crew)
   const canWithdraw = user?.role !== "crew"
   const isAdmin = user?.role === "super_admin"
+
+  // Track if initial load has completed to prevent overwriting on first render
+  const hasLoadedFromCart = useRef(false)
+
+  // Load cart from database on mount (only if not appending)
+  useEffect(() => {
+    const loadCart = async () => {
+      if (!appendingOrderId && user?.email) {
+        try {
+          console.log("Loading cart for user:", user.email)
+          const cartData = await cartApi.get(user.email)
+          setCustomerName(cartData.customerName || "")
+          setOrderType(cartData.orderType || "dine-in")
+          setOrderNote(cartData.orderNote || "")
+          setCurrentOrder(cartData.items || [])
+          console.log("Loaded cart from database:", cartData)
+        } catch (error) {
+          console.error("Error loading cart from database:", error)
+          console.error("Error details:", error instanceof Error ? error.message : String(error))
+        } finally {
+          // Mark that we've attempted to load
+          hasLoadedFromCart.current = true
+        }
+      } else if (appendingOrderId) {
+        // If appending, mark as loaded to allow saving
+        hasLoadedFromCart.current = true
+      }
+    }
+
+    loadCart()
+  }, [appendingOrderId, user?.email])
+
+  // Save cart to database whenever it changes (only if not appending and after initial load)
+  useEffect(() => {
+    const saveCart = async () => {
+      if (hasLoadedFromCart.current && !isAppending && !appendingOrderId && user?.email) {
+        try {
+          const cartData = {
+            customerName,
+            orderType,
+            orderNote,
+            items: currentOrder,
+          }
+          await cartApi.save(user.email, cartData)
+          console.log("Saved cart to database:", cartData)
+        } catch (error) {
+          console.error("Error saving cart to database:", error)
+        }
+      }
+    }
+
+    // Debounce the save to avoid too many API calls
+    const timeoutId = setTimeout(saveCart, 500)
+    return () => clearTimeout(timeoutId)
+  }, [customerName, orderType, orderNote, currentOrder, isAppending, appendingOrderId, user?.email])
 
   // Load menu data from API with fallback
   useEffect(() => {
@@ -384,6 +439,17 @@ export function OrderTaker({
         setCurrentOrder([])
         setNewItems([])
         setAppendingOrder(null)
+
+        // Clear cart from database after successful append
+        if (user?.email) {
+          try {
+            await cartApi.clear(user.email)
+            console.log("Cleared cart from database after appending items")
+          } catch (error) {
+            console.error("Error clearing cart:", error)
+          }
+        }
+
         onAppendComplete()
       } else {
         // Create new order
@@ -453,6 +519,16 @@ export function OrderTaker({
         setCurrentOrder([])
         setOrderType("dine-in")
         setOrderNote("")
+
+        // Clear cart from database after successful order creation
+        if (user?.email) {
+          try {
+            await cartApi.clear(user.email)
+            console.log("Cleared cart from database after order creation")
+          } catch (error) {
+            console.error("Error clearing cart:", error)
+          }
+        }
       }
     } catch (error) {
       console.error("Error submitting order:", error)
@@ -467,12 +543,23 @@ export function OrderTaker({
     }
   }
 
-  const cancelAppend = () => {
+  const cancelAppend = async () => {
     setIsAppending(false)
     setCustomerName("")
     setCurrentOrder([])
     setNewItems([])
     setAppendingOrder(null)
+
+    // Clear cart from database when canceling append
+    if (user?.email) {
+      try {
+        await cartApi.clear(user.email)
+        console.log("Cleared cart from database after canceling append")
+      } catch (error) {
+        console.error("Error clearing cart:", error)
+      }
+    }
+
     onAppendComplete()
   }
 

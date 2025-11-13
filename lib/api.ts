@@ -47,6 +47,13 @@ export interface OrderItem {
   servedByEmail?: string;
 }
 
+export interface Cart {
+  customerName: string;
+  orderType: "dine-in" | "take-out";
+  orderNote: string;
+  items: OrderItem[];
+}
+
 export interface AppendedOrder {
   id: string;
   items: OrderItem[];
@@ -612,6 +619,58 @@ export const ordersApi = {
       todayOrders: 0,
       totalRevenue: 0
     };
+  },
+};
+
+// Cart API
+export const cartApi = {
+  /**
+   * Get cart for a user
+   * @param userEmail - User's email
+   */
+  get: async (userEmail: string): Promise<Cart> => {
+    const response = await apiCall<{ data: Cart }>(
+      `/cart/${encodeURIComponent(userEmail)}`,
+      {
+        method: "GET",
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Save cart for a user
+   * @param userEmail - User's email
+   * @param cart - Cart data to save
+   */
+  save: async (userEmail: string, cart: Cart): Promise<Cart> => {
+    const response = await apiCall<{ data: Cart }>(
+      `/cart`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userEmail,
+          ...cart,
+        }),
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Clear cart for a user
+   * @param userEmail - User's email
+   */
+  clear: async (userEmail: string): Promise<void> => {
+    await apiCall(
+      `/cart/${encodeURIComponent(userEmail)}`,
+      {
+        method: "DELETE",
+      }
+    );
   },
 };
 

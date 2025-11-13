@@ -67,6 +67,7 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/cart', require('./routes/cart'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -90,6 +91,7 @@ app.get('/', (req, res) => {
       orders: '/api/orders',
       withdrawals: '/api/withdrawals',
       inventory: '/api/inventory',
+      cart: '/api/cart',
       images: '/uploads/:filename'
     }
   });
