@@ -5,7 +5,16 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp } from "lucide-react"
+import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp, ShoppingCart } from "lucide-react"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils"
 import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -910,69 +919,157 @@ export function OrderTaker({
             </div>
           ) : (
             <>
-              <div className="mb-8">
-                <h3 className="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wide">Categories</h3>
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                  {/* Best Sellers button */}
+              {/* Improved Categories Section with Clear Visual Distinction */}
+              <div className="mb-8 bg-gradient-to-br from-slate-100 to-slate-50 p-4 rounded-2xl border-2 border-slate-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                    Filter by Category
+                  </h3>
+                </div>
+
+                {/* Mobile: Horizontal Scroll with Pill Style */}
+                <div className="lg:hidden">
+                  <ScrollArea className="w-full">
+                    <div className="flex gap-2 pb-2">
+                      {/* Best Sellers */}
+                      <button
+                        onClick={() => setSelectedCategory(null)}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2.5 rounded-full transition-all flex-shrink-0",
+                          "font-semibold text-sm whitespace-nowrap min-h-[44px] border",
+                          selectedCategory === null
+                            ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
+                            : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 active:scale-95"
+                        )}
+                      >
+                        <span className="text-lg">⭐</span>
+                        <span>Best Sellers</span>
+                      </button>
+
+                      {/* Category Buttons */}
+                      {categories.map((category) => (
+                        <button
+                          key={category.id}
+                          onClick={() => setSelectedCategory(category.id)}
+                          className={cn(
+                            "flex items-center gap-2 px-4 py-2.5 rounded-full transition-all flex-shrink-0",
+                            "font-semibold text-sm whitespace-nowrap min-h-[44px] border",
+                            selectedCategory === category.id
+                              ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
+                              : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 active:scale-95"
+                          )}
+                        >
+                          <img
+                            src={getImageUrl(category.image) || "/placeholder.svg"}
+                            alt={category.name}
+                            className="w-5 h-5 rounded-full object-cover"
+                          />
+                          <span>{category.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </div>
+
+                {/* Desktop: Compact Horizontal Layout */}
+                <div className="hidden lg:flex lg:flex-wrap gap-2">
+                  {/* Best Sellers */}
                   <button
                     onClick={() => setSelectedCategory(null)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg transition-all flex-shrink-0 border shadow-sm ${
+                    className={cn(
+                      "flex items-center gap-2 px-5 py-3 rounded-full transition-all border",
+                      "font-semibold text-sm",
                       selectedCategory === null
-                        ? "bg-blue-600 text-white border-blue-700 shadow-md"
-                        : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-md"
-                    }`}
+                        ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
+                        : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50"
+                    )}
                   >
-                    <div className={`w-16 h-16 rounded-lg flex items-center justify-center text-2xl ${selectedCategory === null ? "bg-blue-700/30" : "bg-slate-100"}`}>⭐</div>
-                    <span className={`text-xs font-bold text-center ${selectedCategory === null ? "text-white" : "text-slate-700"}`}>Best Sellers</span>
+                    <span className="text-xl">⭐</span>
+                    <span>Best Sellers</span>
                   </button>
 
-                  {/* Category buttons */}
+                  {/* Category Pills */}
                   {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg transition-all flex-shrink-0 border shadow-sm ${
-                    selectedCategory === category.id
-                      ? "bg-blue-600 text-white border-blue-700 shadow-md"
-                      : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-md"
-                  }`}
-                >
-                  <img
-                    src={getImageUrl(category.image) || "/placeholder.svg"}
-                    alt={category.name}
-                    className={`w-16 h-16 rounded-lg object-cover ${selectedCategory === category.id ? "ring-2 ring-blue-300" : ""}`}
-                  />
-                  <span className={`text-xs font-bold text-center ${selectedCategory === category.id ? "text-white" : "text-slate-700"}`}>{category.name}</span>
-                </button>
-              ))}
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-5 py-3 rounded-full transition-all border",
+                        "font-semibold text-sm",
+                        selectedCategory === category.id
+                          ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
+                          : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50"
+                      )}
+                    >
+                      <img
+                        src={getImageUrl(category.image) || "/placeholder.svg"}
+                        alt={category.name}
+                        className="w-6 h-6 rounded-full object-cover border-2 border-white/50"
+                      />
+                      <span>{category.name}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Menu Items Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {getDisplayedItems().map((item) => (
-              <button
-                key={item.id}
-                onClick={() => addItem(item)}
-                className="flex flex-col items-center justify-start gap-2.5 p-4 rounded-lg bg-white border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition-all h-full"
-              >
-                <img
-                  src={getImageUrl(item.image) || "/placeholder.svg"}
-                  alt={item.name}
-                  className="w-20 h-20 rounded-lg object-cover"
-                />
-                {item.isBestSeller && <Badge className="bg-amber-500 border border-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-md shadow-sm">Best Seller</Badge>}
-                <span className="text-sm font-semibold text-center text-slate-900">{item.name}</span>
-                <span className="text-xs font-medium text-slate-600">₱{item.price.toFixed(2)}</span>
-              </button>
+              {/* Improved Menu Items Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
+                {getDisplayedItems().map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => addItem(item)}
+                    className={cn(
+                      "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white",
+                      "border-2 border-slate-200 hover:border-blue-400 active:border-blue-500",
+                      "shadow-sm hover:shadow-lg active:shadow-md",
+                      "transition-all duration-200 active:scale-95",
+                      "min-h-[160px] lg:min-h-[180px]",
+                      "min-w-[140px] sm:min-w-0"
+                    )}
+                  >
+                    {/* Image Container with Best Seller Badge */}
+                    <div className="relative">
+                      <img
+                        src={getImageUrl(item.image) || "/placeholder.svg"}
+                        alt={item.name}
+                        className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
+                                   group-hover:scale-105 transition-transform duration-200"
+                      />
+                      {item.isBestSeller && (
+                        <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
+                                         text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
+                          BEST
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Item Details */}
+                    <div className="flex flex-col items-center gap-1 flex-1">
+                      <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
+                                      line-clamp-2 leading-tight">
+                        {item.name}
+                      </span>
+                      <span className="text-base lg:text-sm font-bold text-blue-600">
+                        ₱{item.price.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Tap indicator (only on mobile) */}
+                    <div className="lg:hidden w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center
+                                   group-active:bg-blue-200 transition-colors">
+                      <Plus className="w-4 h-4 text-blue-600" />
+                    </div>
+                  </button>
                 ))}
               </div>
             </>
           )}
         </div>
 
-        {/* Order Summary */}
-        <div className="lg:col-span-1">
+        {/* Order Summary - Desktop Only */}
+        <div className="hidden lg:block lg:col-span-1">
           <Card className={`p-4 sm:p-5 sticky top-4 bg-white border border-slate-200/80 shadow-sm ${isAppending ? "border-2 border-blue-300 bg-blue-50/30" : ""}`}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-xl font-bold text-slate-900">{isAppending ? "Append Items" : "Current Order"}</h3>
@@ -1281,6 +1378,243 @@ export function OrderTaker({
             </div>
           </Card>
         </div>
+        </div>
+
+        {/* Mobile: Floating Order Summary Button */}
+        <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                size="lg"
+                className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white shadow-2xl
+                           flex items-center justify-between px-6"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 rounded-full w-10 h-10 flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-base">View Order</div>
+                    <div className="text-xs text-blue-100">{existingItemCount + newItemCount} items</div>
+                  </div>
+                </div>
+                <span className="text-xl font-bold">₱{currentOrderTotal.toFixed(2)}</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl p-0">
+              <div className="flex flex-col h-full">
+                <SheetHeader className="border-b pb-4 px-6 pt-6">
+                  <div className="flex items-center justify-between">
+                    <SheetTitle className="text-xl">
+                      {isAppending ? "Append Items" : "Current Order"}
+                    </SheetTitle>
+                    {isAppending && (
+                      <Badge className="bg-blue-600 text-white">Appending</Badge>
+                    )}
+                  </div>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  <div className="mb-5">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Customer Name</label>
+                    <Input
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Enter name"
+                      className="w-full border-slate-200 focus:border-slate-400"
+                      disabled={isAppending}
+                    />
+                  </div>
+
+                  {!isAppending && (
+                    <div className="mb-5">
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
+                      <Input
+                        value={orderNote}
+                        onChange={(e) => setOrderNote(e.target.value)}
+                        placeholder="Add a note for this order"
+                        className="w-full border-slate-200 focus:border-slate-400"
+                      />
+                    </div>
+                  )}
+
+                  {isAppending && appendingOrder && (
+                    <div className="mb-5 pb-5 border-b border-slate-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-bold text-slate-700 uppercase tracking-wide">Existing Items</p>
+                        {appendingOrder.isPaid && (
+                          <Badge className="bg-emerald-600 text-white">Paid</Badge>
+                        )}
+                      </div>
+                      <div className="space-y-2.5">
+                        {currentOrder.map((item) => (
+                          <div key={item.id} className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-semibold text-slate-900">{item.name}</span>
+                              <Badge variant="outline" className="text-xs font-bold">x{item.quantity}</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {isAppending && (
+                    <div className="mb-5">
+                      <p className="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wide">New Items to Add</p>
+                      {newItems.length === 0 ? (
+                        <p className="text-slate-500 text-sm font-medium">No new items added</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {newItems.map((item) => (
+                            <div key={item.id} className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
+                                  <p className="text-xs font-medium text-slate-600">₱{item.price.toFixed(2)}</p>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <button
+                                    onClick={() => {
+                                      const updated = newItems.map((i) =>
+                                        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+                                      )
+                                      setNewItems(updated)
+                                    }}
+                                    className="p-1.5 hover:bg-emerald-50 rounded-md transition-colors border border-emerald-200 min-w-[32px] min-h-[32px]"
+                                  >
+                                    <Plus className="w-4 h-4 text-emerald-600" />
+                                  </button>
+                                  <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                                  <button
+                                    onClick={() => {
+                                      const updated = newItems
+                                        .map((i) => (i.id === item.id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+                                        .filter((i) => i.quantity > 0)
+                                      setNewItems(updated)
+                                    }}
+                                    className="p-1.5 hover:bg-red-50 rounded-md transition-colors border border-red-200 min-w-[32px] min-h-[32px]"
+                                  >
+                                    <Minus className="w-4 h-4 text-red-600" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const updated = newItems.filter((i) => i.id !== item.id)
+                                      setNewItems(updated)
+                                    }}
+                                    className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200 min-w-[32px] min-h-[32px]"
+                                  >
+                                    <X className="w-4 h-4 text-red-600" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!isAppending && (
+                    <div className="space-y-3 mb-5">
+                      {currentOrder.length === 0 ? (
+                        <p className="text-slate-500 text-sm font-medium">No items added</p>
+                      ) : (
+                        currentOrder.map((item) => (
+                          <div key={item.id} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
+                                <p className="text-xs font-medium text-slate-600">₱{item.price.toFixed(2)}</p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                  onClick={() => {
+                                    const updated = currentOrder.map((i) =>
+                                      i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+                                    )
+                                    setCurrentOrder(updated)
+                                  }}
+                                  className="p-1.5 hover:bg-emerald-50 rounded-md transition-colors border border-emerald-200 min-w-[32px] min-h-[32px]"
+                                >
+                                  <Plus className="w-4 h-4 text-emerald-600" />
+                                </button>
+                                <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                                <button
+                                  onClick={() => {
+                                    const updated = currentOrder
+                                      .map((i) => (i.id === item.id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+                                      .filter((i) => i.quantity > 0)
+                                    setCurrentOrder(updated)
+                                  }}
+                                  className="p-1.5 hover:bg-red-50 rounded-md transition-colors border border-red-200 min-w-[32px] min-h-[32px]"
+                                >
+                                  <Minus className="w-4 h-4 text-red-600" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const updated = currentOrder.filter((i) => i.id !== item.id)
+                                    setCurrentOrder(updated)
+                                  }}
+                                  className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200 min-w-[32px] min-h-[32px]"
+                                >
+                                  <X className="w-4 h-4 text-red-600" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t bg-white px-6 py-4">
+                  <div className="mb-4">
+                    {isAppending ? (
+                      <>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-bold text-sm text-slate-700">New Items Total:</span>
+                          <span className="text-lg font-bold text-blue-600">₱{totalNewItems.toFixed(2)}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 font-medium">New items: {newItemCount}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-bold text-base text-slate-900">Total:</span>
+                          <span className="text-xl font-bold text-slate-900">₱{currentOrderTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 font-medium">Items: {existingItemCount}</div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={submitOrder}
+                      disabled={!customerName.trim() || (isAppending ? newItems.length === 0 : currentOrder.length === 0) || isSubmitting}
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold h-12"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        isAppending ? "Update Order" : "Submit Order"
+                      )}
+                    </Button>
+                    {isAppending && (
+                      <Button onClick={cancelAppend} variant="outline" className="flex-1 h-12" disabled={isSubmitting}>
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 

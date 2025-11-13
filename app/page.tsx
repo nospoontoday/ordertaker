@@ -8,7 +8,23 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical } from "lucide-react"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Separator } from "@/components/ui/separator"
 
 export default function Home() {
   const router = useRouter()
@@ -82,91 +98,216 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <OfflineIndicator />
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-2 p-3 sm:p-4 border-b border-border">
-        {/* Only show view toggle buttons for non-crew users */}
-        {!isCrew && (
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setView("taker")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                view === "taker" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              Order Taker
-            </button>
-            <button
-              onClick={() => setView("crew")}
-              className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                view === "crew" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              Order Dashboard
-            </button>
-            {canAccessPastOrders && (
-              <button
-                onClick={() => setView("past")}
-                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                  view === "past" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                Past Orders
-              </button>
-            )}
+
+      {/* Improved Navigation Header */}
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-4 py-3">
+          {/* Desktop Navigation */}
+          <div className="hidden lg:flex items-center justify-between">
+            {/* Left: View Toggle */}
+            <div className="flex gap-2">
+              {!isCrew && (
+                <>
+                  <Button
+                    variant={view === "taker" ? "default" : "ghost"}
+                    size="default"
+                    onClick={() => setView("taker")}
+                    className="min-h-[44px] font-semibold"
+                  >
+                    Order Taker
+                  </Button>
+                  <Button
+                    variant={view === "crew" ? "default" : "ghost"}
+                    size="default"
+                    onClick={() => setView("crew")}
+                    className="min-h-[44px] font-semibold"
+                  >
+                    Dashboard
+                  </Button>
+                  {canAccessPastOrders && (
+                    <Button
+                      variant={view === "past" ? "default" : "ghost"}
+                      size="default"
+                      onClick={() => setView("past")}
+                      className="min-h-[44px] font-semibold"
+                    >
+                      Past Orders
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-600">{user?.email}</span>
+              <div className="h-6 w-px bg-slate-300" />
+
+              <Button variant="outline" onClick={() => router.push("/kitchen")}>
+                <ChefHat className="h-4 w-4 mr-2" />
+                Kitchen
+              </Button>
+
+              {!isCrew && (
+                <>
+                  <Button variant="outline" onClick={() => router.push("/sales-reports")}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Sales
+                  </Button>
+                  <Button variant="outline" onClick={() => router.push("/inventory")}>
+                    <Package className="h-4 w-4 mr-2" />
+                    Inventory
+                  </Button>
+                </>
+              )}
+
+              {/* More Actions Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="min-h-[44px] min-w-[44px]">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {!isCrew && (
+                    <DropdownMenuItem onClick={() => router.push("/stats")}>
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Statistics
+                    </DropdownMenuItem>
+                  )}
+                  {canAccessAdmin && (
+                    <DropdownMenuItem onClick={() => router.push("/admin")}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Admin
+                    </DropdownMenuItem>
+                  )}
+                  {(!isCrew || canAccessAdmin) && <DropdownMenuSeparator />}
+                  <DropdownMenuItem onClick={() => router.push("/change-password")}>
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Change Password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout} variant="destructive">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        )}
 
-        {/* Show placeholder for crew users to maintain layout */}
-        {isCrew && <div></div>}
+          {/* Mobile Navigation */}
+          <div className="lg:hidden">
+            <div className="flex items-center justify-between">
+              {/* Logo/Title */}
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">OrderTaker</h1>
+                <p className="text-xs text-slate-500">{user?.email}</p>
+              </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-xs sm:text-sm text-muted-foreground truncate min-w-0 flex-shrink">{user.email}</span>
-          {/* Show Kitchen button for all user types */}
-          <Button variant="outline" size="sm" onClick={() => router.push("/kitchen")} className="text-xs sm:text-sm">
-            <ChefHat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Kitchen</span>
-            <span className="sm:hidden">Kitchen</span>
-          </Button>
-          {/* Show Sales Reports button for all roles except crew */}
-          {!isCrew && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/sales-reports")} className="text-xs sm:text-sm">
-              <FileText className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Sales Reports</span>
-              <span className="sm:hidden">Reports</span>
-            </Button>
-          )}
-          {/* Show Stats button for all roles except crew */}
-          {!isCrew && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/stats")} className="text-xs sm:text-sm">
-              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Stats</span>
-              <span className="sm:hidden">Stats</span>
-            </Button>
-          )}
-          {/* Show Inventory button for all users */}
-          <Button variant="outline" size="sm" onClick={() => router.push("/inventory")} className="text-xs sm:text-sm">
-            <Package className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Inventory</span>
-            <span className="sm:hidden">Inventory</span>
-          </Button>
-          {/* Only show Admin button for super admin */}
-          {canAccessAdmin && (
-            <Button variant="outline" size="sm" onClick={() => router.push("/admin")} className="text-xs sm:text-sm">
-              <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              Admin
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => router.push("/change-password")} className="text-xs sm:text-sm">
-            <KeyRound className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Change Password</span>
-            <span className="sm:hidden">Password</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs sm:text-sm">
-            <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Logout</span>
-            <span className="sm:hidden">Out</span>
-          </Button>
+              <div className="flex items-center gap-2">
+                {/* View Switcher for non-crew users */}
+                {!isCrew && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      if (view === "taker") setView("crew")
+                      else if (view === "crew" && canAccessPastOrders) setView("past")
+                      else setView("taker")
+                    }}
+                    className="min-h-[44px] px-4"
+                  >
+                    {view === "taker" ? "Dashboard" : view === "crew" && canAccessPastOrders ? "Past Orders" : "Order Taker"}
+                  </Button>
+                )}
+
+                {/* Hamburger Menu */}
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="icon" className="min-h-[44px] min-w-[44px]">
+                      <Menu className="h-5 w-5" />
+                      <span className="sr-only">Open menu</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                    <SheetHeader>
+                      <SheetTitle>Menu</SheetTitle>
+                      <SheetDescription className="text-xs">
+                        {user?.email}
+                      </SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-8 space-y-2">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start h-12"
+                        onClick={() => router.push("/kitchen")}
+                      >
+                        <ChefHat className="h-5 w-5 mr-3" />
+                        Kitchen
+                      </Button>
+                      {!isCrew && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/sales-reports")}
+                          >
+                            <FileText className="h-5 w-5 mr-3" />
+                            Sales Reports
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/stats")}
+                          >
+                            <BarChart3 className="h-5 w-5 mr-3" />
+                            Statistics
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/inventory")}
+                          >
+                            <Package className="h-5 w-5 mr-3" />
+                            Inventory
+                          </Button>
+                        </>
+                      )}
+                      {canAccessAdmin && (
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start h-12"
+                          onClick={() => router.push("/admin")}
+                        >
+                          <Settings className="h-5 w-5 mr-3" />
+                          Admin Panel
+                        </Button>
+                      )}
+                      <Separator className="my-4" />
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start h-12"
+                        onClick={() => router.push("/change-password")}
+                      >
+                        <KeyRound className="h-5 w-5 mr-3" />
+                        Change Password
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start h-12 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={handleLogout}
+                      >
+                        <LogOut className="h-5 w-5 mr-3" />
+                        Logout
+                      </Button>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Only show Order Taker for non-crew users */}
       {!isCrew && view === "taker" && (
