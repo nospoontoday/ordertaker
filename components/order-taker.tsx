@@ -387,6 +387,34 @@ export function OrderTaker({
     }
   }
 
+  // Helper function to switch item type and automatically group items with same id and type
+  const switchItemType = (items: OrderItem[], targetItem: OrderItem, newType: "dine-in" | "take-out"): OrderItem[] => {
+    // Find if there's already an item with the same id and the target type
+    const existingItemWithNewType = items.find(
+      (item) => item.id === targetItem.id && item.itemType === newType && item !== targetItem
+    )
+
+    if (existingItemWithNewType) {
+      // Merge: add quantities and remove the item being switched
+      return items
+        .map((item) => {
+          if (item.id === targetItem.id && item.itemType === newType) {
+            // Add the quantities together
+            return { ...item, quantity: item.quantity + targetItem.quantity }
+          }
+          return item
+        })
+        .filter((item) => !(item.id === targetItem.id && item.itemType === targetItem.itemType))
+    } else {
+      // No merge needed, just update the type
+      return items.map((item) =>
+        item.id === targetItem.id && item.itemType === targetItem.itemType
+          ? { ...item, itemType: newType }
+          : item
+      )
+    }
+  }
+
   const incrementQuantity = (itemId: string) => {
     setNewItems(newItems.map((item) => (item.id === itemId ? { ...item, quantity: item.quantity + 1 } : item)))
   }
@@ -1132,12 +1160,13 @@ export function OrderTaker({
 
               {/* Improved Menu Items Grid */}
               <TooltipProvider>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4 pb-28 lg:pb-0">
                   {getDisplayedItems().map((item) => (
                     <div
                       key={item.id}
+                      onClick={() => addItem(item, "dine-in")}
                       className={cn(
-                        "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white",
+                        "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white cursor-pointer",
                         "border-2 border-slate-200 hover:border-blue-400",
                         "shadow-sm hover:shadow-lg",
                         "transition-all duration-200",
@@ -1339,9 +1368,7 @@ export function OrderTaker({
                         <div className="flex gap-2 mt-2">
                           <button
                             onClick={() => {
-                              const updated = newItems.map((i) =>
-                                i.id === item.id ? { ...i, itemType: "dine-in" as const } : i
-                              )
+                              const updated = switchItemType(newItems, item, "dine-in")
                               setNewItems(updated)
                             }}
                             className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1354,9 +1381,7 @@ export function OrderTaker({
                           </button>
                           <button
                             onClick={() => {
-                              const updated = newItems.map((i) =>
-                                i.id === item.id ? { ...i, itemType: "take-out" as const } : i
-                              )
+                              const updated = switchItemType(newItems, item, "take-out")
                               setNewItems(updated)
                             }}
                             className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1453,9 +1478,7 @@ export function OrderTaker({
                       <div className="flex gap-2 mt-2">
                         <button
                           onClick={() => {
-                            const updated = currentOrder.map((i) =>
-                              (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
-                            )
+                            const updated = switchItemType(currentOrder, item, "dine-in")
                             setCurrentOrder(updated)
                           }}
                           className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1468,9 +1491,7 @@ export function OrderTaker({
                         </button>
                         <button
                           onClick={() => {
-                            const updated = currentOrder.map((i) =>
-                              (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
-                            )
+                            const updated = switchItemType(currentOrder, item, "take-out")
                             setCurrentOrder(updated)
                           }}
                           className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1556,9 +1577,7 @@ export function OrderTaker({
                                     <div className="flex gap-2 mt-2">
                                       <button
                                         onClick={() => {
-                                          const updated = currentOrder.map((i) =>
-                                            (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
-                                          )
+                                          const updated = switchItemType(currentOrder, item, "dine-in")
                                           setCurrentOrder(updated)
                                         }}
                                         className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1571,9 +1590,7 @@ export function OrderTaker({
                                       </button>
                                       <button
                                         onClick={() => {
-                                          const updated = currentOrder.map((i) =>
-                                            (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
-                                          )
+                                          const updated = switchItemType(currentOrder, item, "take-out")
                                           setCurrentOrder(updated)
                                         }}
                                         className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1863,9 +1880,7 @@ export function OrderTaker({
                             <div className="flex gap-2 mt-2">
                               <button
                                 onClick={() => {
-                                  const updated = currentOrder.map((i) =>
-                                    (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
-                                  )
+                                  const updated = switchItemType(currentOrder, item, "dine-in")
                                   setCurrentOrder(updated)
                                 }}
                                 className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1878,9 +1893,7 @@ export function OrderTaker({
                               </button>
                               <button
                                 onClick={() => {
-                                  const updated = currentOrder.map((i) =>
-                                    (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
-                                  )
+                                  const updated = switchItemType(currentOrder, item, "take-out")
                                   setCurrentOrder(updated)
                                 }}
                                 className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1963,9 +1976,7 @@ export function OrderTaker({
                                           <div className="flex gap-2 mt-2">
                                             <button
                                               onClick={() => {
-                                                const updated = currentOrder.map((i) =>
-                                                  (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
-                                                )
+                                                const updated = switchItemType(currentOrder, item, "dine-in")
                                                 setCurrentOrder(updated)
                                               }}
                                               className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
@@ -1978,9 +1989,7 @@ export function OrderTaker({
                                             </button>
                                             <button
                                               onClick={() => {
-                                                const updated = currentOrder.map((i) =>
-                                                  (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
-                                                )
+                                                const updated = switchItemType(currentOrder, item, "take-out")
                                                 setCurrentOrder(updated)
                                               }}
                                               className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
