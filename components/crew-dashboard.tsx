@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 
 interface OrderItem {
   id: string
@@ -81,7 +82,13 @@ interface Order {
 
 type ItemStatus = "pending" | "preparing" | "ready" | "served"
 
-export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: string) => void }) {
+export function CrewDashboard({
+  onAppendItems,
+  onKitchenStatusChange
+}: {
+  onAppendItems: (orderId: string) => void
+  onKitchenStatusChange?: (status: KitchenStatusData | null) => void
+}) {
   const [orders, setOrders] = useState<Order[]>([])
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
   const [expandedServed, setExpandedServed] = useState<Set<string>>(new Set())
@@ -546,6 +553,101 @@ export function CrewDashboard({ onAppendItems }: { onAppendItems: (orderId: stri
   useEffect(() => {
     if (orders.length > 0) {
       orderDB.saveOrders(orders.map((order: Order) => ({ ...order, synced: false }))).catch(console.error)
+    }
+  }, [orders])
+
+  // Calculate and report kitchen status
+  const calculateKitchenStatus = (): KitchenStatusData | null => {
+    // Collect all items from all orders and appended orders
+    const allItems: OrderItem[] = []
+
+    orders.forEach(order => {
+      allItems.push(...order.items)
+      order.appendedOrders?.forEach(appended => {
+        allItems.push(...appended.items)
+      })
+    })
+
+    if (allItems.length === 0) {
+      return null
+    }
+
+    // Count items by status
+    const pendingItems = allItems.filter(item => item.status === "pending")
+    const preparingItems = allItems.filter(item => item.status === "preparing")
+
+    // Calculate average prep time from items that have been served
+    const completedItems = allItems.filter(
+      item => item.preparingAt && item.servedAt && item.status === "served"
+    )
+
+    let averagePrepTimeMs = 0
+    if (completedItems.length > 0) {
+      const totalPrepTime = completedItems.reduce((sum, item) => {
+        return sum + (item.servedAt! - item.preparingAt!)
+      }, 0)
+      averagePrepTimeMs = totalPrepTime / completedItems.length
+    } else {
+      // Default estimate if no historical data (5 minutes per item)
+      averagePrepTimeMs = 5 * 60 * 1000
+    }
+
+    const averagePrepTimeMinutes = Math.round(averagePrepTimeMs / 1000 / 60)
+
+    // Calculate longest waiting item (items that are preparing or pending)
+    const activeItems = allItems.filter(item =>
+      item.status === "pending" || item.status === "preparing"
+    )
+
+    let longestWaitingMinutes = 0
+    const now = Date.now()
+
+    activeItems.forEach(item => {
+      const startTime = item.preparingAt || item.status === "pending" ?
+        (orders.find(o =>
+          o.items.some(i => i.id === item.id) ||
+          o.appendedOrders?.some(a => a.items.some(i => i.id === item.id))
+        )?.createdAt || now) :
+        now
+
+      const waitingMinutes = Math.floor((now - startTime) / 1000 / 60)
+      if (waitingMinutes > longestWaitingMinutes) {
+        longestWaitingMinutes = waitingMinutes
+      }
+    })
+
+    // Assume kitchen capacity of 6 items being prepared simultaneously
+    const KITCHEN_CAPACITY = 6
+    const kitchenLoadPercent = Math.round((preparingItems.length / KITCHEN_CAPACITY) * 100)
+
+    // Estimate wait time:
+    // - Items currently preparing will take their remaining average time
+    // - Pending items will be added to queue
+    // - Assume parallelization up to KITCHEN_CAPACITY
+    const totalActiveItems = pendingItems.length + preparingItems.length
+
+    let estimatedWaitMinutes = 0
+    if (totalActiveItems > 0) {
+      // Calculate number of "batches" needed
+      const batches = Math.ceil(totalActiveItems / KITCHEN_CAPACITY)
+      estimatedWaitMinutes = batches * averagePrepTimeMinutes
+    }
+
+    return {
+      pendingItemsCount: pendingItems.length,
+      preparingItemsCount: preparingItems.length,
+      averagePrepTimeMinutes,
+      estimatedWaitMinutes,
+      kitchenLoadPercent,
+      longestWaitingMinutes,
+    }
+  }
+
+  // Update kitchen status when orders change
+  useEffect(() => {
+    if (onKitchenStatusChange) {
+      const status = calculateKitchenStatus()
+      onKitchenStatusChange(status)
     }
   }, [orders])
 

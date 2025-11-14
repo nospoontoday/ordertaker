@@ -9,6 +9,7 @@ import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
 import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical } from "lucide-react"
+import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
   Sheet,
   SheetClose,
@@ -33,6 +34,7 @@ export default function Home() {
   const [view, setView] = useState<"taker" | "crew" | "past">("crew")
   const [mounted, setMounted] = useState(false)
   const [appendingOrderId, setAppendingOrderId] = useState<string | null>(null)
+  const [kitchenStatus, setKitchenStatus] = useState<KitchenStatusData | null>(null)
 
   // Role-based permission checks
   const isCrew = user?.role === "crew"
@@ -348,11 +350,20 @@ export default function Home() {
 
       {/* Only show Order Taker for non-crew users */}
       {!isCrew && view === "taker" && (
-        <OrderTaker appendingOrderId={appendingOrderId} onAppendComplete={() => setAppendingOrderId(null)} />
+        <OrderTaker
+          appendingOrderId={appendingOrderId}
+          onAppendComplete={() => setAppendingOrderId(null)}
+          kitchenStatus={kitchenStatus}
+        />
       )}
 
       {/* Show Crew Dashboard for crew users or when view is crew */}
-      {(isCrew || view === "crew") && <CrewDashboard onAppendItems={(orderId) => setAppendingOrderId(orderId)} />}
+      {(isCrew || view === "crew") && (
+        <CrewDashboard
+          onAppendItems={(orderId) => setAppendingOrderId(orderId)}
+          onKitchenStatusChange={setKitchenStatus}
+        />
+      )}
 
       {/* Show Past Orders only for admins and super_admins */}
       {canAccessPastOrders && view === "past" && <PastOrders />}

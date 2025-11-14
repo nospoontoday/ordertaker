@@ -20,6 +20,7 @@ import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { WithdrawalDialog } from "@/components/withdrawal-dialog"
+import { KitchenStatusBanner, type KitchenStatusData } from "@/components/kitchen-status-banner"
 
 interface OrderItem {
   id: string
@@ -124,7 +125,12 @@ const FALLBACK_MENU_ITEMS: MenuItem[] = [
 export function OrderTaker({
   appendingOrderId,
   onAppendComplete,
-}: { appendingOrderId: string | null; onAppendComplete: () => void }) {
+  kitchenStatus,
+}: {
+  appendingOrderId: string | null
+  onAppendComplete: () => void
+  kitchenStatus?: KitchenStatusData | null
+}) {
   const [customerName, setCustomerName] = useState("")
   const [orderType, setOrderType] = useState<"dine-in" | "take-out">("dine-in")
   const [orderNote, setOrderNote] = useState("")
@@ -846,6 +852,9 @@ export function OrderTaker({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      {/* Kitchen Status Banner */}
+      <KitchenStatusBanner kitchenStatus={kitchenStatus || null} />
+
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Premium Header */}
         <div className="mb-8">
