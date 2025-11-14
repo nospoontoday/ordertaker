@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp, ShoppingCart } from "lucide-react"
+import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp, ShoppingCart, Utensils, ShoppingBag } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -13,6 +13,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
@@ -132,7 +138,6 @@ export function OrderTaker({
   kitchenStatus?: KitchenStatusData | null
 }) {
   const [customerName, setCustomerName] = useState("")
-  const [orderType, setOrderType] = useState<"dine-in" | "take-out">("dine-in")
   const [orderNote, setOrderNote] = useState("")
   const [currentOrder, setCurrentOrder] = useState<OrderItem[]>([])
   const [newItems, setNewItems] = useState<OrderItem[]>([])
@@ -172,7 +177,6 @@ export function OrderTaker({
           console.log("Loading cart for user:", user.email)
           const cartData = await cartApi.get(user.email)
           setCustomerName(cartData.customerName || "")
-          setOrderType(cartData.orderType || "dine-in")
           setOrderNote(cartData.orderNote || "")
           setCurrentOrder(cartData.items || [])
           console.log("Loaded cart from database:", cartData)
@@ -199,7 +203,6 @@ export function OrderTaker({
         try {
           const cartData = {
             customerName,
-            orderType,
             orderNote,
             items: currentOrder,
           }
@@ -214,7 +217,7 @@ export function OrderTaker({
     // Debounce the save to avoid too many API calls
     const timeoutId = setTimeout(saveCart, 500)
     return () => clearTimeout(timeoutId)
-  }, [customerName, orderType, orderNote, currentOrder, isAppending, appendingOrderId, user?.email])
+  }, [customerName, orderNote, currentOrder, isAppending, appendingOrderId, user?.email])
 
   // Load menu data from API with fallback
   useEffect(() => {
@@ -362,18 +365,25 @@ export function OrderTaker({
     }
   }, [orders])
 
-  const addItem = (menuItem: MenuItem) => {
+  const addItem = (menuItem: MenuItem, itemType: "dine-in" | "take-out" = "dine-in") => {
     const targetArray = isAppending ? newItems : currentOrder
     const setTargetArray = isAppending ? setNewItems : setCurrentOrder
 
-    const existingItem = targetArray.find((item) => item.id === menuItem.id)
+    // Find if there's an existing item with the same id AND same itemType
+    const existingItem = targetArray.find((item) => item.id === menuItem.id && item.itemType === itemType)
 
     if (existingItem) {
+      // Increment quantity if item with same type exists
       setTargetArray(
-        targetArray.map((item) => (item.id === menuItem.id ? { ...item, quantity: item.quantity + 1 } : item)),
+        targetArray.map((item) =>
+          (item.id === menuItem.id && item.itemType === itemType)
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        ),
       )
     } else {
-      setTargetArray([...targetArray, { ...menuItem, quantity: 1, itemType: "dine-in" }])
+      // Add new item with specified type
+      setTargetArray([...targetArray, { ...menuItem, quantity: 1, itemType }])
     }
   }
 
@@ -459,7 +469,6 @@ export function OrderTaker({
         onAppendComplete()
       } else {
         // Create new order
-        const currentOrderType = orderType; // Capture current value before any state changes
         const currentOrderNote = orderNote.trim(); // Capture current note value
         const newOrder: Order = {
           id: `order-${Date.now()}`,
@@ -467,7 +476,6 @@ export function OrderTaker({
           items: currentOrder.map((item) => ({ ...item, status: "pending" as const })),
           createdAt: Date.now(),
           isPaid: false,
-          orderType: currentOrderType,
           appendedOrders: [],
           notes: currentOrderNote ? [{
             id: `note-${Date.now()}`,
@@ -478,7 +486,6 @@ export function OrderTaker({
           }] : [],
         }
 
-        console.log('Creating order with type:', currentOrderType)
         console.log('Order items before submit:', newOrder.items)
 
         try {
@@ -492,7 +499,6 @@ export function OrderTaker({
             })),
             createdAt: newOrder.createdAt,
             isPaid: newOrder.isPaid,
-            orderType: newOrder.orderType || "dine-in",
             appendedOrders: [],
             notes: newOrder.notes,
             orderTakerName: user?.name,
@@ -523,7 +529,6 @@ export function OrderTaker({
         // Reset form AFTER order is created
         setCustomerName("")
         setCurrentOrder([])
-        setOrderType("dine-in")
         setOrderNote("")
 
         // Clear cart from database after successful order creation
@@ -612,6 +617,13 @@ export function OrderTaker({
     return orderToCheck
       .filter(orderItem => orderItem.id === itemId)
       .reduce((total, orderItem) => total + orderItem.quantity, 0)
+  }
+
+  // Group items by order type
+  const groupItemsByType = (items: OrderItem[]) => {
+    const dineInItems = items.filter(item => item.itemType === "dine-in")
+    const takeOutItems = items.filter(item => item.itemType === "take-out")
+    return { dineInItems, takeOutItems }
   }
 
   // Calculate daily sales from completed orders (fully paid)
@@ -1119,63 +1131,103 @@ export function OrderTaker({
               </div>
 
               {/* Improved Menu Items Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
-                {getDisplayedItems().map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => addItem(item)}
-                    className={cn(
-                      "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white",
-                      "border-2 border-slate-200 hover:border-blue-400 active:border-blue-500",
-                      "shadow-sm hover:shadow-lg active:shadow-md",
-                      "transition-all duration-200 active:scale-95",
-                      "min-h-[160px] lg:min-h-[180px]",
-                      "min-w-[140px] sm:min-w-0"
-                    )}
-                  >
-                    {/* Image Container with Best Seller Badge */}
-                    <div className="relative">
-                      <img
-                        src={getImageUrl(item.image) || "/placeholder.svg"}
-                        alt={item.name}
-                        className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
-                                   group-hover:scale-105 transition-transform duration-200"
-                      />
-                      {/* Quantity Counter Badge (top-left) */}
-                      {getItemQuantityInCart(item.id) > 0 && (
-                        <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
-                                         text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
-                                         min-w-[28px] flex items-center justify-center">
-                          {getItemQuantityInCart(item.id)}
-                        </Badge>
+              <TooltipProvider>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
+                  {getDisplayedItems().map((item) => (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white",
+                        "border-2 border-slate-200 hover:border-blue-400",
+                        "shadow-sm hover:shadow-lg",
+                        "transition-all duration-200",
+                        "min-h-[200px] lg:min-h-[220px]",
+                        "min-w-[140px] sm:min-w-0"
                       )}
-                      {item.isBestSeller && (
-                        <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
-                                         text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
-                          BEST
-                        </Badge>
-                      )}
-                    </div>
+                    >
+                      {/* Image Container with Best Seller Badge */}
+                      <div className="relative">
+                        <img
+                          src={getImageUrl(item.image) || "/placeholder.svg"}
+                          alt={item.name}
+                          className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
+                                     group-hover:scale-105 transition-transform duration-200"
+                        />
+                        {/* Quantity Counter Badge (top-left) */}
+                        {getItemQuantityInCart(item.id) > 0 && (
+                          <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
+                                           text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
+                                           min-w-[28px] flex items-center justify-center">
+                            {getItemQuantityInCart(item.id)}
+                          </Badge>
+                        )}
+                        {item.isBestSeller && (
+                          <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
+                                           text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
+                            BEST
+                          </Badge>
+                        )}
+                      </div>
 
-                    {/* Item Details */}
-                    <div className="flex flex-col items-center gap-1 flex-1">
-                      <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
-                                      line-clamp-2 leading-tight">
-                        {item.name}
-                      </span>
-                      <span className="text-base lg:text-sm font-bold text-blue-600">
-                        ₱{item.price.toFixed(2)}
-                      </span>
-                    </div>
+                      {/* Item Details */}
+                      <div className="flex flex-col items-center gap-1 flex-1">
+                        <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
+                                        line-clamp-2 leading-tight">
+                          {item.name}
+                        </span>
+                        <span className="text-base lg:text-sm font-bold text-blue-600">
+                          ₱{item.price.toFixed(2)}
+                        </span>
+                      </div>
 
-                    {/* Tap indicator (only on mobile) */}
-                    <div className="lg:hidden w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center
-                                   group-active:bg-blue-200 transition-colors">
-                      <Plus className="w-4 h-4 text-blue-600" />
+                      {/* Dine In / Take Out Buttons */}
+                      <div className="flex gap-2 w-full">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                addItem(item, "dine-in")
+                              }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                       bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+                                       text-white font-semibold text-xs
+                                       transition-all active:scale-95 shadow-sm hover:shadow-md"
+                            >
+                              <Utensils className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Dine In</span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Add as Dine In</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                addItem(item, "take-out")
+                              }}
+                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                       bg-orange-600 hover:bg-orange-700 active:bg-orange-800
+                                       text-white font-semibold text-xs
+                                       transition-all active:scale-95 shadow-sm hover:shadow-md"
+                            >
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Take Out</span>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Add as Take Out</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
-                  </button>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </TooltipProvider>
             </>
           )}
         </div>
@@ -1204,43 +1256,15 @@ export function OrderTaker({
             </div>
 
             {!isAppending && (
-              <>
-                <div className="mb-5">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Order Type</label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setOrderType("dine-in")}
-                      className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
-                        orderType === "dine-in"
-                          ? "bg-blue-600 border-blue-700 text-white shadow-md"
-                          : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
-                      }`}
-                    >
-                      🍽️ Dine In
-                    </button>
-                    <button
-                      onClick={() => setOrderType("take-out")}
-                      className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
-                        orderType === "take-out"
-                          ? "bg-orange-600 border-orange-700 text-white shadow-md"
-                          : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
-                      }`}
-                    >
-                      🥡 Take Out
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mb-5">
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
-                  <Input
-                    value={orderNote}
-                    onChange={(e) => setOrderNote(e.target.value)}
-                    placeholder="Add a note for this order"
-                    className="w-full border-slate-200 focus:border-slate-400"
-                  />
-                </div>
-              </>
+              <div className="mb-5">
+                <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
+                <Input
+                  value={orderNote}
+                  onChange={(e) => setOrderNote(e.target.value)}
+                  placeholder="Add a note for this order"
+                  className="w-full border-slate-200 focus:border-slate-400"
+                />
+              </div>
             )}
 
             {isAppending && appendingOrder && (
@@ -1365,12 +1389,24 @@ export function OrderTaker({
             )}
 
             {!isAppending && (
-              <div className="space-y-3 mb-5 max-h-64 overflow-y-auto">
+              <div className="space-y-4 mb-5 max-h-64 overflow-y-auto">
                 {currentOrder.length === 0 ? (
                   <p className="text-slate-500 text-sm font-medium">No items added</p>
                 ) : (
-                  currentOrder.map((item) => (
-                    <div key={item.id} className="bg-slate-50/80 p-3 rounded-lg border border-slate-200/80 gap-2">
+                  <>
+                    {(() => {
+                      const { dineInItems, takeOutItems } = groupItemsByType(currentOrder)
+                      return (
+                        <>
+                          {dineInItems.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2 px-2">
+                                <Utensils className="w-4 h-4 text-blue-600" />
+                                <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wide">Dine In</h4>
+                              </div>
+                              <div className="space-y-3">
+                                {dineInItems.map((item) => (
+                    <div key={`${item.id}-${item.itemType}`} className="bg-slate-50/80 p-3 rounded-lg border border-slate-200/80 gap-2">
                       <div className="flex items-center justify-between mb-2.5">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
@@ -1380,7 +1416,7 @@ export function OrderTaker({
                         <button
                           onClick={() => {
                             const updated = currentOrder.map((i) =>
-                              i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
+                              i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: i.quantity + 1 } : i,
                             )
                             setCurrentOrder(updated)
                           }}
@@ -1393,7 +1429,7 @@ export function OrderTaker({
                         <button
                           onClick={() => {
                             const updated = currentOrder
-                              .map((i) => (i.id === item.id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+                              .map((i) => (i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
                               .filter((i) => i.quantity > 0)
                             setCurrentOrder(updated)
                           }}
@@ -1404,7 +1440,7 @@ export function OrderTaker({
                         </button>
                         <button
                           onClick={() => {
-                            const updated = currentOrder.filter((i) => i.id !== item.id)
+                            const updated = currentOrder.filter((i) => !(i.id === item.id && i.itemType === item.itemType))
                             setCurrentOrder(updated)
                           }}
                           className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200"
@@ -1418,7 +1454,7 @@ export function OrderTaker({
                         <button
                           onClick={() => {
                             const updated = currentOrder.map((i) =>
-                              i.id === item.id ? { ...i, itemType: "dine-in" as const } : i
+                              (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
                             )
                             setCurrentOrder(updated)
                           }}
@@ -1433,7 +1469,7 @@ export function OrderTaker({
                         <button
                           onClick={() => {
                             const updated = currentOrder.map((i) =>
-                              i.id === item.id ? { ...i, itemType: "take-out" as const } : i
+                              (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
                             )
                             setCurrentOrder(updated)
                           }}
@@ -1451,7 +1487,7 @@ export function OrderTaker({
                           value={item.note || ""}
                           onChange={(e) => {
                             const updated = currentOrder.map((i) =>
-                              i.id === item.id ? { ...i, note: e.target.value } : i
+                              (i.id === item.id && i.itemType === item.itemType) ? { ...i, note: e.target.value } : i
                             )
                             setCurrentOrder(updated)
                           }}
@@ -1460,7 +1496,117 @@ export function OrderTaker({
                         />
                       </div>
                     </div>
-                  ))
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {takeOutItems.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2 px-2">
+                                <ShoppingBag className="w-4 h-4 text-orange-600" />
+                                <h4 className="text-xs font-bold text-orange-600 uppercase tracking-wide">Take Out</h4>
+                              </div>
+                              <div className="space-y-3">
+                                {takeOutItems.map((item) => (
+                                  <div key={item.id} className="bg-slate-50/80 p-3 rounded-lg border border-slate-200/80 gap-2">
+                                    <div className="flex items-center justify-between mb-2.5">
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
+                                        <p className="text-xs font-medium text-slate-600">₱{item.price.toFixed(2)}</p>
+                                      </div>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <button
+                                          onClick={() => {
+                                            const updated = currentOrder.map((i) =>
+                                              i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: i.quantity + 1 } : i,
+                                            )
+                                            setCurrentOrder(updated)
+                                          }}
+                                          className="p-1.5 hover:bg-emerald-50 rounded-md transition-colors border border-emerald-200"
+                                          aria-label="Increase quantity"
+                                        >
+                                          <Plus className="w-4 h-4 text-emerald-600" />
+                                        </button>
+                                        <span className="w-8 text-center font-bold text-sm text-slate-900">{item.quantity}</span>
+                                        <button
+                                          onClick={() => {
+                                            const updated = currentOrder
+                                              .map((i) => (i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+                                              .filter((i) => i.quantity > 0)
+                                            setCurrentOrder(updated)
+                                          }}
+                                          className="p-1.5 hover:bg-red-50 rounded-md transition-colors border border-red-200"
+                                          aria-label="Decrease quantity"
+                                        >
+                                          <Minus className="w-4 h-4 text-red-600" />
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const updated = currentOrder.filter((i) => !(i.id === item.id && i.itemType === item.itemType))
+                                            setCurrentOrder(updated)
+                                          }}
+                                          className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200"
+                                          aria-label="Remove item"
+                                        >
+                                          <X className="w-4 h-4 text-red-600" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2 mt-2">
+                                      <button
+                                        onClick={() => {
+                                          const updated = currentOrder.map((i) =>
+                                            (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
+                                          )
+                                          setCurrentOrder(updated)
+                                        }}
+                                        className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                          item.itemType === "dine-in"
+                                            ? "bg-blue-600 border border-blue-700 text-white shadow-md"
+                                            : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                        }`}
+                                      >
+                                        🍽️ Dine In
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          const updated = currentOrder.map((i) =>
+                                            (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
+                                          )
+                                          setCurrentOrder(updated)
+                                        }}
+                                        className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                          item.itemType === "take-out"
+                                            ? "bg-orange-600 border border-orange-700 text-white shadow-md"
+                                            : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                        }`}
+                                      >
+                                        🥡 Take Out
+                                      </button>
+                                    </div>
+                                    <div className="mt-2">
+                                      <Input
+                                        value={item.note || ""}
+                                        onChange={(e) => {
+                                          const updated = currentOrder.map((i) =>
+                                            (i.id === item.id && i.itemType === item.itemType) ? { ...i, note: e.target.value } : i
+                                          )
+                                          setCurrentOrder(updated)
+                                        }}
+                                        placeholder="Add note (optional)"
+                                        className="w-full text-xs border-slate-200 focus:border-slate-400"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
+                  </>
                 )}
               </div>
             )}
@@ -1567,43 +1713,15 @@ export function OrderTaker({
                   </div>
 
                   {!isAppending && (
-                    <>
-                      <div className="mb-5">
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Order Type</label>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setOrderType("dine-in")}
-                            className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
-                              orderType === "dine-in"
-                                ? "bg-blue-600 border-blue-700 text-white shadow-md"
-                                : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
-                            }`}
-                          >
-                            🍽️ Dine In
-                          </button>
-                          <button
-                            onClick={() => setOrderType("take-out")}
-                            className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
-                              orderType === "take-out"
-                                ? "bg-orange-600 border-orange-700 text-white shadow-md"
-                                : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
-                            }`}
-                          >
-                            🥡 Take Out
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mb-5">
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
-                        <Input
-                          value={orderNote}
-                          onChange={(e) => setOrderNote(e.target.value)}
-                          placeholder="Add a note for this order"
-                          className="w-full border-slate-200 focus:border-slate-400"
-                        />
-                      </div>
-                    </>
+                    <div className="mb-5">
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
+                      <Input
+                        value={orderNote}
+                        onChange={(e) => setOrderNote(e.target.value)}
+                        placeholder="Add a note for this order"
+                        className="w-full border-slate-200 focus:border-slate-400"
+                      />
+                    </div>
                   )}
 
                   {isAppending && appendingOrder && (
@@ -1684,12 +1802,24 @@ export function OrderTaker({
                   )}
 
                   {!isAppending && (
-                    <div className="space-y-3 mb-5">
+                    <div className="space-y-4 mb-5">
                       {currentOrder.length === 0 ? (
                         <p className="text-slate-500 text-sm font-medium">No items added</p>
                       ) : (
-                        currentOrder.map((item) => (
-                          <div key={item.id} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        <>
+                          {(() => {
+                            const { dineInItems, takeOutItems } = groupItemsByType(currentOrder)
+                            return (
+                              <>
+                                {dineInItems.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-2 px-2">
+                                      <Utensils className="w-4 h-4 text-blue-600" />
+                                      <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wide">Dine In</h4>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {dineInItems.map((item) => (
+                          <div key={`${item.id}-${item.itemType}`} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
@@ -1699,7 +1829,7 @@ export function OrderTaker({
                                 <button
                                   onClick={() => {
                                     const updated = currentOrder.map((i) =>
-                                      i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+                                      i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: i.quantity + 1 } : i
                                     )
                                     setCurrentOrder(updated)
                                   }}
@@ -1711,7 +1841,7 @@ export function OrderTaker({
                                 <button
                                   onClick={() => {
                                     const updated = currentOrder
-                                      .map((i) => (i.id === item.id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+                                      .map((i) => (i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
                                       .filter((i) => i.quantity > 0)
                                     setCurrentOrder(updated)
                                   }}
@@ -1721,7 +1851,7 @@ export function OrderTaker({
                                 </button>
                                 <button
                                   onClick={() => {
-                                    const updated = currentOrder.filter((i) => i.id !== item.id)
+                                    const updated = currentOrder.filter((i) => !(i.id === item.id && i.itemType === item.itemType))
                                     setCurrentOrder(updated)
                                   }}
                                   className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200 min-w-[32px] min-h-[32px]"
@@ -1730,8 +1860,160 @@ export function OrderTaker({
                                 </button>
                               </div>
                             </div>
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => {
+                                  const updated = currentOrder.map((i) =>
+                                    (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
+                                  )
+                                  setCurrentOrder(updated)
+                                }}
+                                className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                  item.itemType === "dine-in"
+                                    ? "bg-blue-600 border border-blue-700 text-white shadow-md"
+                                    : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                }`}
+                              >
+                                🍽️ Dine In
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const updated = currentOrder.map((i) =>
+                                    (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
+                                  )
+                                  setCurrentOrder(updated)
+                                }}
+                                className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                  item.itemType === "take-out"
+                                    ? "bg-orange-600 border border-orange-700 text-white shadow-md"
+                                    : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                }`}
+                              >
+                                🥡 Take Out
+                              </button>
+                            </div>
+                            <div className="mt-2">
+                              <Input
+                                value={item.note || ""}
+                                onChange={(e) => {
+                                  const updated = currentOrder.map((i) =>
+                                    (i.id === item.id && i.itemType === item.itemType) ? { ...i, note: e.target.value } : i
+                                  )
+                                  setCurrentOrder(updated)
+                                }}
+                                placeholder="Add note (optional)"
+                                className="w-full text-xs border-slate-200 focus:border-slate-400"
+                              />
+                            </div>
                           </div>
-                        ))
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {takeOutItems.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-2 px-2">
+                                      <ShoppingBag className="w-4 h-4 text-orange-600" />
+                                      <h4 className="text-xs font-bold text-orange-600 uppercase tracking-wide">Take Out</h4>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {takeOutItems.map((item) => (
+                                        <div key={`${item.id}-${item.itemType}`} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
+                                              <p className="text-xs font-medium text-slate-600">₱{item.price.toFixed(2)}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                              <button
+                                                onClick={() => {
+                                                  const updated = currentOrder.map((i) =>
+                                                    i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: i.quantity + 1 } : i
+                                                  )
+                                                  setCurrentOrder(updated)
+                                                }}
+                                                className="p-1.5 hover:bg-emerald-50 rounded-md transition-colors border border-emerald-200 min-w-[32px] min-h-[32px]"
+                                              >
+                                                <Plus className="w-4 h-4 text-emerald-600" />
+                                              </button>
+                                              <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                                              <button
+                                                onClick={() => {
+                                                  const updated = currentOrder
+                                                    .map((i) => (i.id === item.id && i.itemType === item.itemType ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))
+                                                    .filter((i) => i.quantity > 0)
+                                                  setCurrentOrder(updated)
+                                                }}
+                                                className="p-1.5 hover:bg-red-50 rounded-md transition-colors border border-red-200 min-w-[32px] min-h-[32px]"
+                                              >
+                                                <Minus className="w-4 h-4 text-red-600" />
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  const updated = currentOrder.filter((i) => !(i.id === item.id && i.itemType === item.itemType))
+                                                  setCurrentOrder(updated)
+                                                }}
+                                                className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200 min-w-[32px] min-h-[32px]"
+                                              >
+                                                <X className="w-4 h-4 text-red-600" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div className="flex gap-2 mt-2">
+                                            <button
+                                              onClick={() => {
+                                                const updated = currentOrder.map((i) =>
+                                                  (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "dine-in" as const } : i
+                                                )
+                                                setCurrentOrder(updated)
+                                              }}
+                                              className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                                item.itemType === "dine-in"
+                                                  ? "bg-blue-600 border border-blue-700 text-white shadow-md"
+                                                  : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                              }`}
+                                            >
+                                              🍽️ Dine In
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                const updated = currentOrder.map((i) =>
+                                                  (i.id === item.id && i.itemType === item.itemType) ? { ...i, itemType: "take-out" as const } : i
+                                                )
+                                                setCurrentOrder(updated)
+                                              }}
+                                              className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                                item.itemType === "take-out"
+                                                  ? "bg-orange-600 border border-orange-700 text-white shadow-md"
+                                                  : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                              }`}
+                                            >
+                                              🥡 Take Out
+                                            </button>
+                                          </div>
+                                          <div className="mt-2">
+                                            <Input
+                                              value={item.note || ""}
+                                              onChange={(e) => {
+                                                const updated = currentOrder.map((i) =>
+                                                  (i.id === item.id && i.itemType === item.itemType) ? { ...i, note: e.target.value } : i
+                                                )
+                                                setCurrentOrder(updated)
+                                              }}
+                                              placeholder="Add note (optional)"
+                                              className="w-full text-xs border-slate-200 focus:border-slate-400"
+                                            />
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )
+                          })()}
+                        </>
                       )}
                     </div>
                   )}
