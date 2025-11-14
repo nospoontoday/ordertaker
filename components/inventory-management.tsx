@@ -95,6 +95,7 @@ export function InventoryManagement() {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const [stockFilter, setStockFilter] = useState<"all" | "in-stock" | "low-stock" | "out-of-stock">("all")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -124,7 +125,7 @@ export function InventoryManagement() {
     loadItems()
   }, [])
 
-  // Filter items based on search and category
+  // Filter items based on search, category, and stock status
   useEffect(() => {
     let filtered = items
 
@@ -141,8 +142,22 @@ export function InventoryManagement() {
       filtered = filtered.filter(item => item.category === selectedCategory)
     }
 
+    // Filter by stock status
+    if (stockFilter !== "all") {
+      filtered = filtered.filter(item => {
+        if (stockFilter === "out-of-stock") {
+          return item.quantity === 0
+        } else if (stockFilter === "low-stock") {
+          return item.quantity > 0 && item.quantity <= item.lowStockThreshold
+        } else if (stockFilter === "in-stock") {
+          return item.quantity > item.lowStockThreshold
+        }
+        return true
+      })
+    }
+
     setFilteredItems(filtered)
-  }, [items, searchQuery, selectedCategory])
+  }, [items, searchQuery, selectedCategory, stockFilter])
 
   const loadItems = async () => {
     try {
@@ -658,7 +673,12 @@ export function InventoryManagement() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          <Card className="p-4 sm:p-5 bg-gradient-to-br from-blue-50 to-white border border-slate-200 shadow-sm">
+          <Card
+            onClick={() => setStockFilter("all")}
+            className={`p-4 sm:p-5 bg-gradient-to-br from-blue-50 to-white border-2 shadow-sm cursor-pointer transition-all hover:shadow-md active:scale-95 ${
+              stockFilter === "all" ? "border-blue-500 ring-2 ring-blue-200" : "border-slate-200 hover:border-blue-300"
+            }`}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">Total Items</p>
@@ -667,7 +687,12 @@ export function InventoryManagement() {
               <Package className="w-8 h-8 text-blue-600" />
             </div>
           </Card>
-          <Card className="p-4 sm:p-5 bg-gradient-to-br from-emerald-50 to-white border border-slate-200 shadow-sm">
+          <Card
+            onClick={() => setStockFilter("in-stock")}
+            className={`p-4 sm:p-5 bg-gradient-to-br from-emerald-50 to-white border-2 shadow-sm cursor-pointer transition-all hover:shadow-md active:scale-95 ${
+              stockFilter === "in-stock" ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200 hover:border-emerald-300"
+            }`}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">In Stock</p>
@@ -676,7 +701,12 @@ export function InventoryManagement() {
               <CheckCircle className="w-8 h-8 text-emerald-600" />
             </div>
           </Card>
-          <Card className="p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-white border border-slate-200 shadow-sm">
+          <Card
+            onClick={() => setStockFilter("low-stock")}
+            className={`p-4 sm:p-5 bg-gradient-to-br from-amber-50 to-white border-2 shadow-sm cursor-pointer transition-all hover:shadow-md active:scale-95 ${
+              stockFilter === "low-stock" ? "border-amber-500 ring-2 ring-amber-200" : "border-slate-200 hover:border-amber-300"
+            }`}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">Low Stock</p>
@@ -685,7 +715,12 @@ export function InventoryManagement() {
               <AlertTriangle className="w-8 h-8 text-amber-600" />
             </div>
           </Card>
-          <Card className="p-4 sm:p-5 bg-gradient-to-br from-red-50 to-white border border-slate-200 shadow-sm">
+          <Card
+            onClick={() => setStockFilter("out-of-stock")}
+            className={`p-4 sm:p-5 bg-gradient-to-br from-red-50 to-white border-2 shadow-sm cursor-pointer transition-all hover:shadow-md active:scale-95 ${
+              stockFilter === "out-of-stock" ? "border-red-500 ring-2 ring-red-200" : "border-slate-200 hover:border-red-300"
+            }`}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-slate-600 uppercase tracking-wide font-semibold mb-1">Out of Stock</p>
@@ -741,7 +776,7 @@ export function InventoryManagement() {
             </p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filteredItems.map(item => {
               const stockStatus = getStockStatus(item)
               const isEditing = editingId === item._id
@@ -749,38 +784,38 @@ export function InventoryManagement() {
               return (
                 <Card
                   key={item._id}
-                  className={`p-6 border-2 shadow-sm hover:shadow-md transition-all ${isEditing ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'}`}
+                  className={`p-3 sm:p-4 border-2 shadow-sm hover:shadow-md transition-all ${isEditing ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'}`}
                 >
                   {isEditing ? (
                     // EDIT MODE - All fields editable
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-blue-900">Edit Item</h3>
-                        <Badge className={`${stockStatus.color} font-bold text-xs px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1`}>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-bold text-blue-900">Edit Item</h3>
+                        <Badge className={`${stockStatus.color} font-bold text-xs px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1`}>
                           {getStockIcon(stockStatus.status)}
                           {stockStatus.label}
                         </Badge>
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         <div>
-                          <Label htmlFor={`name-${item._id}`} className="text-sm font-semibold text-slate-700">Item Name</Label>
+                          <Label htmlFor={`name-${item._id}`} className="text-xs font-semibold text-slate-700">Item Name</Label>
                           <Input
                             id={`name-${item._id}`}
                             value={editForm.name || ""}
                             onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                            className="mt-1"
+                            className="mt-1 h-9 text-sm"
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-2.5">
                           <div>
-                            <Label htmlFor={`category-${item._id}`} className="text-sm font-semibold text-slate-700">Category</Label>
+                            <Label htmlFor={`category-${item._id}`} className="text-xs font-semibold text-slate-700">Category</Label>
                             <Select
                               value={editForm.category}
                               onValueChange={(value) => setEditForm({...editForm, category: value})}
                             >
-                              <SelectTrigger id={`category-${item._id}`} className="mt-1">
+                              <SelectTrigger id={`category-${item._id}`} className="mt-1 h-9 text-sm">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -792,12 +827,12 @@ export function InventoryManagement() {
                           </div>
 
                           <div>
-                            <Label htmlFor={`unit-${item._id}`} className="text-sm font-semibold text-slate-700">Unit</Label>
+                            <Label htmlFor={`unit-${item._id}`} className="text-xs font-semibold text-slate-700">Unit</Label>
                             <Select
                               value={editForm.unit}
                               onValueChange={(value) => setEditForm({...editForm, unit: value})}
                             >
-                              <SelectTrigger id={`unit-${item._id}`} className="mt-1">
+                              <SelectTrigger id={`unit-${item._id}`} className="mt-1 h-9 text-sm">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -809,48 +844,48 @@ export function InventoryManagement() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-2.5">
                           <div>
-                            <Label htmlFor={`quantity-${item._id}`} className="text-sm font-semibold text-slate-700">Current Quantity</Label>
+                            <Label htmlFor={`quantity-${item._id}`} className="text-xs font-semibold text-slate-700">Quantity</Label>
                             <Input
                               id={`quantity-${item._id}`}
                               type="number"
                               min="0"
                               value={editForm.quantity || 0}
                               onChange={(e) => setEditForm({...editForm, quantity: parseInt(e.target.value) || 0})}
-                              className="mt-1"
+                              className="mt-1 h-9 text-sm"
                             />
                           </div>
 
                           <div>
-                            <Label htmlFor={`threshold-${item._id}`} className="text-sm font-semibold text-slate-700">Low Stock Threshold</Label>
+                            <Label htmlFor={`threshold-${item._id}`} className="text-xs font-semibold text-slate-700">Alert Threshold</Label>
                             <Input
                               id={`threshold-${item._id}`}
                               type="number"
                               min="0"
                               value={editForm.lowStockThreshold || 0}
                               onChange={(e) => setEditForm({...editForm, lowStockThreshold: parseInt(e.target.value) || 0})}
-                              className="mt-1"
+                              className="mt-1 h-9 text-sm"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <Label htmlFor={`notes-${item._id}`} className="text-sm font-semibold text-slate-700">Notes (Optional)</Label>
+                          <Label htmlFor={`notes-${item._id}`} className="text-xs font-semibold text-slate-700">Notes</Label>
                           <Textarea
                             id={`notes-${item._id}`}
                             value={editForm.notes || ""}
                             onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
-                            className="mt-1 min-h-[80px]"
-                            placeholder="Add any notes about this item..."
+                            className="mt-1 min-h-[60px] text-sm"
+                            placeholder="Add notes..."
                           />
                         </div>
 
                         <div>
-                          <Label className="text-sm font-semibold text-slate-700">Item Image (Optional)</Label>
-                          <div className="mt-1 space-y-3">
+                          <Label className="text-xs font-semibold text-slate-700">Item Image</Label>
+                          <div className="mt-1">
                             {imagePreview ? (
-                              <div className="relative w-full h-40 border-2 border-slate-200 rounded-lg overflow-hidden">
+                              <div className="relative w-full h-24 border border-slate-200 rounded overflow-hidden">
                                 <img
                                   src={imagePreview.startsWith('/') ? `${API_URL.replace('/api', '')}${imagePreview}` : imagePreview}
                                   alt="Preview"
@@ -861,17 +896,16 @@ export function InventoryManagement() {
                                   variant="destructive"
                                   size="sm"
                                   onClick={handleRemoveImage}
-                                  className="absolute top-2 right-2"
+                                  className="absolute top-1 right-1 h-6 w-6 p-0"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <X className="w-3 h-3" />
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-lg hover:border-slate-400 transition-colors cursor-pointer bg-slate-50">
+                              <div className="flex flex-col items-center justify-center w-full h-24 border border-dashed border-slate-300 rounded hover:border-slate-400 transition-colors cursor-pointer bg-slate-50">
                                 <label htmlFor={`edit-image-${item._id}`} className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
-                                  <ImagePlus className="w-10 h-10 text-slate-400 mb-2" />
-                                  <p className="text-sm text-slate-600 font-medium">Click to upload image</p>
-                                  <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
+                                  <ImagePlus className="w-6 h-6 text-slate-400 mb-1" />
+                                  <p className="text-xs text-slate-600">Upload</p>
                                 </label>
                                 <input
                                   id={`edit-image-${item._id}`}
@@ -886,20 +920,20 @@ export function InventoryManagement() {
                         </div>
                       </div>
 
-                      <div className="flex gap-3 pt-4 border-t">
+                      <div className="flex gap-2 pt-3 border-t">
                         <Button
                           onClick={handleSaveEdit}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700"
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 h-9 text-sm"
                         >
-                          <Save className="w-4 h-4 mr-2" />
-                          Save Changes
+                          <Save className="w-3.5 h-3.5 mr-1.5" />
+                          Save
                         </Button>
                         <Button
                           onClick={handleCancelEdit}
                           variant="outline"
-                          className="flex-1"
+                          className="flex-1 h-9 text-sm"
                         >
-                          <X className="w-4 h-4 mr-2" />
+                          <X className="w-3.5 h-3.5 mr-1.5" />
                           Cancel
                         </Button>
                       </div>
@@ -907,93 +941,94 @@ export function InventoryManagement() {
                   ) : (
                     // VIEW MODE - Display only
                     <>
-                      {/* Image Display */}
-                      {item.image && (
-                        <div className="mb-4 -mx-6 -mt-6">
-                          <div className="relative w-full h-40 lg:h-48 overflow-hidden rounded-t-lg">
+                      {/* Compact Header with Image Thumbnail */}
+                      <div className="flex gap-3 mb-2">
+                        {item.image && (
+                          <div className="relative w-16 h-16 flex-shrink-0 overflow-hidden rounded-lg border border-slate-200">
                             <img
                               src={`${API_URL.replace('/api', '')}${item.image}`}
                               alt={item.name}
                               className="w-full h-full object-cover"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-base font-bold text-slate-900 truncate leading-tight">{item.name}</h3>
+                              <p className="text-xs text-slate-500 font-medium">{item.category}</p>
+                            </div>
+                            <Badge className={`${stockStatus.color} font-bold text-[10px] px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1 flex-shrink-0`}>
+                              {getStockIcon(stockStatus.status)}
+                              <span className="hidden sm:inline">{stockStatus.label}</span>
+                            </Badge>
+                          </div>
+                          <div className="flex items-baseline gap-1 mt-1">
+                            <span className="text-xl font-bold text-slate-900">{item.quantity}</span>
+                            <span className="text-xs font-medium text-slate-600">{item.unit}</span>
                           </div>
                         </div>
-                      )}
-
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-xl font-bold text-slate-900 truncate mb-1">{item.name}</h3>
-                          <p className="text-sm text-slate-500 font-medium">{item.category}</p>
-                        </div>
-                        <Badge className={`${stockStatus.color} font-bold text-xs px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1.5`}>
-                          {getStockIcon(stockStatus.status)}
-                          {stockStatus.label}
-                        </Badge>
                       </div>
 
                       {item.notes && (
-                        <div className="bg-slate-50 p-3 rounded-lg mb-4">
-                          <p className="text-xs text-slate-600 italic">"{item.notes}"</p>
+                        <div className="bg-slate-50 p-2 rounded mb-2">
+                          <p className="text-xs text-slate-600 italic line-clamp-2">"{item.notes}"</p>
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-2xl font-bold text-slate-900">{item.quantity}</span>
-                          <span className="text-sm font-medium text-slate-600">{item.unit}</span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartEdit(item)}
-                          className="h-11 w-11 sm:h-9 sm:w-9 p-0 hover:bg-blue-50 hover:text-blue-600"
-                          aria-label="Edit item"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </div>
-
-                      <div className="flex items-center gap-3 mb-4">
+                      {/* Action Buttons - Compact Layout */}
+                      <div className="flex items-center gap-2 mb-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleUpdateQuantity(item._id, -1)}
-                          className="flex-1 h-11 sm:h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold"
+                          className="flex-1 h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs px-2"
                           aria-label="Remove one unit"
                         >
-                          <Minus className="w-4 h-4 mr-1.5" />
-                          Remove
+                          <Minus className="w-3 h-3 sm:mr-1" />
+                          <span className="hidden sm:inline">Remove</span>
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleUpdateQuantity(item._id, 1)}
-                          className="flex-1 h-11 sm:h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold"
+                          className="flex-1 h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold text-xs px-2"
                           aria-label="Add one unit"
                         >
-                          <Plus className="w-4 h-4 mr-1.5" />
-                          Add
+                          <Plus className="w-3 h-3 sm:mr-1" />
+                          <span className="hidden sm:inline">Add</span>
                         </Button>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                        <div className="text-xs text-slate-600">
-                          <span className="font-semibold">Low stock alert:</span> {item.lowStockThreshold} {item.unit}
-                        </div>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setDeleteId(item._id)}
-                          className="h-11 w-11 sm:h-9 sm:w-9 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          aria-label="Delete item"
+                          onClick={() => handleStartEdit(item)}
+                          className="h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
+                          aria-label="Edit item"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Edit className="w-3.5 h-3.5" />
                         </Button>
                       </div>
 
-                      <div className="text-xs text-slate-400 mt-3">
-                        {item.updatedAt ? `Updated ${formatDistanceToNow(new Date(item.updatedAt), { addSuffix: true })}` : 'Never updated'}
+                      {/* Footer - Compact */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-[10px] text-slate-500">
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-500" />
+                          <span>{item.lowStockThreshold} {item.unit}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="hidden sm:inline">
+                            {item.updatedAt ? formatDistanceToNow(new Date(item.updatedAt), { addSuffix: true }) : 'Never'}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteId(item._id)}
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            aria-label="Delete item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </>
                   )}
