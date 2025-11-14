@@ -1204,15 +1204,43 @@ export function OrderTaker({
             </div>
 
             {!isAppending && (
-              <div className="mb-5">
-                <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
-                <Input
-                  value={orderNote}
-                  onChange={(e) => setOrderNote(e.target.value)}
-                  placeholder="Add a note for this order"
-                  className="w-full border-slate-200 focus:border-slate-400"
-                />
-              </div>
+              <>
+                <div className="mb-5">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Order Type</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setOrderType("dine-in")}
+                      className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
+                        orderType === "dine-in"
+                          ? "bg-blue-600 border-blue-700 text-white shadow-md"
+                          : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                      }`}
+                    >
+                      🍽️ Dine In
+                    </button>
+                    <button
+                      onClick={() => setOrderType("take-out")}
+                      className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
+                        orderType === "take-out"
+                          ? "bg-orange-600 border-orange-700 text-white shadow-md"
+                          : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                      }`}
+                    >
+                      🥡 Take Out
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
+                  <Input
+                    value={orderNote}
+                    onChange={(e) => setOrderNote(e.target.value)}
+                    placeholder="Add a note for this order"
+                    className="w-full border-slate-200 focus:border-slate-400"
+                  />
+                </div>
+              </>
             )}
 
             {isAppending && appendingOrder && (
@@ -1539,15 +1567,43 @@ export function OrderTaker({
                   </div>
 
                   {!isAppending && (
-                    <div className="mb-5">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
-                      <Input
-                        value={orderNote}
-                        onChange={(e) => setOrderNote(e.target.value)}
-                        placeholder="Add a note for this order"
-                        className="w-full border-slate-200 focus:border-slate-400"
-                      />
-                    </div>
+                    <>
+                      <div className="mb-5">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Order Type</label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setOrderType("dine-in")}
+                            className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
+                              orderType === "dine-in"
+                                ? "bg-blue-600 border-blue-700 text-white shadow-md"
+                                : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                            }`}
+                          >
+                            🍽️ Dine In
+                          </button>
+                          <button
+                            onClick={() => setOrderType("take-out")}
+                            className={`flex-1 px-4 py-3 text-sm rounded-lg font-bold transition-all shadow-sm border-2 ${
+                              orderType === "take-out"
+                                ? "bg-orange-600 border-orange-700 text-white shadow-md"
+                                : "bg-white border-slate-300 text-slate-600 hover:border-slate-400"
+                            }`}
+                          >
+                            🥡 Take Out
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mb-5">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Note (Optional)</label>
+                        <Input
+                          value={orderNote}
+                          onChange={(e) => setOrderNote(e.target.value)}
+                          placeholder="Add a note for this order"
+                          className="w-full border-slate-200 focus:border-slate-400"
+                        />
+                      </div>
+                    </>
                   )}
 
                   {isAppending && appendingOrder && (
