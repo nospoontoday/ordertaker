@@ -296,12 +296,26 @@ export default function SalesReportsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wide font-semibold mb-0.5 sm:mb-1 whitespace-nowrap">
-                        Net Sales
+                    <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+                      {/* Gross Sales */}
+                      <div className="text-right">
+                        <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wide font-semibold mb-0.5 sm:mb-1 whitespace-nowrap">
+                          Gross Sales
+                        </div>
+                        <div className="text-sm sm:text-lg font-bold text-slate-700 whitespace-nowrap">
+                          ₱{daily.totalSales.toFixed(2)}
+                        </div>
                       </div>
-                      <div className={`text-base sm:text-2xl font-bold ${daily.netSales >= 0 ? 'text-emerald-600' : 'text-red-600'} whitespace-nowrap`}>
-                        ₱{daily.netSales.toFixed(2)}
+                      {/* Separator */}
+                      <div className="hidden sm:block h-12 w-[1px] bg-slate-300" />
+                      {/* Net Sales */}
+                      <div className="text-right">
+                        <div className="text-[10px] sm:text-xs text-slate-500 uppercase tracking-wide font-semibold mb-0.5 sm:mb-1 whitespace-nowrap">
+                          Net Sales
+                        </div>
+                        <div className={`text-base sm:text-2xl font-bold ${daily.netSales >= 0 ? 'text-emerald-600' : 'text-red-600'} whitespace-nowrap`}>
+                          ₱{daily.netSales.toFixed(2)}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-auto">
