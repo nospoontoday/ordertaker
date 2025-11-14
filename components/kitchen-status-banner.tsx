@@ -11,7 +11,6 @@ export interface KitchenStatusData {
   averagePrepTimeMinutes: number
   estimatedWaitMinutes: number
   kitchenLoadPercent: number
-  longestWaitingMinutes: number
 }
 
 interface KitchenStatusBannerProps {
@@ -29,7 +28,6 @@ export function KitchenStatusBanner({ kitchenStatus }: KitchenStatusBannerProps)
     averagePrepTimeMinutes,
     estimatedWaitMinutes,
     kitchenLoadPercent,
-    longestWaitingMinutes,
   } = kitchenStatus
 
   // Determine status color based on kitchen load
@@ -95,7 +93,7 @@ export function KitchenStatusBanner({ kitchenStatus }: KitchenStatusBannerProps)
           </div>
 
           {/* Right: Metrics Grid */}
-          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
             {/* Pending Items */}
             <div className="flex flex-col">
               <span className="text-muted-foreground text-xs">Pending</span>
@@ -130,14 +128,6 @@ export function KitchenStatusBanner({ kitchenStatus }: KitchenStatusBannerProps)
                 )}
               >
                 ~{estimatedWaitMinutes}m
-              </span>
-            </div>
-
-            {/* Longest Waiting */}
-            <div className="flex flex-col">
-              <span className="text-muted-foreground text-xs">Longest Wait</span>
-              <span className="font-bold text-lg">
-                {longestWaitingMinutes > 0 ? `${longestWaitingMinutes}m` : "0m"}
               </span>
             </div>
           </div>

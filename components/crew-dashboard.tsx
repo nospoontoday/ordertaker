@@ -594,28 +594,6 @@ export function CrewDashboard({
 
     const averagePrepTimeMinutes = Math.round(averagePrepTimeMs / 1000 / 60)
 
-    // Calculate longest waiting item (items that are preparing or pending)
-    const activeItems = allItems.filter(item =>
-      item.status === "pending" || item.status === "preparing"
-    )
-
-    let longestWaitingMinutes = 0
-    const now = Date.now()
-
-    activeItems.forEach(item => {
-      const startTime = item.preparingAt || item.status === "pending" ?
-        (orders.find(o =>
-          o.items.some(i => i.id === item.id) ||
-          o.appendedOrders?.some(a => a.items.some(i => i.id === item.id))
-        )?.createdAt || now) :
-        now
-
-      const waitingMinutes = Math.floor((now - startTime) / 1000 / 60)
-      if (waitingMinutes > longestWaitingMinutes) {
-        longestWaitingMinutes = waitingMinutes
-      }
-    })
-
     // Assume kitchen capacity of 6 items being prepared simultaneously
     const KITCHEN_CAPACITY = 6
     const kitchenLoadPercent = Math.round((preparingItems.length / KITCHEN_CAPACITY) * 100)
@@ -639,7 +617,6 @@ export function CrewDashboard({
       averagePrepTimeMinutes,
       estimatedWaitMinutes,
       kitchenLoadPercent,
-      longestWaitingMinutes,
     }
   }
 

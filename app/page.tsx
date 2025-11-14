@@ -365,6 +365,16 @@ export default function Home() {
         />
       )}
 
+      {/* Hidden Crew Dashboard for kitchen status calculation when on Order Taker view */}
+      {!isCrew && view === "taker" && (
+        <div className="hidden">
+          <CrewDashboard
+            onAppendItems={(orderId) => setAppendingOrderId(orderId)}
+            onKitchenStatusChange={setKitchenStatus}
+          />
+        </div>
+      )}
+
       {/* Show Past Orders only for admins and super_admins */}
       {canAccessPastOrders && view === "past" && <PastOrders />}
     </div>
