@@ -170,6 +170,9 @@ export function OrderTaker({
   // Track if initial load has completed to prevent overwriting on first render
   const hasLoadedFromCart = useRef(false)
 
+  // Shared AudioContext for consistent sound playback
+  const audioContextRef = useRef<AudioContext | null>(null)
+
   // Load cart from database on mount (only if not appending)
   useEffect(() => {
     const loadCart = async () => {
@@ -388,10 +391,18 @@ export function OrderTaker({
     }
   }
 
-  // Play a subtle click sound using Web Audio API
-  const playClickSound = () => {
+  // Initialize AudioContext once and reuse it for consistent sound playback
+  const getAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    return audioContextRef.current
+  }
+
+  // Play a subtle click sound for menu item clicks
+  const playMenuItemSound = () => {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const audioContext = getAudioContext()
       const oscillator = audioContext.createOscillator()
       const gainNode = audioContext.createGain()
 
@@ -414,9 +425,59 @@ export function OrderTaker({
     }
   }
 
+  // Play a warm, lower sound for Dine In button
+  const playDineInSound = () => {
+    try {
+      const audioContext = getAudioContext()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // Warm, lower frequency for dine-in
+      oscillator.frequency.value = 500 // Lower, warmer tone
+      oscillator.type = "sine"
+
+      // Smooth fade out
+      gainNode.gain.setValueAtTime(0.12, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.08)
+    } catch (error) {
+      console.log("Audio playback not supported")
+    }
+  }
+
+  // Play a distinct, brighter sound for Take Out button
+  const playTakeOutSound = () => {
+    try {
+      const audioContext = getAudioContext()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // Brighter, distinct tone for take-out
+      oscillator.frequency.value = 1000 // Higher, brighter tone
+      oscillator.type = "triangle" // Different waveform for distinction
+
+      // Quick, snappy fade out
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.06)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.06)
+    } catch (error) {
+      console.log("Audio playback not supported")
+    }
+  }
+
   // Handle item click with sound and animation
   const handleItemClick = (item: MenuItem, itemType: "dine-in" | "take-out" = "dine-in") => {
-    playClickSound()
+    playMenuItemSound()
     setClickedItemId(item.id)
     setTimeout(() => setClickedItemId(null), 300) // Remove animation after 300ms
     addItem(item, itemType)
@@ -1241,6 +1302,7 @@ export function OrderTaker({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
+                                playDineInSound()
                                 addItem(item, "dine-in")
                               }}
                               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
@@ -1262,6 +1324,7 @@ export function OrderTaker({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
+                                playTakeOutSound()
                                 addItem(item, "take-out")
                               }}
                               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
