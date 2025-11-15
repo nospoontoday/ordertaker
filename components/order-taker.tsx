@@ -475,9 +475,47 @@ export function OrderTaker({
     }
   }
 
+  // Play a cash register "ching" sound for Submit Order button
+  const playCashRegisterSound = () => {
+    try {
+      const audioContext = getAudioContext()
+
+      // Create two oscillators for a bell-like "ching" sound
+      const osc1 = audioContext.createOscillator()
+      const osc2 = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      osc1.connect(gainNode)
+      osc2.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // High frequencies for bell-like tone
+      osc1.frequency.value = 1200 // Primary tone
+      osc2.frequency.value = 1800 // Harmonic for richness
+      osc1.type = "sine"
+      osc2.type = "sine"
+
+      // Bell-like envelope: quick attack, medium decay
+      gainNode.gain.setValueAtTime(0.15, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+
+      osc1.start(audioContext.currentTime)
+      osc2.start(audioContext.currentTime)
+      osc1.stop(audioContext.currentTime + 0.3)
+      osc2.stop(audioContext.currentTime + 0.3)
+    } catch (error) {
+      console.log("Audio playback not supported")
+    }
+  }
+
   // Handle item click with sound and animation
   const handleItemClick = (item: MenuItem, itemType: "dine-in" | "take-out" = "dine-in") => {
-    playMenuItemSound()
+    // Play the appropriate sound based on item type
+    if (itemType === "dine-in") {
+      playDineInSound()
+    } else {
+      playTakeOutSound()
+    }
     setClickedItemId(item.id)
     setTimeout(() => setClickedItemId(null), 300) // Remove animation after 300ms
     addItem(item, itemType)
@@ -529,6 +567,9 @@ export function OrderTaker({
 
   const submitOrder = async () => {
     if (!customerName.trim() || (isAppending ? newItems.length === 0 : currentOrder.length === 0)) return
+
+    // Play cash register sound when submitting order
+    playCashRegisterSound()
 
     setIsSubmitting(true)
 
