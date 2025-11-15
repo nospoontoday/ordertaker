@@ -166,6 +166,9 @@ export function OrderTaker({
   // Confirmation dialog state
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [pendingOrderData, setPendingOrderData] = useState<any>(null)
+  
+  // Mobile sheet state
+  const [showMobileSheet, setShowMobileSheet] = useState(false)
 
   // API state
   const [menuItems, setMenuItems] = useState<MenuItem[]>(FALLBACK_MENU_ITEMS)
@@ -812,6 +815,9 @@ export function OrderTaker({
         setAmountReceived("")
         setCashAmount("")
         setGcashAmount("")
+
+        // Close mobile sheet after successful order submission
+        setShowMobileSheet(false)
 
         // Clear cart from database after successful order creation
         if (user?.email) {
@@ -2204,7 +2210,7 @@ export function OrderTaker({
 
         {/* Mobile: Floating Order Summary Button */}
         <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40">
-          <Sheet>
+          <Sheet open={showMobileSheet} onOpenChange={setShowMobileSheet}>
             <SheetTrigger asChild>
               <Button
                 size="lg"
@@ -2257,6 +2263,175 @@ export function OrderTaker({
                         placeholder="Add a note for this order"
                         className="w-full border-slate-200 focus:border-slate-400"
                       />
+                    </div>
+                  )}
+
+                  {!isAppending && (
+                    <div className="mb-5 pb-5 border-b border-slate-200/80">
+                      <div className="flex items-center gap-3 mb-4">
+                        <input
+                          type="checkbox"
+                          id="isPaid-mobile"
+                          checked={isPaid}
+                          onChange={(e) => {
+                            setIsPaid(e.target.checked)
+                            if (e.target.checked) {
+                              setPaymentMethod("cash")
+                              setAmountReceived(currentOrderTotal.toFixed(2))
+                            } else {
+                              setPaymentMethod(null)
+                              setAmountReceived("")
+                              setCashAmount("")
+                              setGcashAmount("")
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 cursor-pointer"
+                        />
+                        <label htmlFor="isPaid-mobile" className="text-sm font-bold text-slate-700 cursor-pointer">
+                          Mark as Paid
+                        </label>
+                      </div>
+
+                      {isPaid && (
+                        <div className="space-y-4 bg-blue-50/50 p-4 rounded-lg border border-blue-200/60">
+                          {/* Amount Received */}
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Amount Received (₱)</label>
+                            <Input
+                              type="number"
+                              value={amountReceived}
+                              onChange={(e) => setAmountReceived(e.target.value)}
+                              placeholder="0.00"
+                              step="0.01"
+                              min="0"
+                              className="w-full border-slate-200 focus:border-slate-400"
+                            />
+                          </div>
+
+                          {/* Change Display */}
+                          {amountReceived && (
+                            <div className="bg-white p-3 rounded-lg border border-emerald-200/60">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
+                                <span className="text-sm font-bold text-slate-900">₱{currentOrderTotal.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center mt-2">
+                                <span className="text-sm font-semibold text-slate-700">Amount Received:</span>
+                                <span className="text-sm font-bold text-slate-900">₱{parseFloat(amountReceived || "0").toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
+                                <span className="text-sm font-bold text-emerald-700">Change:</span>
+                                <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - currentOrderTotal) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                  ₱{(parseFloat(amountReceived || "0") - currentOrderTotal).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Payment Method Selection */}
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-3">Payment Method</label>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setPaymentMethod("cash")
+                                  setGcashAmount("")
+                                }}
+                                className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
+                                  paymentMethod === "cash"
+                                    ? "bg-emerald-600 border-emerald-700 text-white shadow-md"
+                                    : "bg-white border-slate-300 text-slate-700 hover:border-emerald-400"
+                                }`}
+                              >
+                                💵 Cash
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setPaymentMethod("gcash")
+                                  setCashAmount("")
+                                }}
+                                className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
+                                  paymentMethod === "gcash"
+                                    ? "bg-blue-600 border-blue-700 text-white shadow-md"
+                                    : "bg-white border-slate-300 text-slate-700 hover:border-blue-400"
+                                }`}
+                              >
+                                Ⓖ GCash
+                              </button>
+                              <button
+                                onClick={() => setPaymentMethod("split")}
+                                className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
+                                  paymentMethod === "split"
+                                    ? "bg-purple-600 border-purple-700 text-white shadow-md"
+                                    : "bg-white border-slate-300 text-slate-700 hover:border-purple-400"
+                                }`}
+                              >
+                                🔀 Split
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Split Payment Form */}
+                          {paymentMethod === "split" && (
+                            <div className="space-y-3 bg-white p-3 rounded-lg border border-purple-200/60">
+                              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Split Payment Details</p>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1.5">Cash Amount (₱)</label>
+                                <Input
+                                  type="number"
+                                  value={cashAmount}
+                                  onChange={(e) => {
+                                    const cash = parseFloat(e.target.value || "0")
+                                    setCashAmount(e.target.value)
+                                    if (e.target.value) {
+                                      const gcash = Math.max(0, currentOrderTotal - cash)
+                                      setGcashAmount(gcash > 0 ? gcash.toFixed(2) : "")
+                                    }
+                                  }}
+                                  placeholder="0.00"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-full text-sm border-slate-200 focus:border-slate-400"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1.5">GCash Amount (₱)</label>
+                                <Input
+                                  type="number"
+                                  value={gcashAmount}
+                                  onChange={(e) => {
+                                    const gcash = parseFloat(e.target.value || "0")
+                                    setGcashAmount(e.target.value)
+                                    if (e.target.value) {
+                                      const cash = Math.max(0, currentOrderTotal - gcash)
+                                      setCashAmount(cash > 0 ? cash.toFixed(2) : "")
+                                    }
+                                  }}
+                                  placeholder="0.00"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-full text-sm border-slate-200 focus:border-slate-400"
+                                />
+                              </div>
+                              {cashAmount && gcashAmount && (
+                                <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-600">Total Split:</span>
+                                    <span className={`font-bold ${Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) < 0.01 ? "text-emerald-600" : "text-amber-600"}`}>
+                                      ₱{(parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")).toFixed(2)}
+                                    </span>
+                                  </div>
+                                  {Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) >= 0.01 && (
+                                    <p className="text-xs text-amber-600 font-semibold mt-1">
+                                      ⚠️ Split total must equal order total (₱{currentOrderTotal.toFixed(2)})
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
