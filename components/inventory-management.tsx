@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow } from "date-fns"
+import { useAuth } from "@/contexts/auth-context"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +51,8 @@ interface InventoryItem {
   image?: string
   createdAt?: string
   updatedAt?: string
+  lastUpdatedBy?: string
+  lastUpdatedByEmail?: string
 }
 import {
   Dialog,
@@ -101,6 +104,20 @@ export function InventoryManagement() {
   const [isLoading, setIsLoading] = useState(true)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const { toast } = useToast()
+  const { user } = useAuth()
+
+  // Last touch confirmation state
+  const [confirmationItem, setConfirmationItem] = useState<{
+    itemId: string
+    itemName: string
+    delta: number
+    lastUpdatedBy: string
+    lastUpdatedByEmail: string
+    lastUpdatedAt: string
+  } | null>(null)
+
+  // Pending quantity changes (for visual feedback before save)
+  const [pendingChanges, setPendingChanges] = useState<Record<string, number>>({})
 
   // New item form state
   const [newItem, setNewItem] = useState({
@@ -317,17 +334,92 @@ export function InventoryManagement() {
     }
   }
 
-  const handleUpdateQuantity = async (id: string, delta: number) => {
+  // Add to pending changes (visual feedback without immediate save)
+  const handleAddPendingChange = (id: string, delta: number) => {
+    const item = items.find(i => i._id === id)
+    if (!item) return
+
+    const currentPending = pendingChanges[id] || 0
+    const newPendingTotal = currentPending + delta
+    const newQuantity = item.quantity + newPendingTotal
+
+    // Don't allow negative quantities
+    if (newQuantity < 0) {
+      toast({
+        title: "Invalid quantity",
+        description: "Quantity cannot be negative.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setPendingChanges(prev => ({
+      ...prev,
+      [id]: newPendingTotal
+    }))
+  }
+
+  // Cancel pending changes for an item
+  const handleCancelPendingChange = (id: string) => {
+    setPendingChanges(prev => {
+      const newChanges = { ...prev }
+      delete newChanges[id]
+      return newChanges
+    })
+  }
+
+  // Save pending changes (with last touch check)
+  const handleSavePendingChange = async (id: string) => {
+    const delta = pendingChanges[id]
+    if (delta === undefined || delta === 0) return
+
+    const item = items.find(i => i._id === id)
+    if (!item) return
+
+    // Check if different user last updated this item
+    if (item.lastUpdatedByEmail && item.lastUpdatedBy && item.lastUpdatedAt &&
+        user?.email !== item.lastUpdatedByEmail) {
+      // Show confirmation modal
+      setConfirmationItem({
+        itemId: id,
+        itemName: item.name,
+        delta,
+        lastUpdatedBy: item.lastUpdatedBy,
+        lastUpdatedByEmail: item.lastUpdatedByEmail,
+        lastUpdatedAt: item.lastUpdatedAt
+      })
+      return
+    }
+
+    // Same user or no last touch info - proceed with update
+    await performQuantityUpdate(id, delta)
+  }
+
+  // Perform the actual quantity update
+  const performQuantityUpdate = async (id: string, delta: number) => {
     try {
       const item = items.find(i => i._id === id)
       if (!item) return
+
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to update inventory.",
+          variant: "destructive",
+        })
+        return
+      }
 
       const response = await fetch(`${API_URL}/inventory/${id}/quantity`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ delta })
+        body: JSON.stringify({
+          delta,
+          lastUpdatedBy: user.name || user.email,
+          lastUpdatedByEmail: user.email
+        })
       })
 
       if (!response.ok) {
@@ -336,6 +428,9 @@ export function InventoryManagement() {
 
       const result = await response.json()
       const newQuantity = result.data.quantity
+
+      // Clear pending change
+      handleCancelPendingChange(id)
 
       await loadItems()
 
@@ -351,6 +446,19 @@ export function InventoryManagement() {
         variant: "destructive",
       })
     }
+  }
+
+  // Confirm update after last touch warning
+  const handleConfirmUpdate = async () => {
+    if (!confirmationItem) return
+
+    await performQuantityUpdate(confirmationItem.itemId, confirmationItem.delta)
+    setConfirmationItem(null)
+  }
+
+  // Keep old function for backward compatibility (now redirects to pending changes)
+  const handleUpdateQuantity = async (id: string, delta: number) => {
+    handleAddPendingChange(id, delta)
   }
 
   const handleSetQuantity = async (id: string, quantity: number) => {
@@ -780,11 +888,18 @@ export function InventoryManagement() {
             {filteredItems.map(item => {
               const stockStatus = getStockStatus(item)
               const isEditing = editingId === item._id
+              const hasPendingChange = pendingChanges[item._id] !== undefined
 
               return (
                 <Card
                   key={item._id}
-                  className={`p-3 sm:p-4 border-2 shadow-sm hover:shadow-md transition-all ${isEditing ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'}`}
+                  className={`p-3 sm:p-4 border-2 shadow-sm hover:shadow-md transition-all ${
+                    isEditing
+                      ? 'border-blue-500 ring-2 ring-blue-100'
+                      : hasPendingChange
+                      ? 'border-blue-400 bg-blue-50/30 ring-2 ring-blue-200'
+                      : 'border-slate-200'
+                  }`}
                 >
                   {isEditing ? (
                     // EDIT MODE - All fields editable
@@ -964,8 +1079,21 @@ export function InventoryManagement() {
                             </Badge>
                           </div>
                           <div className="flex items-baseline gap-1 mt-1">
-                            <span className="text-xl font-bold text-slate-900">{item.quantity}</span>
-                            <span className="text-xs font-medium text-slate-600">{item.unit}</span>
+                            {pendingChanges[item._id] !== undefined ? (
+                              <>
+                                <span className="text-xl font-bold text-slate-400 line-through">{item.quantity}</span>
+                                <span className="text-xl font-bold text-blue-600 ml-1">{item.quantity + pendingChanges[item._id]}</span>
+                                <span className="text-xs font-medium text-slate-600">{item.unit}</span>
+                                <Badge className="ml-2 bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5">
+                                  {pendingChanges[item._id] > 0 ? `+${pendingChanges[item._id]}` : pendingChanges[item._id]}
+                                </Badge>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-xl font-bold text-slate-900">{item.quantity}</span>
+                                <span className="text-xs font-medium text-slate-600">{item.unit}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -977,48 +1105,69 @@ export function InventoryManagement() {
                       )}
 
                       {/* Action Buttons - Compact Layout */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateQuantity(item._id, -1)}
-                          className="flex-1 h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs px-2"
-                          aria-label="Remove one unit"
-                        >
-                          <Minus className="w-3 h-3 sm:mr-1" />
-                          <span className="hidden sm:inline">Remove</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUpdateQuantity(item._id, 1)}
-                          className="flex-1 h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold text-xs px-2"
-                          aria-label="Add one unit"
-                        >
-                          <Plus className="w-3 h-3 sm:mr-1" />
-                          <span className="hidden sm:inline">Add</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartEdit(item)}
-                          className="h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
-                          aria-label="Edit item"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
+                      {pendingChanges[item._id] !== undefined ? (
+                        // Show Save/Cancel when there are pending changes
+                        <div className="flex items-center gap-2 mb-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleSavePendingChange(item._id)}
+                            className="flex-1 h-9 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-2"
+                          >
+                            <Save className="w-3 h-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Save</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelPendingChange(item._id)}
+                            className="flex-1 h-9 border-slate-300 hover:bg-slate-50 font-semibold text-xs px-2"
+                          >
+                            <X className="w-3 h-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Cancel</span>
+                          </Button>
+                        </div>
+                      ) : (
+                        // Show +/- buttons when no pending changes
+                        <div className="flex items-center gap-2 mb-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUpdateQuantity(item._id, -1)}
+                            className="flex-1 h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs px-2"
+                            aria-label="Remove one unit"
+                          >
+                            <Minus className="w-3 h-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Remove</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUpdateQuantity(item._id, 1)}
+                            className="flex-1 h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold text-xs px-2"
+                            aria-label="Add one unit"
+                          >
+                            <Plus className="w-3 h-3 sm:mr-1" />
+                            <span className="hidden sm:inline">Add</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStartEdit(item)}
+                            className="h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
+                            aria-label="Edit item"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )}
 
                       {/* Footer - Compact */}
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-[10px] text-slate-500">
-                        <div className="flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-amber-500" />
-                          <span>{item.lowStockThreshold} {item.unit}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="hidden sm:inline">
-                            {item.updatedAt ? formatDistanceToNow(new Date(item.updatedAt), { addSuffix: true }) : 'Never'}
-                          </span>
+                      <div className="pt-2 border-t border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                          <div className="flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                            <span>Low stock: {item.lowStockThreshold} {item.unit}</span>
+                          </div>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1029,6 +1178,15 @@ export function InventoryManagement() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
+                        {item.lastUpdatedBy && item.lastUpdatedAt && (
+                          <div className="text-[10px] text-slate-500">
+                            <span className="font-medium">Last updated by:</span>{" "}
+                            {item.lastUpdatedBy} ({item.lastUpdatedByEmail}){" "}
+                            <span className="hidden sm:inline">
+                              • {formatDistanceToNow(new Date(item.lastUpdatedAt), { addSuffix: true })}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -1054,6 +1212,39 @@ export function InventoryManagement() {
                 className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
               >
                 Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Last Touch Confirmation Dialog */}
+        <AlertDialog open={confirmationItem !== null} onOpenChange={(open) => !open && setConfirmationItem(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Update</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  <span className="font-semibold">{confirmationItem?.lastUpdatedBy}</span>{" "}
+                  ({confirmationItem?.lastUpdatedByEmail}) last updated{" "}
+                  <span className="font-semibold">{confirmationItem?.itemName}</span>{" "}
+                  {confirmationItem?.lastUpdatedAt && formatDistanceToNow(new Date(confirmationItem.lastUpdatedAt), { addSuffix: true })}.
+                </p>
+                <p className="text-slate-700 font-medium">
+                  Do you want to continue with your update?
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                if (confirmationItem) {
+                  handleCancelPendingChange(confirmationItem.itemId)
+                }
+              }}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmUpdate}
+                className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600"
+              >
+                Continue
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

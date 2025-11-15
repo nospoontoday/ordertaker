@@ -12,11 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Check, Clock, UtensilsCrossed, ChefHat } from "lucide-react"
+import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight } from "lucide-react"
+
+const ORDERS_PER_PAGE = 10
 
 export function PastOrders() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     loadOrders()
@@ -197,12 +200,35 @@ export function PastOrders() {
     )
   }
 
+  // Pagination calculations
+  const totalPages = Math.ceil(orders.length / ORDERS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ORDERS_PER_PAGE
+  const endIndex = startIndex + ORDERS_PER_PAGE
+  const paginatedOrders = orders.slice(startIndex, endIndex)
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1))
+  }
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+  }
+
+  const handlePageClick = (page: number) => {
+    setCurrentPage(page)
+  }
+
   return (
     <div className="p-4 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Past Orders</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Past Orders</h1>
+        <div className="text-sm text-gray-600">
+          Showing {startIndex + 1}-{Math.min(endIndex, orders.length)} of {orders.length} orders
+        </div>
+      </div>
 
       <div className="space-y-4">
-        {orders.map((order) => {
+        {paginatedOrders.map((order) => {
           const allItemsServed = order.items.every((item) => item.status === "served") &&
             (order.appendedOrders?.every((appended) =>
               appended.items.every((item) => item.status === "served")
@@ -277,6 +303,65 @@ export function PastOrders() {
           )
         })}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
+          </Button>
+
+          <div className="flex items-center gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+              // Show first page, last page, current page, and pages around current
+              const showPage =
+                page === 1 ||
+                page === totalPages ||
+                (page >= currentPage - 1 && page <= currentPage + 1)
+
+              if (!showPage) {
+                // Show ellipsis for skipped pages
+                if (page === currentPage - 2 || page === currentPage + 2) {
+                  return (
+                    <span key={page} className="px-2 text-gray-400">
+                      ...
+                    </span>
+                  )
+                }
+                return null
+              }
+
+              return (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handlePageClick(page)}
+                  className="min-w-[40px]"
+                >
+                  {page}
+                </Button>
+              )
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
