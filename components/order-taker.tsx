@@ -157,6 +157,7 @@ export function OrderTaker({
   const [allOrders, setAllOrders] = useState<Order[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false)
+  const [clickedItemId, setClickedItemId] = useState<string | null>(null)
 
   // Toast for notifications
   const { toast } = useToast()
@@ -385,6 +386,40 @@ export function OrderTaker({
       // Add new item with specified type
       setTargetArray([...targetArray, { ...menuItem, quantity: 1, itemType }])
     }
+  }
+
+  // Play a subtle click sound using Web Audio API
+  const playClickSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      // Create a subtle "tap" sound
+      oscillator.frequency.value = 800 // Higher frequency for a crisp tap
+      oscillator.type = "sine"
+
+      // Quick fade out for a tap effect
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime) // Low volume
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.05)
+    } catch (error) {
+      // Silently fail if Web Audio API is not supported
+      console.log("Audio playback not supported")
+    }
+  }
+
+  // Handle item click with sound and animation
+  const handleItemClick = (item: MenuItem, itemType: "dine-in" | "take-out" = "dine-in") => {
+    playClickSound()
+    setClickedItemId(item.id)
+    setTimeout(() => setClickedItemId(null), 300) // Remove animation after 300ms
+    addItem(item, itemType)
   }
 
   // Helper function to switch item type and automatically group items with same id and type
@@ -1152,14 +1187,16 @@ export function OrderTaker({
                   {getDisplayedItems().map((item) => (
                     <div
                       key={item.id}
-                      onClick={() => addItem(item, "dine-in")}
+                      onClick={() => handleItemClick(item, "dine-in")}
                       className={cn(
                         "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white cursor-pointer",
                         "border-2 border-slate-200 hover:border-blue-400",
                         "shadow-sm hover:shadow-lg",
                         "transition-all duration-200",
                         "min-h-[200px] lg:min-h-[220px]",
-                        "min-w-[140px] sm:min-w-0"
+                        "min-w-[140px] sm:min-w-0",
+                        "active:scale-95 active:shadow-md",
+                        clickedItemId === item.id && "animate-pulse scale-95"
                       )}
                     >
                       {/* Image Container with Best Seller Badge */}
