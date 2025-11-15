@@ -96,6 +96,7 @@ export function CrewDashboard({
   const [todayDate, setTodayDate] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("")
@@ -636,6 +637,16 @@ export function CrewDashboard({
       newExpanded.add(orderId)
     }
     setExpandedOrders(newExpanded)
+  }
+
+  const toggleNotesExpanded = (orderId: string) => {
+    const newExpanded = new Set(expandedNotes)
+    if (newExpanded.has(orderId)) {
+      newExpanded.delete(orderId)
+    } else {
+      newExpanded.add(orderId)
+    }
+    setExpandedNotes(newExpanded)
   }
 
   const toggleServedExpanded = (orderId: string) => {
@@ -2629,21 +2640,29 @@ export function CrewDashboard({
                         )}
 
                         {/* Notes Section */}
-                        <div className="pt-4 border-t border-slate-200">
-                          <div className="flex items-center gap-2 mb-4 ml-1">
-                            <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
-                              <MessageSquare className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
-                              {order.notes && order.notes.length > 0 && (
-                                <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
-                              )}
-                            </div>
-                          </div>
+                         <div className="pt-4 border-t border-slate-200">
+                           <div className="flex items-center gap-2 mb-4 ml-1">
+                             <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
+                               <MessageSquare className="w-4 h-4 text-blue-600" />
+                             </div>
+                             <div className="flex-1">
+                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
+                               {order.notes && order.notes.length > 0 && (
+                                 <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
+                               )}
+                             </div>
+                             <Button
+                               onClick={() => toggleNotesExpanded(order.id)}
+                               variant="outline"
+                               size="sm"
+                               className="text-xs font-semibold border-blue-200 hover:bg-blue-50"
+                             >
+                               {expandedNotes.has(order.id) ? "Hide" : "Show"}
+                             </Button>
+                           </div>
 
                           {/* Display existing notes */}
-                          {order.notes && order.notes.length > 0 && (
+                          {order.notes && order.notes.length > 0 && expandedNotes.has(order.id) && (
                             <div className="space-y-2.5 mb-5 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
                               {order.notes.map((note) => {
                                 const noteAuthor = note.createdBy || (note.createdByEmail ? note.createdByEmail.split('@')[0] : 'Unknown')
@@ -2665,33 +2684,35 @@ export function CrewDashboard({
                             </div>
                           )}
 
-                          {/* Add new note */}
-                          <div className="space-y-2.5 bg-gradient-to-br from-slate-50/50 to-white p-4 rounded-lg border border-slate-200/80 shadow-sm">
-                            <div className="flex gap-2">
-                              <Textarea
-                                value={newNotes[order.id] || ""}
-                                onChange={(e) => setNewNotes({ ...newNotes, [order.id]: e.target.value })}
-                                placeholder="Add a note... (e.g., Customer paid 100, we still have to give her 50 pesos change)"
-                                className="flex-1 min-h-[80px] resize-none text-sm"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                    e.preventDefault()
-                                    addNoteToOrder(order.id, newNotes[order.id] || "")
-                                  }
-                                }}
-                              />
-                              <Button
-                                onClick={() => addNoteToOrder(order.id, newNotes[order.id] || "")}
-                                disabled={!newNotes[order.id]?.trim()}
-                                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-4 shadow-sm hover:shadow-md transition-all self-end h-fit"
-                              >
-                                <Send className="w-4 h-4" />
-                              </Button>
+                          {/* Add new note - Only show when notes are expanded */}
+                          {expandedNotes.has(order.id) && (
+                            <div className="space-y-2.5 bg-gradient-to-br from-slate-50/50 to-white p-4 rounded-lg border border-slate-200/80 shadow-sm">
+                              <div className="flex gap-2">
+                                <Textarea
+                                  value={newNotes[order.id] || ""}
+                                  onChange={(e) => setNewNotes({ ...newNotes, [order.id]: e.target.value })}
+                                  placeholder="Add a note... (e.g., Customer paid 100, we still have to give her 50 pesos change)"
+                                  className="flex-1 min-h-[80px] resize-none text-sm"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                      e.preventDefault()
+                                      addNoteToOrder(order.id, newNotes[order.id] || "")
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  onClick={() => addNoteToOrder(order.id, newNotes[order.id] || "")}
+                                  disabled={!newNotes[order.id]?.trim()}
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-4 shadow-sm hover:shadow-md transition-all self-end h-fit"
+                                >
+                                  <Send className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <p className="text-xs text-slate-500 font-medium">
+                                💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Ctrl+Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Cmd+Enter</kbd> to submit
+                              </p>
                             </div>
-                            <p className="text-xs text-slate-500 font-medium">
-                              💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Ctrl+Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Cmd+Enter</kbd> to submit
-                            </p>
-                          </div>
+                          )}
                         </div>
 
                         {/* Action Buttons */}
@@ -3235,21 +3256,29 @@ export function CrewDashboard({
                         )}
 
                         {/* Notes Section */}
-                        <div className="pt-4 border-t border-slate-200">
-                          <div className="flex items-center gap-2 mb-4 ml-1">
-                            <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
-                              <MessageSquare className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
-                              {order.notes && order.notes.length > 0 && (
-                                <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
-                              )}
-                            </div>
-                          </div>
+                         <div className="pt-4 border-t border-slate-200">
+                           <div className="flex items-center gap-2 mb-4 ml-1">
+                             <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
+                               <MessageSquare className="w-4 h-4 text-blue-600" />
+                             </div>
+                             <div className="flex-1">
+                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
+                               {order.notes && order.notes.length > 0 && (
+                                 <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
+                               )}
+                             </div>
+                             <Button
+                               onClick={() => toggleNotesExpanded(order.id)}
+                               variant="outline"
+                               size="sm"
+                               className="text-xs font-semibold border-blue-200 hover:bg-blue-50"
+                             >
+                               {expandedNotes.has(order.id) ? "Hide" : "Show"}
+                             </Button>
+                           </div>
 
                           {/* Display existing notes */}
-                          {order.notes && order.notes.length > 0 && (
+                          {order.notes && order.notes.length > 0 && expandedNotes.has(order.id) && (
                             <div className="space-y-2.5 mb-5 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
                               {order.notes.map((note) => {
                                 const noteAuthor = note.createdBy || (note.createdByEmail ? note.createdByEmail.split('@')[0] : 'Unknown')
@@ -3271,33 +3300,35 @@ export function CrewDashboard({
                             </div>
                           )}
 
-                          {/* Add new note */}
-                          <div className="space-y-2.5 bg-gradient-to-br from-slate-50/50 to-white p-4 rounded-lg border border-slate-200/80 shadow-sm">
-                            <div className="flex gap-2">
-                              <Textarea
-                                value={newNotes[order.id] || ""}
-                                onChange={(e) => setNewNotes({ ...newNotes, [order.id]: e.target.value })}
-                                placeholder="Add a note... (e.g., Customer paid 100, we still have to give her 50 pesos change)"
-                                className="flex-1 min-h-[80px] resize-none text-sm"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                    e.preventDefault()
-                                    addNoteToOrder(order.id, newNotes[order.id] || "")
-                                  }
-                                }}
-                              />
-                              <Button
-                                onClick={() => addNoteToOrder(order.id, newNotes[order.id] || "")}
-                                disabled={!newNotes[order.id]?.trim()}
-                                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-4 shadow-sm hover:shadow-md transition-all self-end h-fit"
-                              >
-                                <Send className="w-4 h-4" />
-                              </Button>
+                          {/* Add new note - Only show when notes are expanded */}
+                          {expandedNotes.has(order.id) && (
+                            <div className="space-y-2.5 bg-gradient-to-br from-slate-50/50 to-white p-4 rounded-lg border border-slate-200/80 shadow-sm">
+                              <div className="flex gap-2">
+                                <Textarea
+                                  value={newNotes[order.id] || ""}
+                                  onChange={(e) => setNewNotes({ ...newNotes, [order.id]: e.target.value })}
+                                  placeholder="Add a note... (e.g., Customer paid 100, we still have to give her 50 pesos change)"
+                                  className="flex-1 min-h-[80px] resize-none text-sm"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                      e.preventDefault()
+                                      addNoteToOrder(order.id, newNotes[order.id] || "")
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  onClick={() => addNoteToOrder(order.id, newNotes[order.id] || "")}
+                                  disabled={!newNotes[order.id]?.trim()}
+                                  className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-4 shadow-sm hover:shadow-md transition-all self-end h-fit"
+                                >
+                                  <Send className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <p className="text-xs text-slate-500 font-medium">
+                                💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Ctrl+Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Cmd+Enter</kbd> to submit
+                              </p>
                             </div>
-                            <p className="text-xs text-slate-500 font-medium">
-                              💡 Tip: Press <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Ctrl+Enter</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-xs font-semibold">Cmd+Enter</kbd> to submit
-                            </p>
-                          </div>
+                          )}
                         </div>
 
                         {/* Action Buttons */}
@@ -3629,7 +3660,7 @@ export function CrewDashboard({
                           </div>
                         )}
 
-                        {/* Notes Section - Always visible for completed orders */}
+                        {/* Notes Section */}
                         <div className="pt-4 border-t border-slate-200">
                           <div className="flex items-center gap-2 mb-4 ml-1">
                             <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
@@ -3641,10 +3672,18 @@ export function CrewDashboard({
                                 <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
                               )}
                             </div>
+                            <Button
+                              onClick={() => toggleNotesExpanded(order.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-xs font-semibold border-blue-200 hover:bg-blue-50"
+                            >
+                              {expandedNotes.has(order.id) ? "Hide" : "Show"}
+                            </Button>
                           </div>
 
                           {/* Display existing notes */}
-                          {order.notes && order.notes.length > 0 ? (
+                          {order.notes && order.notes.length > 0 && expandedNotes.has(order.id) && (
                             <div className="space-y-2.5 mb-5 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
                               {order.notes.map((note) => {
                                 const noteAuthor = note.createdBy || (note.createdByEmail ? note.createdByEmail.split('@')[0] : 'Unknown')
@@ -3663,10 +3702,6 @@ export function CrewDashboard({
                                   </div>
                                 )
                               })}
-                            </div>
-                          ) : (
-                            <div className="mb-5 p-4 rounded-lg bg-slate-50 border border-slate-200">
-                              <p className="text-sm text-slate-500 text-center italic">No notes for this order</p>
                             </div>
                           )}
                         </div>
