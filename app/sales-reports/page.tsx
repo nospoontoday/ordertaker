@@ -234,16 +234,28 @@ export default function SalesReportsPage() {
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchDailySales(pagination.page)}
-              disabled={isLoadingData}
-              className="gap-1 sm:gap-2 text-xs sm:text-sm"
-            >
-              <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isLoadingData ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/historical-order')}
+                className="gap-1 sm:gap-2 text-xs sm:text-sm"
+              >
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Create Daily Summary</span>
+                <span className="sm:hidden">Create</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchDailySales(pagination.page)}
+                disabled={isLoadingData}
+                className="gap-1 sm:gap-2 text-xs sm:text-sm"
+              >
+                <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isLoadingData ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
           </div>
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>

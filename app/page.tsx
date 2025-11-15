@@ -8,7 +8,7 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp } from "lucide-react"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
   Sheet,
@@ -281,6 +281,14 @@ export default function Home() {
                           >
                             <FileText className="h-5 w-5 mr-3" />
                             Sales Reports
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/monthly-report")}
+                          >
+                            <TrendingUp className="h-5 w-5 mr-3" />
+                            Monthly Report
                           </Button>
                           <Button
                             variant="ghost"
