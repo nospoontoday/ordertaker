@@ -7,6 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp, ShoppingCart, Utensils, ShoppingBag } from "lucide-react"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -146,6 +155,17 @@ export function OrderTaker({
   const [appendingOrder, setAppendingOrder] = useState<Order | null>(null)
   const [todayDate, setTodayDate] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+  // Payment state
+  const [isPaid, setIsPaid] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "gcash" | "split" | null>(null)
+  const [amountReceived, setAmountReceived] = useState("")
+  const [cashAmount, setCashAmount] = useState("")
+  const [gcashAmount, setGcashAmount] = useState("")
+  
+  // Confirmation dialog state
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [pendingOrderData, setPendingOrderData] = useState<any>(null)
 
   // API state
   const [menuItems, setMenuItems] = useState<MenuItem[]>(FALLBACK_MENU_ITEMS)
@@ -565,12 +585,60 @@ export function OrderTaker({
     setNewItems(newItems.filter((item) => item.id !== itemId))
   }
 
-  const submitOrder = async () => {
-    if (!customerName.trim() || (isAppending ? newItems.length === 0 : currentOrder.length === 0)) return
+   const submitOrder = async () => {
+     // Validate payment data if marked as paid
+     if (isPaid) {
+       if (!paymentMethod) {
+         toast({
+           title: "Error",
+           description: "Please select a payment method.",
+           variant: "destructive",
+         })
+         return
+       }
+       if (!amountReceived || parseFloat(amountReceived) <= 0) {
+         toast({
+           title: "Error",
+           description: "Please enter a valid amount received.",
+           variant: "destructive",
+         })
+         return
+       }
+       if (paymentMethod === "split") {
+         const cash = parseFloat(cashAmount || "0")
+         const gcash = parseFloat(gcashAmount || "0")
+         const total = cash + gcash
+         if (Math.abs(total - currentOrderTotal) > 0.01) {
+           toast({
+             title: "Error",
+             description: `Split payment amounts must equal the order total (₱${currentOrderTotal.toFixed(2)}).`,
+             variant: "destructive",
+           })
+           return
+         }
+       }
+     }
 
-    // Play cash register sound when submitting order
-    playCashRegisterSound()
+     // Prepare order data for confirmation
+     const orderData = {
+       customerName: customerName.trim(),
+       items: currentOrder,
+       total: currentOrderTotal,
+       isPaid: isPaid,
+       paymentMethod: paymentMethod,
+       amountReceived: isPaid ? parseFloat(amountReceived) : 0,
+       change: isPaid ? parseFloat(amountReceived) - currentOrderTotal : 0,
+       cashAmount: isPaid && paymentMethod === "split" ? parseFloat(cashAmount || "0") : 0,
+       gcashAmount: isPaid && paymentMethod === "split" ? parseFloat(gcashAmount || "0") : 0,
+     }
 
+     // Show confirmation dialog
+     setPendingOrderData(orderData)
+     setShowConfirmation(true)
+   }
+
+
+  const handleSubmitOrder = async (orderData: any) => {
     setIsSubmitting(true)
 
     try {
@@ -635,12 +703,52 @@ export function OrderTaker({
       } else {
         // Create new order
         const currentOrderNote = orderNote.trim(); // Capture current note value
+        
+        // Validate payment data if marked as paid
+        if (isPaid) {
+          if (!paymentMethod) {
+            toast({
+              title: "Error",
+              description: "Please select a payment method.",
+              variant: "destructive",
+            })
+            setIsSubmitting(false)
+            return
+          }
+          if (!amountReceived || parseFloat(amountReceived) <= 0) {
+            toast({
+              title: "Error",
+              description: "Please enter a valid amount received.",
+              variant: "destructive",
+            })
+            setIsSubmitting(false)
+            return
+          }
+          if (paymentMethod === "split") {
+            const cash = parseFloat(cashAmount || "0")
+            const gcash = parseFloat(gcashAmount || "0")
+            const total = cash + gcash
+            if (Math.abs(total - currentOrderTotal) > 0.01) {
+              toast({
+                title: "Error",
+                description: "Split payment amounts must equal the order total (₱" + currentOrderTotal.toFixed(2) + ").",
+                variant: "destructive",
+              })
+              setIsSubmitting(false)
+              return
+            }
+          }
+        }
+
         const newOrder: Order = {
           id: `order-${Date.now()}`,
           customerName: customerName.trim(),
           items: currentOrder.map((item) => ({ ...item, status: "pending" as const })),
           createdAt: Date.now(),
-          isPaid: false,
+          isPaid: isPaid,
+          paymentMethod: paymentMethod,
+          cashAmount: isPaid && paymentMethod === "cash" ? parseFloat(amountReceived) : isPaid && paymentMethod === "split" ? parseFloat(cashAmount || "0") : undefined,
+          gcashAmount: isPaid && paymentMethod === "gcash" ? parseFloat(amountReceived) : isPaid && paymentMethod === "split" ? parseFloat(gcashAmount || "0") : undefined,
           appendedOrders: [],
           notes: currentOrderNote ? [{
             id: `note-${Date.now()}`,
@@ -664,8 +772,12 @@ export function OrderTaker({
             })),
             createdAt: newOrder.createdAt,
             isPaid: newOrder.isPaid,
+            paymentMethod: newOrder.paymentMethod,
+            cashAmount: newOrder.cashAmount,
+            gcashAmount: newOrder.gcashAmount,
+            orderType: "dine-in",
+             amountReceived: isPaid ? parseFloat(amountReceived) : undefined,
             appendedOrders: [],
-            notes: newOrder.notes,
             orderTakerName: user?.name,
             orderTakerEmail: user?.email,
           })
@@ -695,6 +807,11 @@ export function OrderTaker({
         setCustomerName("")
         setCurrentOrder([])
         setOrderNote("")
+        setIsPaid(false)
+        setPaymentMethod(null)
+        setAmountReceived("")
+        setCashAmount("")
+        setGcashAmount("")
 
         // Clear cart from database after successful order creation
         if (user?.email) {
@@ -1425,6 +1542,180 @@ export function OrderTaker({
               </div>
             )}
 
+            {/* Payment Section */}
+            {!isAppending && (
+              <div className="mb-5 pb-5 border-b border-slate-200/80">
+                <div className="flex items-center gap-3 mb-4">
+                  <input
+                    type="checkbox"
+                    id="isPaid"
+                    checked={isPaid}
+                    onChange={(e) => {
+                      setIsPaid(e.target.checked)
+                      if (e.target.checked) {
+                        // Set default payment method to Cash when marking as paid
+                        setPaymentMethod("cash")
+                        // Set default amount received to total order amount
+                        setAmountReceived(currentOrderTotal.toFixed(2))
+                      } else {
+                        setPaymentMethod(null)
+                        setAmountReceived("")
+                        setCashAmount("")
+                        setGcashAmount("")
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 cursor-pointer"
+                  />
+                  <label htmlFor="isPaid" className="text-sm font-bold text-slate-700 cursor-pointer">
+                    Mark as Paid
+                  </label>
+                </div>
+
+                {isPaid && (
+                  <div className="space-y-4 bg-blue-50/50 p-4 rounded-lg border border-blue-200/60">
+                    {/* Amount Received */}
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Amount Received (₱)</label>
+                      <Input
+                        type="number"
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        className="w-full border-slate-200 focus:border-slate-400"
+                      />
+                    </div>
+
+                    {/* Change Display */}
+                    {amountReceived && (
+                      <div className="bg-white p-3 rounded-lg border border-emerald-200/60">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
+                          <span className="text-sm font-bold text-slate-900">₱{currentOrderTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-sm font-semibold text-slate-700">Amount Received:</span>
+                          <span className="text-sm font-bold text-slate-900">₱{parseFloat(amountReceived || "0").toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
+                          <span className="text-sm font-bold text-emerald-700">Change:</span>
+                          <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - currentOrderTotal) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            ₱{(parseFloat(amountReceived || "0") - currentOrderTotal).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Method Selection */}
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-3">Payment Method</label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setPaymentMethod("cash")
+                            setGcashAmount("")
+                          }}
+                          className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
+                            paymentMethod === "cash"
+                              ? "bg-emerald-600 border-emerald-700 text-white shadow-md"
+                              : "bg-white border-slate-300 text-slate-700 hover:border-emerald-400"
+                          }`}
+                        >
+                          💵 Cash
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPaymentMethod("gcash")
+                            setCashAmount("")
+                          }}
+                          className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
+                            paymentMethod === "gcash"
+                              ? "bg-blue-600 border-blue-700 text-white shadow-md"
+                              : "bg-white border-slate-300 text-slate-700 hover:border-blue-400"
+                          }`}
+                        >
+                          Ⓖ GCash
+                        </button>
+                        <button
+                          onClick={() => setPaymentMethod("split")}
+                          className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
+                            paymentMethod === "split"
+                              ? "bg-purple-600 border-purple-700 text-white shadow-md"
+                              : "bg-white border-slate-300 text-slate-700 hover:border-purple-400"
+                          }`}
+                        >
+                          🔀 Split
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Split Payment Form */}
+                    {paymentMethod === "split" && (
+                      <div className="space-y-3 bg-white p-3 rounded-lg border border-purple-200/60">
+                        <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Split Payment Details</p>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">Cash Amount (₱)</label>
+                          <Input
+                            type="number"
+                            value={cashAmount}
+                            onChange={(e) => {
+                              const cash = parseFloat(e.target.value || "0")
+                              setCashAmount(e.target.value)
+                              // Auto-calculate gcash based on total order amount
+                              if (e.target.value) {
+                                const gcash = Math.max(0, currentOrderTotal - cash)
+                                setGcashAmount(gcash > 0 ? gcash.toFixed(2) : "")
+                              }
+                            }}
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                            className="w-full text-sm border-slate-200 focus:border-slate-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">GCash Amount (₱)</label>
+                          <Input
+                            type="number"
+                            value={gcashAmount}
+                            onChange={(e) => {
+                              const gcash = parseFloat(e.target.value || "0")
+                              setGcashAmount(e.target.value)
+                              // Auto-calculate cash based on total order amount
+                              if (e.target.value) {
+                                const cash = Math.max(0, currentOrderTotal - gcash)
+                                setCashAmount(cash > 0 ? cash.toFixed(2) : "")
+                              }
+                            }}
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                            className="w-full text-sm border-slate-200 focus:border-slate-400"
+                          />
+                        </div>
+                        {cashAmount && gcashAmount && (
+                          <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-600">Total Split:</span>
+                              <span className={`font-bold ${Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) < 0.01 ? "text-emerald-600" : "text-amber-600"}`}>
+                                ₱{(parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")).toFixed(2)}
+                              </span>
+                            </div>
+                            {Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) >= 0.01 && (
+                              <p className="text-xs text-amber-600 font-semibold mt-1">
+                                ⚠️ Split total must equal order total (₱{currentOrderTotal.toFixed(2)})
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {isAppending && appendingOrder && (
               <div className="mb-5 pb-5 border-b border-slate-200/80">
                 <div className="flex items-center justify-between mb-3">
@@ -1809,6 +2100,105 @@ export function OrderTaker({
               )}
             </div>
           </Card>
+
+        {/* Confirmation Dialog */}
+        <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+          <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl">Confirm Order Submission</AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-slate-600">
+                Please review your order details before confirming.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            {pendingOrderData && (
+              <div className="space-y-4 py-4">
+                {/* Customer Info */}
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Customer</p>
+                  <p className="text-sm font-bold text-slate-900">{pendingOrderData.customerName}</p>
+                </div>
+
+                {/* Items Breakdown */}
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">Order Items</p>
+                  <div className="space-y-2">
+                    {pendingOrderData.items.map((item: OrderItem, idx: number) => (
+                      <div key={`${item.id}-${idx}`} className="flex justify-between items-start text-sm">
+                        <div className="flex-1">
+                          <p className="font-semibold text-slate-900">{item.name}</p>
+                          <p className="text-xs text-slate-600">x{item.quantity} @ ₱{item.price.toFixed(2)}</p>
+                        </div>
+                        <p className="font-bold text-slate-900">₱{(item.price * item.quantity).toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Payment Summary */}
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">Payment Summary</p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-700">Total Amount:</span>
+                      <span className="font-bold text-slate-900">₱{pendingOrderData.total.toFixed(2)}</span>
+                    </div>
+                    {pendingOrderData.isPaid && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-slate-700">Amount Received:</span>
+                          <span className="font-bold text-slate-900">₱{pendingOrderData.amountReceived.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t border-blue-200">
+                          <span className="font-semibold text-emerald-700">Change:</span>
+                          <span className={`font-bold text-lg ${pendingOrderData.change >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            ₱{pendingOrderData.change.toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Payment Method */}
+                {pendingOrderData.isPaid && (
+                  <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Payment Method</p>
+                    <div className="space-y-1 text-sm">
+                      {pendingOrderData.paymentMethod === "cash" && (
+                        <p className="font-bold text-slate-900">💵 Cash - ₱{pendingOrderData.amountReceived.toFixed(2)}</p>
+                      )}
+                      {pendingOrderData.paymentMethod === "gcash" && (
+                        <p className="font-bold text-slate-900">Ⓖ GCash - ₱{pendingOrderData.amountReceived.toFixed(2)}</p>
+                      )}
+                      {pendingOrderData.paymentMethod === "split" && (
+                        <>
+                          <p className="font-bold text-slate-900">🔀 Split Payment</p>
+                          <p className="text-xs text-slate-600 ml-2">💵 Cash: ₱{pendingOrderData.cashAmount.toFixed(2)}</p>
+                          <p className="text-xs text-slate-600 ml-2">Ⓖ GCash: ₱{pendingOrderData.gcashAmount.toFixed(2)}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <AlertDialogCancel className="border-slate-300 hover:border-slate-400 hover:bg-slate-50">
+              Edit Order
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowConfirmation(false)
+                handleSubmitOrder(pendingOrderData)
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Confirm & Submit
+            </AlertDialogAction>
+          </AlertDialogContent>
+        </AlertDialog>
+
         </div>
         </div>
 

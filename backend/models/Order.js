@@ -194,6 +194,11 @@ const orderSchema = new mongoose.Schema(
       required: false,
       min: [0, 'Paid amount cannot be negative']
     },
+    amountReceived: {
+      type: Number,
+      required: false,
+      min: [0, 'Amount received cannot be negative']
+    },
     orderType: {
       type: String,
       enum: ['dine-in', 'take-out'],

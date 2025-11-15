@@ -271,6 +271,60 @@ export function PastOrders() {
                     </Button>
                   </div>
                   {renderOrderItems(order.items, order.id)}
+                  
+                  {/* Payment Information */}
+                  {order.isPaid && (
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
+                      <div className="space-y-1 text-sm">
+                        {order.paymentMethod && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">Payment Method:</span>
+                            <span className="font-medium capitalize">
+                              {order.paymentMethod === 'split' ? 'Split Payment' : order.paymentMethod === 'gcash' ? 'GCash' : 'Cash'}
+                            </span>
+                          </div>
+                        )}
+                        {order.amountReceived !== undefined && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-gray-700">Amount Received:</span>
+                              <span className="font-medium">₱{order.amountReceived.toFixed(2)}</span>
+                            </div>
+                            {/* Calculate and display change */}
+                            {(() => {
+                              const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                              const change = order.amountReceived - orderTotal
+                              return (
+                                <div className="flex justify-between pt-1 border-t border-blue-200">
+                                  <span className="text-gray-700 font-semibold">Change:</span>
+                                  <span className={`font-semibold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    ₱{change.toFixed(2)}
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </>
+                        )}
+                        {order.paymentMethod === 'split' && (
+                          <>
+                            {order.cashAmount !== undefined && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-700">Cash:</span>
+                                <span className="font-medium">₱{order.cashAmount.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {order.gcashAmount !== undefined && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-700">GCash:</span>
+                                <span className="font-medium">₱{order.gcashAmount.toFixed(2)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Appended Orders */}
