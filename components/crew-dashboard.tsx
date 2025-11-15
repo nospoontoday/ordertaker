@@ -97,11 +97,13 @@ export function CrewDashboard({
   const [isLoading, setIsLoading] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
+  const [showCompletedOrders, setShowCompletedOrders] = useState(false)
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<"all" | "paid" | "unpaid" | "partial">("all")
   const [filterOrderType, setFilterOrderType] = useState<"all" | "dine-in" | "take-out">("all")
+  const [filterByStatus, setFilterByStatus] = useState<"all" | "active" | "pending" | "awaiting">("all")
 
   // Split payment dialog state
   const [splitPaymentDialog, setSplitPaymentDialog] = useState<{
@@ -1779,12 +1781,30 @@ export function CrewDashboard({
       const matchesOrderType = filterOrderType === "all" ||
         order.orderType === filterOrderType
 
-      return matchesSearch && matchesPayment && matchesOrderType
+      // Status filter (from metric cards)
+      let matchesStatus = true
+      if (filterByStatus === "active") {
+        matchesStatus = !isOrderFullyComplete(order) && !isOrderServedNotPaid(order)
+      } else if (filterByStatus === "pending") {
+        // Show orders with at least one pending item
+        const hasPendingItems = order.items.some(i => i.status === "pending") ||
+          (order.appendedOrders?.some(a => a.items.some(i => i.status === "pending")) ?? false)
+        matchesStatus = hasPendingItems
+      } else if (filterByStatus === "awaiting") {
+        // Show orders that are unpaid (served but not paid)
+        matchesStatus = isOrderServedNotPaid(order)
+      }
+
+      return matchesSearch && matchesPayment && matchesOrderType && matchesStatus
     })
   }
 
   const filteredActiveOrders = filterOrders(activeOrders)
   const filteredServedNotPaidOrders = filterOrders(servedNotPaidOrders)
+
+  const shouldShowActiveOrders = filterByStatus === "all" || filterByStatus === "active" || filterByStatus === "pending"
+  const shouldShowServedNotPaid = filterByStatus === "all" || filterByStatus === "awaiting"
+  const shouldShowCompleted = showCompletedOrders && filterByStatus === "all"
 
   const sortedActiveOrders = [...filteredActiveOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
   const sortedServedNotPaidOrders = [...filteredServedNotPaidOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
@@ -1845,54 +1865,63 @@ export function CrewDashboard({
         )}
 
         {/* Summary Metrics Dashboard */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Active Orders</p>
-                  <p className="text-2xl font-bold text-blue-600 mt-1">{activeOrders.length}</p>
-                </div>
-                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                </div>
-              </div>
-            </div>
-          </Card>
+         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+           <Card
+             onClick={() => setFilterByStatus(filterByStatus === "active" ? "all" : "active")}
+             className={`bg-gradient-to-br from-blue-50 to-white border-blue-200 cursor-pointer transition-all duration-200 ${filterByStatus === "active" ? "ring-2 ring-blue-500 shadow-lg" : "hover:shadow-md"}`}
+           >
+             <div className="px-4 py-3">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Active Orders</p>
+                   <p className="text-2xl font-bold text-blue-600 mt-1">{activeOrders.length}</p>
+                 </div>
+                 <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                   <Clock className="w-5 h-5 text-blue-600" />
+                 </div>
+               </div>
+             </div>
+           </Card>
 
-          <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Pending Items</p>
-                  <p className="text-2xl font-bold text-amber-600 mt-1">
-                    {orders.reduce((sum, o) =>
-                      sum + o.items.filter(i => i.status === 'pending').length +
-                      (o.appendedOrders?.reduce((aSum, a) =>
-                        aSum + a.items.filter(i => i.status === 'pending').length, 0) || 0), 0)}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                  <AlertCircle className="w-5 h-5 text-amber-600" />
-                </div>
-              </div>
-            </div>
-          </Card>
+           <Card
+             onClick={() => setFilterByStatus(filterByStatus === "pending" ? "all" : "pending")}
+             className={`bg-gradient-to-br from-amber-50 to-white border-amber-200 cursor-pointer transition-all duration-200 ${filterByStatus === "pending" ? "ring-2 ring-amber-500 shadow-lg" : "hover:shadow-md"}`}
+           >
+             <div className="px-4 py-3">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Pending Items</p>
+                   <p className="text-2xl font-bold text-amber-600 mt-1">
+                     {orders.reduce((sum, o) =>
+                       sum + o.items.filter(i => i.status === 'pending').length +
+                       (o.appendedOrders?.reduce((aSum, a) =>
+                         aSum + a.items.filter(i => i.status === 'pending').length, 0) || 0), 0)}
+                   </p>
+                 </div>
+                 <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                   <AlertCircle className="w-5 h-5 text-amber-600" />
+                 </div>
+               </div>
+             </div>
+           </Card>
 
-          <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Awaiting Payment</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{servedNotPaidOrders.length}</p>
-                </div>
-                <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-emerald-600" />
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
+           <Card
+             onClick={() => setFilterByStatus(filterByStatus === "awaiting" ? "all" : "awaiting")}
+             className={`bg-gradient-to-br from-emerald-50 to-white border-emerald-200 cursor-pointer transition-all duration-200 ${filterByStatus === "awaiting" ? "ring-2 ring-emerald-500 shadow-lg" : "hover:shadow-md"}`}
+           >
+             <div className="px-4 py-3">
+               <div className="flex items-center justify-between">
+                 <div>
+                   <p className="text-xs font-medium text-slate-600 uppercase tracking-wide">Awaiting Payment</p>
+                   <p className="text-2xl font-bold text-emerald-600 mt-1">{servedNotPaidOrders.length}</p>
+                 </div>
+                 <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                   <CreditCard className="w-5 h-5 text-emerald-600" />
+                 </div>
+               </div>
+             </div>
+           </Card>
+         </div>
 
         {/* Search and Filter Bar */}
         <div className="mb-6 space-y-3">
@@ -1985,7 +2014,7 @@ export function CrewDashboard({
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Active Orders */}
-          {sortedActiveOrders.length > 0 && (
+          {shouldShowActiveOrders && sortedActiveOrders.length > 0 && (
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center gap-3 mb-1">
                 <div className="h-2 w-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50" />
@@ -2005,11 +2034,11 @@ export function CrewDashboard({
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5 py-2">
                       {/* Desktop Layout: Multi-row for better spacing */}
-                      <div className="hidden sm:flex flex-col gap-3">
+                      <div className="hidden sm:flex flex-col gap-1.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -2029,8 +2058,8 @@ export function CrewDashboard({
                         </div>
 
                         {/* Row 2: Order Taker, Payment Status, and Action Buttons */}
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {getOrderTakerDisplay(order) && (
                               <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
                                 By: {getOrderTakerDisplay(order)}
@@ -2223,9 +2252,9 @@ export function CrewDashboard({
                       </div>
 
                       {/* Mobile Layout: Stacked */}
-                      <div className="sm:hidden space-y-3">
+                      <div className="sm:hidden space-y-2">
                         {/* Row 1: Order Number and Customer Name */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -2381,11 +2410,11 @@ export function CrewDashboard({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 px-4 sm:px-5 pb-4">
+                      <div className="mt-2 space-y-3 border-t border-slate-200 pt-3 px-4 sm:px-5 pb-3">
                         {/* Main Order Section - Hide section if all items are served AND user is crew only */}
                         {(isOrderTaker || order.items.some(item => item.status !== "served")) && (
-                          <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
+                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                               {order.isPaid ? (
                                 <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
@@ -2483,8 +2512,8 @@ export function CrewDashboard({
 
                         {/* Appended Orders Section */}
                         {totalAppendedOrders > 0 && (
-                          <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
+                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
                                 Appended Orders ({totalAppendedOrders})
                               </p>
@@ -2529,15 +2558,15 @@ export function CrewDashboard({
                                 }
                               })()}
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                             {order.appendedOrders!.map((appended, index) => (
                               // Hide appended order if all items are served AND user is crew only
                               (isOrderTaker || appended.items.some(item => item.status !== "served")) && (
                                 <div
                                   key={appended.id}
-                                  className="rounded-xl p-5 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                  className="rounded-xl p-3 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
                                 >
-                                  <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center justify-between mb-3">
                                     <div>
                                       <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
                                       <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
@@ -2640,8 +2669,8 @@ export function CrewDashboard({
                         )}
 
                         {/* Notes Section */}
-                         <div className="pt-4 border-t border-slate-200">
-                           <div className="flex items-center gap-2 mb-4 ml-1">
+                         <div className="pt-2 border-t border-slate-200">
+                            <div className="flex items-center gap-2 mb-3 ml-1">
                              <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
                                <MessageSquare className="w-4 h-4 text-blue-600" />
                              </div>
@@ -2717,7 +2746,7 @@ export function CrewDashboard({
 
                         {/* Action Buttons */}
                         {canAppendItems && (
-                          <div className="pt-4 px-2 flex gap-2 flex-wrap">
+                          <div className="pt-2 px-2 flex gap-2 flex-wrap">
                             <Button
                               onClick={() => onAppendItems(order.id)}
                               className="flex-1 min-w-32 font-bold bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white shadow-sm hover:shadow-md"
@@ -2747,7 +2776,7 @@ export function CrewDashboard({
         )}
 
         {/* Served (Not Paid) */}
-        {sortedServedNotPaidOrders.length > 0 && (
+        {shouldShowServedNotPaid && sortedServedNotPaidOrders.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 mb-1">
               <div className="h-2 w-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50" />
@@ -2766,11 +2795,11 @@ export function CrewDashboard({
                     key={order.id}
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
-                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-2">
                       {/* Desktop Layout: Multi-row for better spacing */}
-                      <div className="hidden sm:flex flex-col gap-3">
+                      <div className="hidden sm:flex flex-col gap-1.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -2790,8 +2819,8 @@ export function CrewDashboard({
                         </div>
 
                         {/* Row 2: Order Taker, Payment Status, and Action Buttons */}
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {getOrderTakerDisplay(order) && (
                               <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
                                 By: {getOrderTakerDisplay(order)}
@@ -2920,9 +2949,9 @@ export function CrewDashboard({
                       </div>
 
                       {/* Mobile Layout: Stacked */}
-                      <div className="sm:hidden space-y-3">
+                      <div className="sm:hidden space-y-2">
                         {/* Row 1: Order Number and Customer Name */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -3070,10 +3099,10 @@ export function CrewDashboard({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 px-4 sm:px-5 pb-4">
+                      <div className="mt-2 space-y-3 border-t border-slate-200 pt-3 px-4 sm:px-5 pb-3">
                         {/* Main Order Section */}
-                        <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
-                          <div className="flex items-center justify-between mb-4">
+                        <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
                             <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                             {order.isPaid ? (
                               <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
@@ -3142,8 +3171,8 @@ export function CrewDashboard({
 
                         {/* Appended Orders Section */}
                         {totalAppendedOrders > 0 && (
-                          <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
+                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
                                 Appended Orders ({totalAppendedOrders})
                               </p>
@@ -3188,13 +3217,13 @@ export function CrewDashboard({
                                 }
                               })()}
                             </div>
-                            <div className="space-y-4">
-                              {order.appendedOrders!.map((appended, index) => (
-                                <div
-                                  key={appended.id}
-                                  className="rounded-xl p-5 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
-                                >
-                                  <div className="flex items-center justify-between mb-4">
+                            <div className="space-y-3">
+                               {order.appendedOrders!.map((appended, index) => (
+                                 <div
+                                   key={appended.id}
+                                   className="rounded-xl p-3 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                 >
+                                   <div className="flex items-center justify-between mb-3">
                                     <div>
                                       <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
                                       <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
@@ -3256,8 +3285,8 @@ export function CrewDashboard({
                         )}
 
                         {/* Notes Section */}
-                         <div className="pt-4 border-t border-slate-200">
-                           <div className="flex items-center gap-2 mb-4 ml-1">
+                         <div className="pt-2 border-t border-slate-200">
+                            <div className="flex items-center gap-2 mb-3 ml-1">
                              <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
                                <MessageSquare className="w-4 h-4 text-blue-600" />
                              </div>
@@ -3333,7 +3362,7 @@ export function CrewDashboard({
 
                         {/* Action Buttons */}
                         {canAppendItems && (
-                          <div className="pt-4 px-2 flex gap-2 flex-wrap">
+                          <div className="pt-2 px-2 flex gap-2 flex-wrap">
                             <Button
                               onClick={() => onAppendItems(order.id)}
                               className="flex-1 min-w-32 font-bold bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white shadow-sm hover:shadow-md"
@@ -3352,8 +3381,21 @@ export function CrewDashboard({
           </div>
         )}
 
-        {/* Completed Orders */}
+        {/* Completed Orders Toggle */}
         {sortedCompletedOrders.length > 0 && (
+          <div className="flex items-center gap-3 mb-4">
+            <Button
+              onClick={() => setShowCompletedOrders(!showCompletedOrders)}
+              variant={showCompletedOrders ? "default" : "outline"}
+              className={`text-xs font-semibold ${showCompletedOrders ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}
+            >
+              {showCompletedOrders ? "Hide" : "Show"} Completed Orders ({sortedCompletedOrders.length})
+            </Button>
+          </div>
+        )}
+
+        {/* Completed Orders */}
+        {shouldShowCompleted && sortedCompletedOrders.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 mb-1">
               <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
@@ -3372,11 +3414,11 @@ export function CrewDashboard({
                     key={order.id}
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
-                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-4 sm:px-5 py-4">
+                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-4 sm:px-5 py-2">
                       {/* Desktop Layout: Multi-row for better spacing */}
-                      <div className="hidden sm:flex flex-col gap-3">
+                      <div className="hidden sm:flex flex-col gap-1.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -3402,8 +3444,8 @@ export function CrewDashboard({
                         </div>
 
                         {/* Row 2: Order Taker, Payment Status, and Chevron */}
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {getOrderTakerDisplay(order) && (
                               <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
                                 By: {getOrderTakerDisplay(order)}
@@ -3439,9 +3481,9 @@ export function CrewDashboard({
                       </div>
 
                       {/* Mobile Layout: Stacked */}
-                      <div className="sm:hidden space-y-3">
+                      <div className="sm:hidden space-y-2">
                         {/* Row 1: Order Number and Customer Name */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -3507,10 +3549,10 @@ export function CrewDashboard({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 px-4 sm:px-5 pb-4">
+                      <div className="mt-2 space-y-3 border-t border-slate-200 pt-3 px-4 sm:px-5 pb-3">
                         {/* Main Order Section */}
-                        <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
-                          <div className="flex items-center justify-between mb-4">
+                        <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
                             <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                             <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
                               <CreditCard className="w-3.5 h-3.5" />
@@ -3572,8 +3614,8 @@ export function CrewDashboard({
 
                         {/* Appended Orders Section */}
                         {totalAppendedOrders > 0 && (
-                          <div className="bg-slate-50/80 p-5 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
+                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
                                 Appended Orders ({totalAppendedOrders})
                               </p>
@@ -3593,13 +3635,13 @@ export function CrewDashboard({
                                 )
                               })()}
                             </div>
-                            <div className="space-y-4">
-                              {order.appendedOrders!.map((appended, index) => (
-                                <div
-                                  key={appended.id}
-                                  className="rounded-xl p-5 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
-                                >
-                                  <div className="flex items-center justify-between mb-4">
+                            <div className="space-y-3">
+                               {order.appendedOrders!.map((appended, index) => (
+                                 <div
+                                   key={appended.id}
+                                   className="rounded-xl p-3 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                 >
+                                   <div className="flex items-center justify-between mb-3">
                                     <div>
                                       <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
                                       <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
@@ -3661,8 +3703,8 @@ export function CrewDashboard({
                         )}
 
                         {/* Notes Section */}
-                        <div className="pt-4 border-t border-slate-200">
-                          <div className="flex items-center gap-2 mb-4 ml-1">
+                         <div className="pt-2 border-t border-slate-200">
+                            <div className="flex items-center gap-2 mb-3 ml-1">
                             <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
                               <MessageSquare className="w-4 h-4 text-blue-600" />
                             </div>
@@ -3708,7 +3750,7 @@ export function CrewDashboard({
 
                         {/* Action Buttons */}
                         {canAppendItems && (
-                          <div className="pt-4 px-2 flex gap-2 flex-wrap">
+                          <div className="pt-2 px-2 flex gap-2 flex-wrap">
                             <Button
                               onClick={() => onAppendItems(order.id)}
                               className="flex-1 min-w-32 font-bold bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white shadow-sm hover:shadow-md"
