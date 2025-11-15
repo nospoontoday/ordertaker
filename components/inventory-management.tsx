@@ -20,7 +20,8 @@ import {
   Search,
   Filter,
   ImagePlus,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RefreshCw
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow } from "date-fns"
@@ -118,6 +119,7 @@ export function InventoryManagement() {
 
   // Pending quantity changes (for visual feedback before save)
   const [pendingChanges, setPendingChanges] = useState<Record<string, number>>({})
+  const [savingItems, setSavingItems] = useState<Record<string, boolean>>({})
 
   // New item form state
   const [newItem, setNewItem] = useState({
@@ -175,6 +177,25 @@ export function InventoryManagement() {
 
     setFilteredItems(filtered)
   }, [items, searchQuery, selectedCategory, stockFilter])
+
+  // Auto-save with debounce when pending changes exist
+  useEffect(() => {
+    const timeouts: Record<string, NodeJS.Timeout> = {}
+
+    Object.entries(pendingChanges).forEach(([itemId, delta]) => {
+      if (delta !== 0) {
+        // Set a timeout for each item with pending changes
+        timeouts[itemId] = setTimeout(() => {
+          performQuantityUpdate(itemId, delta)
+        }, 1500) // 1.5 second delay to batch rapid clicks
+      }
+    })
+
+    // Cleanup function to clear timeouts if component unmounts or pendingChanges change
+    return () => {
+      Object.values(timeouts).forEach(timeout => clearTimeout(timeout))
+    }
+  }, [pendingChanges])
 
   const loadItems = async () => {
     try {
@@ -368,33 +389,6 @@ export function InventoryManagement() {
     })
   }
 
-  // Save pending changes (with last touch check)
-  const handleSavePendingChange = async (id: string) => {
-    const delta = pendingChanges[id]
-    if (delta === undefined || delta === 0) return
-
-    const item = items.find(i => i._id === id)
-    if (!item) return
-
-    // Check if different user last updated this item
-    if (item.lastUpdatedByEmail && item.lastUpdatedBy && item.lastUpdatedAt &&
-        user?.email !== item.lastUpdatedByEmail) {
-      // Show confirmation modal
-      setConfirmationItem({
-        itemId: id,
-        itemName: item.name,
-        delta,
-        lastUpdatedBy: item.lastUpdatedBy,
-        lastUpdatedByEmail: item.lastUpdatedByEmail,
-        lastUpdatedAt: item.lastUpdatedAt
-      })
-      return
-    }
-
-    // Same user or no last touch info - proceed with update
-    await performQuantityUpdate(id, delta)
-  }
-
   // Perform the actual quantity update
   const performQuantityUpdate = async (id: string, delta: number) => {
     try {
@@ -407,8 +401,12 @@ export function InventoryManagement() {
           description: "You must be logged in to update inventory.",
           variant: "destructive",
         })
+        handleCancelPendingChange(id)
         return
       }
+
+      // Set saving state
+      setSavingItems(prev => ({ ...prev, [id]: true }))
 
       const response = await fetch(`${API_URL}/inventory/${id}/quantity`, {
         method: 'PATCH',
@@ -429,17 +427,30 @@ export function InventoryManagement() {
       const result = await response.json()
       const newQuantity = result.data.quantity
 
-      // Clear pending change
+      // Clear pending change and saving state
       handleCancelPendingChange(id)
+      setSavingItems(prev => {
+        const newState = { ...prev }
+        delete newState[id]
+        return newState
+      })
 
       await loadItems()
 
       toast({
-        title: "Updated",
+        title: "Saved",
         description: `Quantity updated to ${newQuantity} ${item.unit}`,
       })
     } catch (error) {
       console.error("Failed to update quantity:", error)
+
+      // Clear saving state on error
+      setSavingItems(prev => {
+        const newState = { ...prev }
+        delete newState[id]
+        return newState
+      })
+
       toast({
         title: "Error",
         description: "Failed to update quantity.",
@@ -641,13 +652,14 @@ export function InventoryManagement() {
               </h1>
               <p className="text-sm text-slate-500 font-medium">Track and manage your inventory items</p>
             </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold shadow-sm hover:shadow-md transition-all">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Item
-                </Button>
-              </DialogTrigger>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold shadow-sm hover:shadow-md transition-all">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Item
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                   <DialogTitle>Add New Inventory Item</DialogTitle>
@@ -775,6 +787,15 @@ export function InventoryManagement() {
                 </div>
               </DialogContent>
             </Dialog>
+            <Button
+              onClick={loadItems}
+              variant="outline"
+              className="border-slate-300 hover:bg-slate-50 font-bold shadow-sm hover:shadow-md transition-all"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
           </div>
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>
@@ -1104,36 +1125,15 @@ export function InventoryManagement() {
                         </div>
                       )}
 
-                      {/* Action Buttons - Compact Layout */}
-                      {pendingChanges[item._id] !== undefined ? (
-                        // Show Save/Cancel when there are pending changes
-                        <div className="flex items-center gap-2 mb-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleSavePendingChange(item._id)}
-                            className="flex-1 h-9 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-2"
-                          >
-                            <Save className="w-3 h-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Save</span>
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleCancelPendingChange(item._id)}
-                            className="flex-1 h-9 border-slate-300 hover:bg-slate-50 font-semibold text-xs px-2"
-                          >
-                            <X className="w-3 h-3 sm:mr-1" />
-                            <span className="hidden sm:inline">Cancel</span>
-                          </Button>
-                        </div>
-                      ) : (
-                        // Show +/- buttons when no pending changes
-                        <div className="flex items-center gap-2 mb-2">
+                      {/* Action Buttons - Always show +/- buttons */}
+                      <div className="space-y-2 mb-2">
+                        <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleUpdateQuantity(item._id, -1)}
-                            className="flex-1 h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs px-2"
+                            disabled={savingItems[item._id]}
+                            className="flex-1 h-9 border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs px-2 disabled:opacity-50"
                             aria-label="Remove one unit"
                           >
                             <Minus className="w-3 h-3 sm:mr-1" />
@@ -1143,7 +1143,8 @@ export function InventoryManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleUpdateQuantity(item._id, 1)}
-                            className="flex-1 h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold text-xs px-2"
+                            disabled={savingItems[item._id]}
+                            className="flex-1 h-9 border-emerald-200 hover:bg-emerald-50 text-emerald-600 font-semibold text-xs px-2 disabled:opacity-50"
                             aria-label="Add one unit"
                           >
                             <Plus className="w-3 h-3 sm:mr-1" />
@@ -1153,13 +1154,19 @@ export function InventoryManagement() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleStartEdit(item)}
-                            className="h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
+                            disabled={savingItems[item._id]}
+                            className="h-9 w-9 p-0 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0 disabled:opacity-50"
                             aria-label="Edit item"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </Button>
                         </div>
-                      )}
+                        {savingItems[item._id] && (
+                          <div className="text-xs text-blue-600 font-medium text-center animate-pulse">
+                            Saving...
+                          </div>
+                        )}
+                      </div>
 
                       {/* Footer - Compact */}
                       <div className="pt-2 border-t border-slate-200 space-y-1">
@@ -1178,10 +1185,10 @@ export function InventoryManagement() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
-                        {item.lastUpdatedBy && item.lastUpdatedAt && (
+                        {(item.lastUpdatedBy || item.lastUpdatedByEmail) && item.lastUpdatedAt && (
                           <div className="text-[10px] text-slate-500">
                             <span className="font-medium">Last updated by:</span>{" "}
-                            {item.lastUpdatedBy} ({item.lastUpdatedByEmail}){" "}
+                            {item.lastUpdatedBy || item.lastUpdatedByEmail}{" "}
                             <span className="hidden sm:inline">
                               • {formatDistanceToNow(new Date(item.lastUpdatedAt), { addSuffix: true })}
                             </span>
@@ -1224,8 +1231,8 @@ export function InventoryManagement() {
               <AlertDialogTitle>Confirm Update</AlertDialogTitle>
               <AlertDialogDescription className="space-y-2">
                 <p>
-                  <span className="font-semibold">{confirmationItem?.lastUpdatedBy}</span>{" "}
-                  ({confirmationItem?.lastUpdatedByEmail}) last updated{" "}
+                  <span className="font-semibold">{confirmationItem?.lastUpdatedBy || confirmationItem?.lastUpdatedByEmail}</span>{" "}
+                  last updated{" "}
                   <span className="font-semibold">{confirmationItem?.itemName}</span>{" "}
                   {confirmationItem?.lastUpdatedAt && formatDistanceToNow(new Date(confirmationItem.lastUpdatedAt), { addSuffix: true })}.
                 </p>

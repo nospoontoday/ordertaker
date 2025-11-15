@@ -311,7 +311,7 @@ router.patch('/:id', async (req, res) => {
  */
 router.patch('/:id/quantity', async (req, res) => {
   try {
-    const { delta, newQuantity } = req.body;
+    const { delta, newQuantity, lastUpdatedBy, lastUpdatedByEmail } = req.body;
 
     let item = await Inventory.findById(req.params.id);
 
@@ -332,6 +332,14 @@ router.patch('/:id/quantity', async (req, res) => {
         success: false,
         error: 'Please provide either delta or newQuantity'
       });
+    }
+
+    // Update last updated by fields
+    if (lastUpdatedBy !== undefined) {
+      item.lastUpdatedBy = lastUpdatedBy;
+    }
+    if (lastUpdatedByEmail !== undefined) {
+      item.lastUpdatedByEmail = lastUpdatedByEmail;
     }
 
     await item.save();

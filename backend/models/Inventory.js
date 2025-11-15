@@ -55,6 +55,14 @@ const inventorySchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    lastUpdatedBy: {
+      type: String,
+      trim: true
+    },
+    lastUpdatedByEmail: {
+      type: String,
+      trim: true
     }
   },
   {
