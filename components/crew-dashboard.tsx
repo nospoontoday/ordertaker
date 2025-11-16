@@ -1824,19 +1824,29 @@ export function CrewDashboard({
 
   // Calculate pending items summary grouped by item name and type
   const getPendingItemsSummary = () => {
-    const pendingMap = new Map<string, { quantity: number; orders: Array<{ orderNumber: number; customerName: string }> }>()
+    const pendingMap = new Map<string, { quantity: number; orderDetails: Array<{ orderNumber: number; customerName: string; notes: string[] }> }>()
     
     orders.forEach(order => {
       // Main order items
       order.items.forEach(item => {
         if (item.status === "pending") {
           const key = `${item.name}|${item.itemType || "dine-in"}`
-          const existing = pendingMap.get(key) || { quantity: 0, orders: [] }
+          const existing = pendingMap.get(key) || { quantity: 0, orderDetails: [] }
           existing.quantity += item.quantity
           if (order.orderNumber) {
-            // Check if this order is already in the list
-            if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
-              existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+            // Find or create order detail entry
+            let orderDetail = existing.orderDetails.find(o => o.orderNumber === order.orderNumber)
+            if (!orderDetail) {
+              orderDetail = {
+                orderNumber: order.orderNumber,
+                customerName: order.customerName,
+                notes: []
+              }
+              existing.orderDetails.push(orderDetail)
+            }
+            // Add note if it exists
+            if (item.note && !orderDetail.notes.includes(item.note)) {
+              orderDetail.notes.push(item.note)
             }
           }
           pendingMap.set(key, existing)
@@ -1848,12 +1858,22 @@ export function CrewDashboard({
         appended.items.forEach(item => {
           if (item.status === "pending") {
             const key = `${item.name}|${item.itemType || "dine-in"}`
-            const existing = pendingMap.get(key) || { quantity: 0, orders: [] }
+            const existing = pendingMap.get(key) || { quantity: 0, orderDetails: [] }
             existing.quantity += item.quantity
             if (order.orderNumber) {
-              // Check if this order is already in the list
-              if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
-                existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+              // Find or create order detail entry
+              let orderDetail = existing.orderDetails.find(o => o.orderNumber === order.orderNumber)
+              if (!orderDetail) {
+                orderDetail = {
+                  orderNumber: order.orderNumber,
+                  customerName: order.customerName,
+                  notes: []
+                }
+                existing.orderDetails.push(orderDetail)
+              }
+              // Add note if it exists
+              if (item.note && !orderDetail.notes.includes(item.note)) {
+                orderDetail.notes.push(item.note)
               }
             }
             pendingMap.set(key, existing)
@@ -1868,7 +1888,7 @@ export function CrewDashboard({
         name,
         itemType: itemType as "dine-in" | "take-out",
         quantity: data.quantity,
-        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber)
+        orderDetails: data.orderDetails.sort((a, b) => a.orderNumber - b.orderNumber)
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
   }
@@ -2067,39 +2087,50 @@ export function CrewDashboard({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {pendingItemsSummary.map((item, index) => (
-                <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
-                  <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
-                  <div className="flex items-center justify-between gap-2 mt-1 mb-2">
-                    <Badge
-                      className={`text-xs font-bold px-1.5 py-0.5 ${
-                        item.itemType === "dine-in"
-                          ? "bg-blue-600 hover:bg-blue-700 text-white"
-                          : "bg-orange-600 hover:bg-orange-700 text-white"
-                      }`}
-                    >
-                      {item.itemType === "dine-in" ? "🍽️" : "🥡"}
-                    </Badge>
-                    <span className="text-sm font-bold text-amber-700">×{item.quantity}</span>
-                  </div>
-                  <div className="text-xs text-slate-600 font-medium space-y-1 flex-1">
-                    {item.orders.map((order, idx) => (
-                      <div key={idx} className="text-xs">
-                        <span className="font-bold text-slate-900">#{order.orderNumber}</span>
-                        <span className="text-slate-500"> - {order.customerName}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {isCrew && (
-                    <Button
-                      onClick={() => startPreparingItemType(item.name, item.itemType)}
-                      size="sm"
-                      className="mt-2.5 w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all"
-                    >
-                      Start Preparing
-                    </Button>
-                  )}
-                </div>
-              ))}
+               <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
+                 <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
+                 <div className="flex items-center justify-between gap-2 mt-1 mb-2">
+                   <Badge
+                     className={`text-xs font-bold px-1.5 py-0.5 ${
+                       item.itemType === "dine-in"
+                         ? "bg-blue-600 hover:bg-blue-700 text-white"
+                         : "bg-orange-600 hover:bg-orange-700 text-white"
+                     }`}
+                   >
+                     {item.itemType === "dine-in" ? "🍽️" : "🥡"}
+                   </Badge>
+                   <span className="text-sm font-bold text-amber-700">×{item.quantity}</span>
+                 </div>
+                 <div className="text-xs text-slate-600 font-medium space-y-1.5 flex-1">
+                   {item.orderDetails.map((order, idx) => (
+                     <div key={idx} className="text-xs">
+                       <div className="font-bold text-slate-900">
+                         <span>#{order.orderNumber}</span>
+                         <span className="text-slate-500 font-medium"> - {order.customerName}</span>
+                       </div>
+                       {order.notes.length > 0 && (
+                         <div className="mt-1 ml-2 pl-2 border-l-2 border-amber-300 space-y-0.5">
+                           {order.notes.map((note, noteIdx) => (
+                             <div key={noteIdx} className="text-xs text-amber-700 italic">
+                               📝 Note: {note}
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                     </div>
+                   ))}
+                 </div>
+                 {isCrew && (
+                   <Button
+                     onClick={() => startPreparingItemType(item.name, item.itemType)}
+                     size="sm"
+                     className="mt-2.5 w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all"
+                   >
+                     Start Preparing
+                   </Button>
+                 )}
+               </div>
+             ))}
             </div>
           </div>
         )}

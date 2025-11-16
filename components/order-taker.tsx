@@ -2134,6 +2134,11 @@ export function OrderTaker({
                         <div className="flex-1">
                           <p className="font-semibold text-slate-900">{item.name}</p>
                           <p className="text-xs text-slate-600">x{item.quantity} @ ₱{item.price.toFixed(2)}</p>
+                          {item.note && (
+                            <p className="text-xs text-amber-700 font-medium mt-1 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                              📝 {item.note}
+                            </p>
+                          )}
                         </div>
                         <p className="font-bold text-slate-900">₱{(item.price * item.quantity).toFixed(2)}</p>
                       </div>
