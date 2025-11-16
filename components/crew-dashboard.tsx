@@ -205,7 +205,7 @@ export function CrewDashboard({
   // Order Taker + Crew: Can do both (status updates + payments/deletes/appends/mark served)
   // Super Admin: Has all permissions
   const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew"
-  const isCrew = user?.role === "crew" || user?.role === "order_taker_crew"
+  const isCrew = user?.role === "crew" || user?.role === "order_taker_crew" || user?.role === "super_admin"
   const canManagePayments = isOrderTaker
   const canDeleteOrders = isOrderTaker
   const canAppendItems = isOrderTaker
@@ -1824,14 +1824,22 @@ export function CrewDashboard({
 
   // Calculate pending items summary grouped by item name and type
   const getPendingItemsSummary = () => {
-    const pendingMap = new Map<string, number>()
+    const pendingMap = new Map<string, { quantity: number; orders: Array<{ orderNumber: number; customerName: string }> }>()
     
     orders.forEach(order => {
       // Main order items
       order.items.forEach(item => {
         if (item.status === "pending") {
           const key = `${item.name}|${item.itemType || "dine-in"}`
-          pendingMap.set(key, (pendingMap.get(key) || 0) + item.quantity)
+          const existing = pendingMap.get(key) || { quantity: 0, orders: [] }
+          existing.quantity += item.quantity
+          if (order.orderNumber) {
+            // Check if this order is already in the list
+            if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
+              existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+            }
+          }
+          pendingMap.set(key, existing)
         }
       })
       
@@ -1840,19 +1848,179 @@ export function CrewDashboard({
         appended.items.forEach(item => {
           if (item.status === "pending") {
             const key = `${item.name}|${item.itemType || "dine-in"}`
-            pendingMap.set(key, (pendingMap.get(key) || 0) + item.quantity)
+            const existing = pendingMap.get(key) || { quantity: 0, orders: [] }
+            existing.quantity += item.quantity
+            if (order.orderNumber) {
+              // Check if this order is already in the list
+              if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
+                existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+              }
+            }
+            pendingMap.set(key, existing)
           }
         })
       })
     })
     
-    return Array.from(pendingMap.entries()).map(([key, quantity]) => {
+    return Array.from(pendingMap.entries()).map(([key, data]) => {
       const [name, itemType] = key.split("|")
-      return { name, itemType: itemType as "dine-in" | "take-out", quantity }
+      return {
+        name,
+        itemType: itemType as "dine-in" | "take-out",
+        quantity: data.quantity,
+        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber)
+      }
     }).sort((a, b) => a.name.localeCompare(b.name))
   }
 
+  // Start preparing items of a specific type
+  const startPreparingItemType = async (itemName: string, itemType: "dine-in" | "take-out") => {
+    try {
+      // Collect all pending items matching this name and type
+      const itemsToUpdate: Array<{ orderId: string; itemId: string; appendedOrderId?: string }> = []
+      
+      orders.forEach(order => {
+        // Main order items
+        order.items.forEach(item => {
+          if (item.status === "pending" && item.name === itemName && item.itemType === itemType) {
+            itemsToUpdate.push({ orderId: order.id, itemId: item.id })
+          }
+        })
+        
+        // Appended order items
+        order.appendedOrders?.forEach(appended => {
+          appended.items.forEach(item => {
+            if (item.status === "pending" && item.name === itemName && item.itemType === itemType) {
+              itemsToUpdate.push({ orderId: order.id, itemId: item.id, appendedOrderId: appended.id })
+            }
+          })
+        })
+      })
+      
+      // Update all matching items to "preparing" status
+      for (const item of itemsToUpdate) {
+        if (item.appendedOrderId) {
+          await updateAppendedItemStatus(item.orderId, item.appendedOrderId, item.itemId, "preparing")
+        } else {
+          await updateItemStatus(item.orderId, item.itemId, "preparing")
+        }
+      }
+      
+      toast({
+        title: "Preparing Started",
+        description: `Started preparing ${itemsToUpdate.length} ${itemName}${itemsToUpdate.length !== 1 ? 's' : ''}.`,
+      })
+    } catch (error) {
+      console.error("Error starting preparation:", error)
+      toast({
+        title: "Error",
+        description: "Failed to start preparing items.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const pendingItemsSummary = getPendingItemsSummary()
+
+  // Calculate preparing items summary grouped by item name and type
+  const getPreparingItemsSummary = () => {
+    const preparingMap = new Map<string, { quantity: number; orders: Array<{ orderNumber: number; customerName: string }> }>()
+    
+    orders.forEach(order => {
+      // Main order items
+      order.items.forEach(item => {
+        if (item.status === "preparing") {
+          const key = `${item.name}|${item.itemType || "dine-in"}`
+          const existing = preparingMap.get(key) || { quantity: 0, orders: [] }
+          existing.quantity += item.quantity
+          if (order.orderNumber) {
+            // Check if this order is already in the list
+            if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
+              existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+            }
+          }
+          preparingMap.set(key, existing)
+        }
+      })
+      
+      // Appended order items
+      order.appendedOrders?.forEach(appended => {
+        appended.items.forEach(item => {
+          if (item.status === "preparing") {
+            const key = `${item.name}|${item.itemType || "dine-in"}`
+            const existing = preparingMap.get(key) || { quantity: 0, orders: [] }
+            existing.quantity += item.quantity
+            if (order.orderNumber) {
+              // Check if this order is already in the list
+              if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
+                existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+              }
+            }
+            preparingMap.set(key, existing)
+          }
+        })
+      })
+    })
+    
+    return Array.from(preparingMap.entries()).map(([key, data]) => {
+      const [name, itemType] = key.split("|")
+      return {
+        name,
+        itemType: itemType as "dine-in" | "take-out",
+        quantity: data.quantity,
+        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber)
+      }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  // Mark ready items of a specific type
+  const markReadyItemType = async (itemName: string, itemType: "dine-in" | "take-out") => {
+    try {
+      // Collect all preparing items matching this name and type
+      const itemsToUpdate: Array<{ orderId: string; itemId: string; appendedOrderId?: string }> = []
+      
+      orders.forEach(order => {
+        // Main order items
+        order.items.forEach(item => {
+          if (item.status === "preparing" && item.name === itemName && item.itemType === itemType) {
+            itemsToUpdate.push({ orderId: order.id, itemId: item.id })
+          }
+        })
+        
+        // Appended order items
+        order.appendedOrders?.forEach(appended => {
+          appended.items.forEach(item => {
+            if (item.status === "preparing" && item.name === itemName && item.itemType === itemType) {
+              itemsToUpdate.push({ orderId: order.id, itemId: item.id, appendedOrderId: appended.id })
+            }
+          })
+        })
+      })
+      
+      // Update all matching items to "ready" status
+      for (const item of itemsToUpdate) {
+        if (item.appendedOrderId) {
+          await updateAppendedItemStatus(item.orderId, item.appendedOrderId, item.itemId, "ready")
+        } else {
+          await updateItemStatus(item.orderId, item.itemId, "ready")
+        }
+      }
+      
+      toast({
+        title: "Ready to Serve",
+        description: `Marked ${itemsToUpdate.length} ${itemName}${itemsToUpdate.length !== 1 ? 's' : ''} as ready.`,
+      })
+    } catch (error) {
+      console.error("Error marking items as ready:", error)
+      toast({
+        title: "Error",
+        description: "Failed to mark items as ready.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const preparingItemsSummary = getPreparingItemsSummary()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
@@ -1897,11 +2065,11 @@ export function CrewDashboard({
               <AlertCircle className="w-5 h-5 text-amber-600" />
               <h3 className="font-bold text-sm uppercase tracking-wide text-amber-900">Pending Items Summary</h3>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {pendingItemsSummary.map((item, index) => (
-                <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm">
+                <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
                   <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
-                  <div className="flex items-center justify-between gap-2 mt-1">
+                  <div className="flex items-center justify-between gap-2 mt-1 mb-2">
                     <Badge
                       className={`text-xs font-bold px-1.5 py-0.5 ${
                         item.itemType === "dine-in"
@@ -1913,11 +2081,87 @@ export function CrewDashboard({
                     </Badge>
                     <span className="text-sm font-bold text-amber-700">×{item.quantity}</span>
                   </div>
+                  <div className="text-xs text-slate-600 font-medium space-y-1 flex-1">
+                    {item.orders.map((order, idx) => (
+                      <div key={idx} className="text-xs">
+                        <span className="font-bold text-slate-900">#{order.orderNumber}</span>
+                        <span className="text-slate-500"> - {order.customerName}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {isCrew && (
+                    <Button
+                      onClick={() => startPreparingItemType(item.name, item.itemType)}
+                      size="sm"
+                      className="mt-2.5 w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all"
+                    >
+                      Start Preparing
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {/* Preparing Items Summary */}
+        {preparingItemsSummary.length > 0 && (
+          <div className="mb-6 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="w-5 h-5 text-orange-600 animate-pulse" />
+              <h3 className="font-bold text-sm uppercase tracking-wide text-orange-900">Preparing Items Summary</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {preparingItemsSummary.map((item, index) => (
+                <div key={index} className="bg-white rounded-lg p-2.5 border border-orange-100 shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group">
+                  {/* Animated background pulse */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-100/0 via-orange-100/20 to-orange-100/0 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-xs font-semibold text-slate-900 truncate flex-1">{item.name}</p>
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1 mb-2">
+                      <Badge
+                        className={`text-xs font-bold px-1.5 py-0.5 ${
+                          item.itemType === "dine-in"
+                            ? "bg-blue-600 hover:bg-blue-700 text-white"
+                            : "bg-orange-600 hover:bg-orange-700 text-white"
+                        }`}
+                      >
+                        {item.itemType === "dine-in" ? "🍽️" : "🥡"}
+                      </Badge>
+                      <span className="text-sm font-bold text-orange-700">×{item.quantity}</span>
+                    </div>
+                    <div className="text-xs text-slate-600 font-medium space-y-1 flex-1 mb-2">
+                      {item.orders.map((order, idx) => (
+                        <div key={idx} className="text-xs">
+                          <span className="font-bold text-slate-900">#{order.orderNumber}</span>
+                          <span className="text-slate-500"> - {order.customerName}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {isCrew && (
+                      <Button
+                        onClick={() => markReadyItemType(item.name, item.itemType)}
+                        size="sm"
+                        className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all relative group/btn overflow-hidden"
+                      >
+                        <span className="relative z-10 flex items-center justify-center gap-1.5">
+                          <Clock className="w-3 h-3 animate-spin" />
+                          Mark Ready
+                        </span>
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
 
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-24">
@@ -2096,31 +2340,31 @@ export function CrewDashboard({
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5 py-1">
+                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-2 sm:px-3 py-1">
                       {/* Desktop Layout: Multi-row for better spacing */}
                       <div className="hidden sm:flex flex-col gap-0.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-0.5 flex-wrap">
                           {order.orderNumber && (
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
                             </span>
                           )}
-                          <h3 className="font-bold text-base text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
-                          <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium whitespace-nowrap">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <h3 className="font-bold text-sm text-slate-900 truncate min-w-[100px]">{order.customerName}</h3>
+                          <span className="flex items-center gap-1 text-xs text-slate-600 font-medium whitespace-nowrap">
+                            <Clock className="w-3 h-3 text-slate-400" />
                             {formatTime(order.createdAt)}
                           </span>
                           <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
                             {order.items.reduce((sum, item) => sum + item.quantity, 0)} items
                             {totalAppendedOrders > 0 && (
-                              <span className="ml-1.5 font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">+{totalAppendedOrders}</span>
+                              <span className="ml-1 font-semibold text-blue-600 bg-blue-50 px-1.5 py-0 rounded text-xs">+{totalAppendedOrders}</span>
                             )}
                           </span>
                         </div>
 
                         {/* Row 2: Order Taker, Payment Status, and Action Buttons */}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
                           <div className="flex items-center gap-2 flex-wrap">
                             {getOrderTakerDisplay(order) && (
                               <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
@@ -2472,11 +2716,11 @@ export function CrewDashboard({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-2 space-y-3 border-t border-slate-200 pt-3 px-4 sm:px-5 pb-3">
-                        {/* Main Order Section - Hide section if all items are served AND user is crew only */}
-                        {(isOrderTaker || order.items.some(item => item.status !== "served")) && (
-                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-3">
+                       <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 px-2 sm:px-3 pb-2">
+                         {/* Main Order Section - Hide section if all items are served AND user is crew only */}
+                         {(isOrderTaker || order.items.some(item => item.status !== "served")) && (
+                           <div className="bg-slate-50/80 p-2.5 border border-slate-200/80 shadow-sm">
+                             <div className="flex items-center justify-between mb-2">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                               {order.isPaid ? (
                                 <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
@@ -2491,16 +2735,16 @@ export function CrewDashboard({
                               )}
                             </div>
 
-                            <div className="space-y-2.5">
-                              {order.items.filter(item => isOrderTaker || item.status !== "served").map((item) => {
-                                console.log('Rendering item:', item.name, 'note:', item.note)
-                                return (
-                              <div
-                                key={item.id}
-                                className="flex items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                            <div className="space-y-2">
+                               {order.items.filter(item => isOrderTaker || item.status !== "served").map((item) => {
+                                 console.log('Rendering item:', item.name, 'note:', item.note)
+                                 return (
+                               <div
+                                 key={item.id}
+                                 className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                               >
+                                 <div className="flex-1 min-w-0">
+                                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                                     <p className="font-semibold text-sm text-slate-900">{item.name}</p>
                                     <Badge variant="outline" className="text-xs font-bold border-slate-300">
                                       x{item.quantity}
@@ -2574,8 +2818,8 @@ export function CrewDashboard({
 
                         {/* Appended Orders Section */}
                         {totalAppendedOrders > 0 && (
-                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-3">
+                          <div className="bg-slate-50/80 p-2.5 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
                                 Appended Orders ({totalAppendedOrders})
                               </p>
@@ -2620,26 +2864,26 @@ export function CrewDashboard({
                                 }
                               })()}
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                             {order.appendedOrders!.map((appended, index) => (
                               // Hide appended order if all items are served AND user is crew only
                               (isOrderTaker || appended.items.some(item => item.status !== "served")) && (
                                 <div
                                   key={appended.id}
-                                  className="rounded-xl p-3 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                  className="rounded-lg p-2.5 border border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
                                 >
-                                  <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center justify-between mb-2">
                                     <div>
-                                      <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
-                                      <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
+                                      <p className="text-xs font-bold text-slate-800">Appended #{index + 1}</p>
+                                      <p className="text-xs text-slate-500 mt-0.5 font-medium">{formatTime(appended.createdAt)}</p>
                                     </div>
                                   </div>
 
-                                  <div className="space-y-2.5 mb-4">
+                                  <div className="space-y-2 mb-2">
                                     {appended.items.filter(item => isOrderTaker || item.status !== "served").map((item) => (
                                     <div
                                       key={item.id}
-                                      className="flex items-center justify-between gap-4 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                      className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
                                     >
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -2732,12 +2976,12 @@ export function CrewDashboard({
 
                         {/* Notes Section */}
                          <div className="pt-2 border-t border-slate-200">
-                            <div className="flex items-center gap-2 mb-3 ml-1">
-                             <div className="p-2 rounded-lg bg-blue-50 border border-blue-200">
-                               <MessageSquare className="w-4 h-4 text-blue-600" />
+                            <div className="flex items-center gap-2 mb-2 ml-1">
+                             <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-200">
+                               <MessageSquare className="w-3 h-3 text-blue-600" />
                              </div>
                              <div className="flex-1">
-                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
+                               <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Order Notes</p>
                                {order.notes && order.notes.length > 0 && (
                                  <p className="text-xs text-slate-500 font-medium">{order.notes.length} note{order.notes.length !== 1 ? 's' : ''}</p>
                                )}
@@ -2857,19 +3101,19 @@ export function CrewDashboard({
                     key={order.id}
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
-                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-1">
+                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-2 sm:px-3 py-1">
                       {/* Desktop Layout: Multi-row for better spacing */}
                       <div className="hidden sm:flex flex-col gap-0.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {order.orderNumber && (
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
-                              #{order.orderNumber}
-                            </span>
-                          )}
-                          <h3 className="font-bold text-base text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
-                          <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium whitespace-nowrap">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <div className="flex items-center gap-0.5 flex-wrap">
+                           {order.orderNumber && (
+                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
+                               #{order.orderNumber}
+                             </span>
+                           )}
+                           <h3 className="font-bold text-sm text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
+                           <span className="flex items-center gap-1 text-xs text-slate-600 font-medium whitespace-nowrap">
+                             <Clock className="w-3 h-3 text-slate-400" />
                             {formatTime(order.createdAt)}
                           </span>
                           <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
@@ -3161,11 +3405,11 @@ export function CrewDashboard({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-2 space-y-3 border-t border-slate-200 pt-3 px-4 sm:px-5 pb-3">
-                        {/* Main Order Section */}
-                        <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
+                       <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 px-2 sm:px-3 pb-2">
+                         {/* Main Order Section */}
+                         <div className="bg-slate-50/80 p-2.5 border border-slate-200/80 shadow-sm">
+                           <div className="flex items-center justify-between mb-2">
+                             <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                             {order.isPaid ? (
                               <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
                                 <CreditCard className="w-3.5 h-3.5" />
@@ -3179,15 +3423,15 @@ export function CrewDashboard({
                             )}
                           </div>
 
-                          <div className="space-y-2.5">
+                          <div className="space-y-2">
                             {order.items.map((item) => {
                               return (
                                 <div
                                   key={item.id}
-                                  className="flex items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                  className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
                                 >
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                                       <p className="font-semibold text-sm text-slate-900">{item.name}</p>
                                       <Badge variant="outline" className="text-xs font-bold border-slate-300">
                                         x{item.quantity}
@@ -3233,8 +3477,8 @@ export function CrewDashboard({
 
                         {/* Appended Orders Section */}
                         {totalAppendedOrders > 0 && (
-                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-3">
+                          <div className="bg-slate-50/80 p-2.5 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
                                 Appended Orders ({totalAppendedOrders})
                               </p>
@@ -3279,24 +3523,24 @@ export function CrewDashboard({
                                 }
                               })()}
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                {order.appendedOrders!.map((appended, index) => (
                                  <div
                                    key={appended.id}
-                                   className="rounded-xl p-3 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                   className="rounded-lg p-2.5 border border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
                                  >
-                                   <div className="flex items-center justify-between mb-3">
-                                    <div>
-                                      <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
-                                      <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
-                                    </div>
-                                  </div>
+                                   <div className="flex items-center justify-between mb-2">
+                                     <div>
+                                       <p className="text-xs font-bold text-slate-800">Appended #{index + 1}</p>
+                                       <p className="text-xs text-slate-500 mt-0.5 font-medium">{formatTime(appended.createdAt)}</p>
+                                     </div>
+                                   </div>
 
-                                  <div className="space-y-2.5 mb-4">
-                                    {appended.items.map((item) => (
-                                      <div
-                                        key={item.id}
-                                        className="flex items-center justify-between gap-4 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                   <div className="space-y-2 mb-2">
+                                     {appended.items.map((item) => (
+                                       <div
+                                         key={item.id}
+                                         className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
                                       >
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -3476,19 +3720,19 @@ export function CrewDashboard({
                     key={order.id}
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
-                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-4 sm:px-5 py-1">
+                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-2 sm:px-3 py-1">
                       {/* Desktop Layout: Multi-row for better spacing */}
                       <div className="hidden sm:flex flex-col gap-0.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {order.orderNumber && (
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
-                              #{order.orderNumber}
-                            </span>
-                          )}
-                          <h3 className="font-bold text-base text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
-                          <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium whitespace-nowrap">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <div className="flex items-center gap-0.5 flex-wrap">
+                           {order.orderNumber && (
+                             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-xs font-bold shadow-sm flex-shrink-0">
+                               #{order.orderNumber}
+                             </span>
+                           )}
+                           <h3 className="font-bold text-sm text-slate-900 truncate min-w-[120px]">{order.customerName}</h3>
+                           <span className="flex items-center gap-1 text-xs text-slate-600 font-medium whitespace-nowrap">
+                             <Clock className="w-3 h-3 text-slate-400" />
                             {formatTime(order.createdAt)}
                           </span>
                           <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
@@ -3611,26 +3855,26 @@ export function CrewDashboard({
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-2 space-y-3 border-t border-slate-200 pt-3 px-4 sm:px-5 pb-3">
-                        {/* Main Order Section */}
-                        <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
+                       <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 px-2 sm:px-3 pb-2">
+                         {/* Main Order Section */}
+                         <div className="bg-slate-50/80 p-2.5 border border-slate-200/80 shadow-sm">
+                           <div className="flex items-center justify-between mb-2">
+                             <p className="text-sm font-bold uppercase tracking-wider text-slate-700">Main Order</p>
                             <Badge className="bg-emerald-600 border border-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1.5">
                               <CreditCard className="w-3.5 h-3.5" />
                               Paid: ₱{(order.paidAmount || getOrderTotal(order.items)).toFixed(2)}
                             </Badge>
                           </div>
 
-                          <div className="space-y-2.5">
+                          <div className="space-y-2">
                             {order.items.map((item) => {
                               return (
                                 <div
                                   key={item.id}
-                                  className="flex items-center justify-between gap-4 bg-white p-4 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                  className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
                                 >
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                                       <p className="font-semibold text-sm text-slate-900">{item.name}</p>
                                       <Badge variant="outline" className="text-xs font-bold border-slate-300">
                                         x{item.quantity}
@@ -3676,8 +3920,8 @@ export function CrewDashboard({
 
                         {/* Appended Orders Section */}
                         {totalAppendedOrders > 0 && (
-                          <div className="bg-slate-50/80 p-3 border border-slate-200/80 shadow-sm">
-                            <div className="flex items-center justify-between mb-3">
+                          <div className="bg-slate-50/80 p-2.5 border border-slate-200/80 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
                               <p className="text-sm font-bold uppercase tracking-wider text-slate-700">
                                 Appended Orders ({totalAppendedOrders})
                               </p>
@@ -3697,24 +3941,24 @@ export function CrewDashboard({
                                 )
                               })()}
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                {order.appendedOrders!.map((appended, index) => (
                                  <div
                                    key={appended.id}
-                                   className="rounded-xl p-3 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
+                                   className="rounded-lg p-2.5 border border-blue-200/60 bg-gradient-to-br from-blue-50/50 to-white shadow-sm"
                                  >
-                                   <div className="flex items-center justify-between mb-3">
+                                   <div className="flex items-center justify-between mb-2">
                                     <div>
-                                      <p className="text-sm font-bold text-slate-800">Appended #{index + 1}</p>
-                                      <p className="text-xs text-slate-500 mt-1 font-medium">{formatTime(appended.createdAt)}</p>
+                                      <p className="text-xs font-bold text-slate-800">Appended #{index + 1}</p>
+                                      <p className="text-xs text-slate-500 mt-0.5 font-medium">{formatTime(appended.createdAt)}</p>
                                     </div>
                                   </div>
 
-                                  <div className="space-y-2.5 mb-4">
+                                  <div className="space-y-2 mb-2">
                                     {appended.items.map((item) => (
                                       <div
                                         key={item.id}
-                                        className="flex items-center justify-between gap-4 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
+                                        className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
                                       >
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2.5 mb-2 flex-wrap">
