@@ -20,6 +20,7 @@ export interface OrderItem {
   price: number;
   quantity: number;
   status: "pending" | "preparing" | "ready" | "served";
+  image?: string;
 }
 
 export interface AppendedOrder {
@@ -163,7 +164,7 @@ class OrderDB {
       const transaction = db.transaction(['orders'], 'readonly');
       const store = transaction.objectStore('orders');
       const index = store.index('synced');
-      const request = index.getAll(false);
+      const request = index.getAll(IDBKeyRange.only(false));
 
       request.onsuccess = () => resolve(request.result || []);
       request.onerror = () => reject(request.error);

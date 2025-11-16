@@ -30,6 +30,7 @@ interface OrderItem {
   status: "pending" | "preparing" | "ready" | "served"
   itemType?: "dine-in" | "take-out"
   note?: string
+  image?: string
   preparingAt?: number
   readyAt?: number
   servedAt?: number
@@ -1821,6 +1822,38 @@ export function CrewDashboard({
     return { mainOrderPaid, appendedOrdersPaid, totalAppendedOrders }
   }
 
+  // Calculate pending items summary grouped by item name and type
+  const getPendingItemsSummary = () => {
+    const pendingMap = new Map<string, number>()
+    
+    orders.forEach(order => {
+      // Main order items
+      order.items.forEach(item => {
+        if (item.status === "pending") {
+          const key = `${item.name}|${item.itemType || "dine-in"}`
+          pendingMap.set(key, (pendingMap.get(key) || 0) + item.quantity)
+        }
+      })
+      
+      // Appended order items
+      order.appendedOrders?.forEach(appended => {
+        appended.items.forEach(item => {
+          if (item.status === "pending") {
+            const key = `${item.name}|${item.itemType || "dine-in"}`
+            pendingMap.set(key, (pendingMap.get(key) || 0) + item.quantity)
+          }
+        })
+      })
+    })
+    
+    return Array.from(pendingMap.entries()).map(([key, quantity]) => {
+      const [name, itemType] = key.split("|")
+      return { name, itemType: itemType as "dine-in" | "take-out", quantity }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  const pendingItemsSummary = getPendingItemsSummary()
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
@@ -1856,6 +1889,35 @@ export function CrewDashboard({
           </div>
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>
+
+        {/* Pending Items Summary */}
+        {pendingItemsSummary.length > 0 && (
+          <div className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+              <h3 className="font-bold text-sm uppercase tracking-wide text-amber-900">Pending Items Summary</h3>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {pendingItemsSummary.map((item, index) => (
+                <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm">
+                  <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <Badge
+                      className={`text-xs font-bold px-1.5 py-0.5 ${
+                        item.itemType === "dine-in"
+                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                          : "bg-orange-600 hover:bg-orange-700 text-white"
+                      }`}
+                    >
+                      {item.itemType === "dine-in" ? "🍽️" : "🥡"}
+                    </Badge>
+                    <span className="text-sm font-bold text-amber-700">×{item.quantity}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-24">
@@ -2034,11 +2096,11 @@ export function CrewDashboard({
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
 
-                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5 py-2">
+                    <div onClick={() => toggleOrderExpanded(order.id)} className="relative px-4 sm:px-5 py-1">
                       {/* Desktop Layout: Multi-row for better spacing */}
-                      <div className="hidden sm:flex flex-col gap-1.5">
+                      <div className="hidden sm:flex flex-col gap-0.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -2795,11 +2857,11 @@ export function CrewDashboard({
                     key={order.id}
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
-                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-2">
+                    <div onClick={() => toggleServedExpanded(order.id)} className="relative px-4 sm:px-5 py-1">
                       {/* Desktop Layout: Multi-row for better spacing */}
-                      <div className="hidden sm:flex flex-col gap-1.5">
+                      <div className="hidden sm:flex flex-col gap-0.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -3414,11 +3476,11 @@ export function CrewDashboard({
                     key={order.id}
                     className="group relative overflow-hidden bg-white border border-slate-200/80 shadow-sm transition-all duration-300 cursor-pointer"
                   >
-                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-4 sm:px-5 py-2">
+                    <div onClick={() => toggleCompletedExpanded(order.id)} className="relative px-4 sm:px-5 py-1">
                       {/* Desktop Layout: Multi-row for better spacing */}
-                      <div className="hidden sm:flex flex-col gap-1.5">
+                      <div className="hidden sm:flex flex-col gap-0.5">
                         {/* Row 1: Order Number, Customer Name, Time, Items Count */}
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {order.orderNumber && (
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-sm font-bold shadow-sm flex-shrink-0">
                               #{order.orderNumber}
@@ -3444,7 +3506,7 @@ export function CrewDashboard({
                         </div>
 
                         {/* Row 2: Order Taker, Payment Status, and Chevron */}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
                           <div className="flex items-center gap-2 flex-wrap">
                             {getOrderTakerDisplay(order) && (
                               <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
