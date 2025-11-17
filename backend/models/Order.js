@@ -125,6 +125,11 @@ const appendedOrderSchema = new mongoose.Schema(
       type: Number,
       required: false,
       min: [0, 'Paid amount cannot be negative']
+    },
+    amountReceived: {
+      type: Number,
+      required: false,
+      min: [0, 'Amount received cannot be negative']
     }
   },
   { _id: false } // Don't create _id for subdocuments

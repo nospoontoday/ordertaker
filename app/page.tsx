@@ -40,7 +40,7 @@ export default function Home() {
   const isCrew = user?.role === "crew"
   const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew"
   const canAccessAdmin = user?.role === "super_admin"
-  const canAccessPastOrders = user?.role === "admin" || user?.role === "super_admin"
+  const canAccessPastOrders = user?.role === "super_admin" || user?.role === "order_taker" || user?.role === "order_taker_crew"
   const isOrderTakerCrew = user?.role === "order_taker_crew"
 
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { ordersApi, Order, OrderItem, AppendedOrder } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,14 +13,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 const ORDERS_PER_PAGE = 10
 
 export function PastOrders() {
+  const { user } = useAuth()
+  const { toast } = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     loadOrders()
@@ -73,6 +90,36 @@ export function PastOrders() {
       await loadOrders()
     } catch (error) {
       console.error("Error toggling payment:", error)
+    }
+  }
+
+  const handleDeleteClick = (order: Order) => {
+    setOrderToDelete(order)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!orderToDelete || !user?.id) return
+
+    try {
+      setIsDeleting(true)
+      await ordersApi.delete(orderToDelete.id, user.id)
+      toast({
+        title: "Order deleted",
+        description: `Order #${orderToDelete.orderNumber || orderToDelete.id.split('-')[1]} has been deleted successfully.`,
+      })
+      await loadOrders()
+      setDeleteDialogOpen(false)
+      setOrderToDelete(null)
+    } catch (error: any) {
+      console.error("Error deleting order:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete order. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -237,6 +284,10 @@ export function PastOrders() {
           const allPaid = order.isPaid &&
             (order.appendedOrders?.every((appended) => appended.isPaid) ?? true)
 
+          // Check if at least one order is paid but not all
+          const anyPaid = order.isPaid || (order.appendedOrders?.some((appended) => appended.isPaid) ?? false)
+          const partiallyPaid = anyPaid && !allPaid
+
           return (
             <Card key={order.id}>
               <CardHeader>
@@ -247,12 +298,27 @@ export function PastOrders() {
                       Order #{order.orderNumber || order.id.split('-')[1]} • {formatDate(order.createdAt)}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    {allItemsServed && (
-                      <Badge className="bg-green-100 text-green-800">All Served</Badge>
-                    )}
-                    {allPaid && (
-                      <Badge className="bg-blue-100 text-blue-800">Fully Paid</Badge>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-2">
+                      {allItemsServed && (
+                        <Badge className="bg-green-100 text-green-800">All Served</Badge>
+                      )}
+                      {allPaid && (
+                        <Badge className="bg-blue-100 text-blue-800">Fully Paid</Badge>
+                      )}
+                      {partiallyPaid && (
+                        <Badge className="bg-amber-100 text-amber-800">Partially Paid</Badge>
+                      )}
+                    </div>
+                    {user?.role === "super_admin" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteClick(order)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -285,27 +351,56 @@ export function PastOrders() {
                             </span>
                           </div>
                         )}
-                        {order.amountReceived !== undefined && (
-                          <>
-                            <div className="flex justify-between">
-                              <span className="text-gray-700">Amount Received:</span>
-                              <span className="font-medium">₱{order.amountReceived.toFixed(2)}</span>
+                        {/* Order Total */}
+                        {(() => {
+                          const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                          return (
+                            <div className="flex justify-between pt-1 border-t border-blue-200">
+                              <span className="text-gray-700 font-semibold">Total:</span>
+                              <span className="font-semibold text-blue-900">₱{orderTotal.toFixed(2)}</span>
                             </div>
-                            {/* Calculate and display change */}
-                            {(() => {
-                              const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-                              const change = order.amountReceived - orderTotal
-                              return (
-                                <div className="flex justify-between pt-1 border-t border-blue-200">
-                                  <span className="text-gray-700 font-semibold">Change:</span>
-                                  <span className={`font-semibold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    ₱{change.toFixed(2)}
-                                  </span>
-                                </div>
-                              )
-                            })()}
-                          </>
-                        )}
+                          )
+                        })()}
+                        {/* Amount Received - get from backend or calculate from payment fields */}
+                        {(() => {
+                          const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                          let amountReceived = orderTotal // Default fallback to order total
+
+                          // Priority 1: Check for amountReceived field (the actual amount entered by user)
+                          if (order.amountReceived !== undefined) {
+                            amountReceived = order.amountReceived
+                          }
+                          // Priority 2: For split payments, sum cash + gcash
+                          else if (order.paymentMethod === 'split' && (order.cashAmount !== undefined || order.gcashAmount !== undefined)) {
+                            amountReceived = (order.cashAmount || 0) + (order.gcashAmount || 0)
+                          }
+                          // Priority 3: Use paidAmount if available
+                          else if (order.paidAmount !== undefined) {
+                            amountReceived = order.paidAmount
+                          }
+                          // Priority 4: Use cashAmount or gcashAmount
+                          else if (order.cashAmount !== undefined) {
+                            amountReceived = order.cashAmount
+                          } else if (order.gcashAmount !== undefined) {
+                            amountReceived = order.gcashAmount
+                          }
+
+                          const change = amountReceived - orderTotal
+                          return (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-gray-700">Amount Received:</span>
+                                <span className="font-medium">₱{amountReceived.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-blue-200">
+                                <span className="text-gray-700 font-semibold">Change:</span>
+                                <span className={`font-semibold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  ₱{change.toFixed(2)}
+                                </span>
+                              </div>
+                            </>
+                          )
+                        })()}
                         {order.paymentMethod === 'split' && (
                           <>
                             {order.cashAmount !== undefined && (
@@ -348,10 +443,168 @@ export function PastOrders() {
                           </Button>
                         </div>
                         {renderOrderItems(appended.items, order.id, true, appended.id)}
+
+                        {/* Appended Order Payment Information */}
+                        {appended.isPaid && (
+                          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
+                            <div className="space-y-1 text-sm">
+                              {appended.paymentMethod && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-700">Payment Method:</span>
+                                  <span className="font-medium capitalize">
+                                    {appended.paymentMethod === 'split' ? 'Split Payment' : appended.paymentMethod === 'gcash' ? 'GCash' : 'Cash'}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Appended Order Total */}
+                              {(() => {
+                                const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                return (
+                                  <div className="flex justify-between pt-1 border-t border-blue-200">
+                                    <span className="text-gray-700 font-semibold">Total:</span>
+                                    <span className="font-semibold text-blue-900">₱{appendedTotal.toFixed(2)}</span>
+                                  </div>
+                                )
+                              })()}
+                              {/* Amount Received - get from backend or calculate from payment fields */}
+                              {(() => {
+                                const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                                let amountReceived = appendedTotal // Default fallback to order total
+
+                                // Priority 1: Check for amountReceived field (the actual amount entered by user)
+                                if (appended.amountReceived !== undefined) {
+                                  amountReceived = appended.amountReceived
+                                }
+                                // Priority 2: For split payments, sum cash + gcash
+                                else if (appended.paymentMethod === 'split' && (appended.cashAmount !== undefined || appended.gcashAmount !== undefined)) {
+                                  amountReceived = (appended.cashAmount || 0) + (appended.gcashAmount || 0)
+                                }
+                                // Priority 3: Use paidAmount if available
+                                else if (appended.paidAmount !== undefined) {
+                                  amountReceived = appended.paidAmount
+                                }
+                                // Priority 4: Use cashAmount or gcashAmount
+                                else if (appended.cashAmount !== undefined) {
+                                  amountReceived = appended.cashAmount
+                                } else if (appended.gcashAmount !== undefined) {
+                                  amountReceived = appended.gcashAmount
+                                }
+
+                                const change = amountReceived - appendedTotal
+                                return (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-700">Amount Received:</span>
+                                      <span className="font-medium">₱{amountReceived.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between pt-1 border-t border-blue-200">
+                                      <span className="text-gray-700 font-semibold">Change:</span>
+                                      <span className={`font-semibold ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        ₱{change.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  </>
+                                )
+                              })()}
+                              {appended.paymentMethod === 'split' && (
+                                <>
+                                  {appended.cashAmount !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-700">Cash:</span>
+                                      <span className="font-medium">₱{appended.cashAmount.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {appended.gcashAmount !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-700">GCash:</span>
+                                      <span className="font-medium">₱{appended.gcashAmount.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
+
+                {/* Overall Payment Summary */}
+                {(() => {
+                  // Calculate main order total
+                  const mainOrderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+
+                  // Calculate appended orders total
+                  const appendedOrdersTotal = (order.appendedOrders || []).reduce((sum, appended) => {
+                    return sum + appended.items.reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0)
+                  }, 0)
+
+                  // Calculate overall total
+                  const overallTotal = mainOrderTotal + appendedOrdersTotal
+
+                  // Calculate payment method breakdown
+                  let totalCash = 0
+                  let totalGcash = 0
+
+                  // Main order payment
+                  if (order.isPaid) {
+                    if (order.paymentMethod === 'cash') {
+                      totalCash += order.cashAmount || order.paidAmount || mainOrderTotal
+                    } else if (order.paymentMethod === 'gcash') {
+                      totalGcash += order.gcashAmount || order.paidAmount || mainOrderTotal
+                    } else if (order.paymentMethod === 'split') {
+                      totalCash += order.cashAmount || 0
+                      totalGcash += order.gcashAmount || 0
+                    }
+                  }
+
+                  // Appended orders payments
+                  (order.appendedOrders || []).forEach((appended) => {
+                    if (appended.isPaid) {
+                      const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                      if (appended.paymentMethod === 'cash') {
+                        totalCash += appended.cashAmount || appended.paidAmount || appendedTotal
+                      } else if (appended.paymentMethod === 'gcash') {
+                        totalGcash += appended.gcashAmount || appended.paidAmount || appendedTotal
+                      } else if (appended.paymentMethod === 'split') {
+                        totalCash += appended.cashAmount || 0
+                        totalGcash += appended.gcashAmount || 0
+                      }
+                    }
+                  })
+
+                  // Only show overall summary if there are multiple orders (main + appended)
+                  const hasMultipleOrders = order.appendedOrders && order.appendedOrders.length > 0
+
+                  if (hasMultipleOrders) {
+                    return (
+                      <div className="mt-6 p-4 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg border-2 border-emerald-200">
+                        <div className="text-base font-bold text-emerald-900 mb-3">Overall Payment Summary</div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between items-center pb-2 border-b-2 border-emerald-300">
+                            <span className="text-gray-800 font-bold text-base">Overall Total:</span>
+                            <span className="font-bold text-emerald-900 text-lg">₱{overallTotal.toFixed(2)}</span>
+                          </div>
+                          {totalCash > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-700 font-semibold">💵 Cash:</span>
+                              <span className="font-semibold text-emerald-800">₱{totalCash.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {totalGcash > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-700 font-semibold">Ⓖ GCash:</span>
+                              <span className="font-semibold text-blue-800">₱{totalGcash.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
               </CardContent>
             </Card>
           )
@@ -416,6 +669,29 @@ export function PastOrders() {
           </Button>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete order #{orderToDelete?.orderNumber || orderToDelete?.id.split('-')[1]} for {orderToDelete?.customerName}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

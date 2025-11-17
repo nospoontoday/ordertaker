@@ -1009,19 +1009,40 @@ export function CrewDashboard({
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
 
-    // Update local state immediately - mark main order and all appended orders as paid with payment method
+    // Calculate what needs to be paid
+    const mainTotal = getOrderTotal(order.items)
+    const mainOrderPaid = order.isPaid
+
+    // Determine what gets paid with this transaction
+    let mainOrderPaidAmount = 0
+    const updatedAppendedOrders = (order.appendedOrders || []).map((appended) => {
+      if (!appended.isPaid) {
+        const appendedTotal = getOrderTotal(appended.items)
+        return {
+          ...appended,
+          isPaid: true,
+          paymentMethod,
+          paidAmount: appendedTotal,
+        }
+      }
+      return appended
+    })
+
+    // If main order is not paid, include it in this payment
+    if (!mainOrderPaid) {
+      mainOrderPaidAmount = mainTotal
+    }
+
+    // Update local state immediately
     setOrders(
       orders.map((o) =>
         o.id === orderId
           ? {
               ...o,
               isPaid: true,
-              paymentMethod,
-              appendedOrders: (o.appendedOrders || []).map((appended) => ({
-                ...appended,
-                isPaid: true,
-                paymentMethod,
-              })),
+              paymentMethod: !mainOrderPaid ? paymentMethod : o.paymentMethod,
+              paidAmount: !mainOrderPaid ? mainTotal : o.paidAmount,
+              appendedOrders: updatedAppendedOrders,
             }
           : o,
       ),
@@ -1029,20 +1050,25 @@ export function CrewDashboard({
 
     // Sync to API
     try {
-      // Mark main order as paid with payment method
-      await ordersApi.togglePayment(orderId, true, paymentMethod)
+      // Mark main order as paid with payment method if not already paid
+      if (!mainOrderPaid) {
+        await ordersApi.togglePayment(orderId, true, paymentMethod)
+      }
 
-      // Mark all appended orders as paid with payment method
+      // Mark all unpaid appended orders as paid with payment method
       if (order.appendedOrders && order.appendedOrders.length > 0) {
-        await Promise.all(
-          order.appendedOrders.map((appended) => ordersApi.toggleAppendedPayment(orderId, appended.id, true, paymentMethod)),
-        )
+        const unpaidAppendedOrders = order.appendedOrders.filter((a) => !a.isPaid)
+        if (unpaidAppendedOrders.length > 0) {
+          await Promise.all(
+            unpaidAppendedOrders.map((appended) => ordersApi.toggleAppendedPayment(orderId, appended.id, true, paymentMethod)),
+          )
+        }
       }
 
       setIsOnline(true)
       toast({
-        title: "All Paid",
-        description: `All orders have been marked as paid via ${paymentMethod.toUpperCase()}.`,
+        title: "Payment Recorded",
+        description: `Payment has been marked as paid via ${paymentMethod.toUpperCase()}.`,
       })
     } catch (error) {
       console.error("Error marking all as paid:", error)
@@ -1059,21 +1085,36 @@ export function CrewDashboard({
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
 
-    // Update local state immediately - mark main order with split payment, appended orders as just paid
+    // Calculate what needs to be paid
+    const mainTotal = getOrderTotal(order.items)
+    const mainOrderPaid = order.isPaid
+
+    // Determine what gets paid with this transaction
+    const updatedAppendedOrders = (order.appendedOrders || []).map((appended) => {
+      if (!appended.isPaid) {
+        const appendedTotal = getOrderTotal(appended.items)
+        return {
+          ...appended,
+          isPaid: true,
+          paidAmount: appendedTotal,
+          // Don't set payment method for appended - split is tracked at main order level
+        }
+      }
+      return appended
+    })
+
+    // Update local state immediately
     setOrders(
       orders.map((o) =>
         o.id === orderId
           ? {
               ...o,
               isPaid: true,
-              paymentMethod: "split",
-              cashAmount,
-              gcashAmount,
-              appendedOrders: (o.appendedOrders || []).map((appended) => ({
-                ...appended,
-                isPaid: true,
-                // Don't set payment method for appended - split is tracked at main order level
-              })),
+              paymentMethod: !mainOrderPaid ? "split" : o.paymentMethod,
+              cashAmount: !mainOrderPaid ? cashAmount : o.cashAmount,
+              gcashAmount: !mainOrderPaid ? gcashAmount : o.gcashAmount,
+              paidAmount: !mainOrderPaid ? mainTotal : o.paidAmount,
+              appendedOrders: updatedAppendedOrders,
             }
           : o,
       ),
@@ -1081,16 +1122,21 @@ export function CrewDashboard({
 
     // Sync to API
     try {
-      // Mark main order as paid with split payment (this stores the split details)
-      await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount)
+      // Mark main order as paid with split payment if not already paid
+      if (!mainOrderPaid) {
+        await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount)
+      }
 
-      // Mark all appended orders as just paid (no payment method needed - it's in main order)
+      // Mark all unpaid appended orders as paid
       if (order.appendedOrders && order.appendedOrders.length > 0) {
-        await Promise.all(
-          order.appendedOrders.map((appended) =>
-            ordersApi.toggleAppendedPayment(orderId, appended.id, true)
-          ),
-        )
+        const unpaidAppendedOrders = order.appendedOrders.filter((a) => !a.isPaid)
+        if (unpaidAppendedOrders.length > 0) {
+          await Promise.all(
+            unpaidAppendedOrders.map((appended) =>
+              ordersApi.toggleAppendedPayment(orderId, appended.id, true)
+            ),
+          )
+        }
       }
 
       setIsOnline(true)

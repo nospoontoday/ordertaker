@@ -744,7 +744,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail } = req.body;
+    const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount } = req.body;
 
     // Validation
     if (!id) {
@@ -798,6 +798,9 @@ router.post('/', async (req, res) => {
       createdAt: createdAt || Date.now(),
       isPaid: isPaid || false,
       paymentMethod: paymentMethod || null,
+      amountReceived: amountReceived || undefined,
+      cashAmount: cashAmount || undefined,
+      gcashAmount: gcashAmount || undefined,
       orderType: orderType || 'dine-in',
       appendedOrders: appendedOrders || [],
       orderTakerName: orderTakerName || null,
@@ -904,11 +907,31 @@ router.put('/:id', async (req, res) => {
 
 /**
  * @route   DELETE /api/orders/:id
- * @desc    Delete an order
- * @access  Public
+ * @desc    Delete an order (super admin only)
+ * @body    { userId } - User ID to verify authorization
+ * @access  Super Admin only
  */
 router.delete('/:id', async (req, res) => {
   try {
+    const { userId } = req.body;
+
+    // Validate user authorization
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Verify user exists and is super_admin
+    const dbUser = await User.findById(userId);
+    if (!dbUser || dbUser.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized. Only super admin can delete orders'
+      });
+    }
+
     const order = await Order.findOneAndDelete({ id: req.params.id });
 
     if (!order) {
@@ -948,7 +971,7 @@ router.delete('/:id', async (req, res) => {
  */
 router.post('/:id/append', async (req, res) => {
   try {
-    const { items, createdAt, isPaid } = req.body;
+    const { items, createdAt, isPaid, paymentMethod, cashAmount, gcashAmount, amountReceived } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -974,7 +997,11 @@ router.post('/:id/append', async (req, res) => {
         status: item.status || 'pending'
       })),
       createdAt: createdAt || Date.now(),
-      isPaid: isPaid || false
+      isPaid: isPaid || false,
+      paymentMethod: paymentMethod || null,
+      cashAmount: cashAmount || undefined,
+      gcashAmount: gcashAmount || undefined,
+      amountReceived: amountReceived || undefined
     };
 
     order.appendedOrders.push(appendedOrder);
@@ -1232,6 +1259,11 @@ router.put('/:id/payment', async (req, res) => {
       const mainOrderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       order.paidAmount = mainOrderTotal;
 
+      // Store amount received from request body
+      if (req.body.amountReceived !== undefined) {
+        order.amountReceived = req.body.amountReceived;
+      }
+
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
         order.cashAmount = req.body.cashAmount || 0;
@@ -1240,7 +1272,8 @@ router.put('/:id/payment', async (req, res) => {
           orderId: order.id,
           cashAmount: order.cashAmount,
           gcashAmount: order.gcashAmount,
-          paidAmount: order.paidAmount
+          paidAmount: order.paidAmount,
+          amountReceived: order.amountReceived
         });
       } else {
         // Clear split amounts for non-split payments
@@ -1253,6 +1286,7 @@ router.put('/:id/payment', async (req, res) => {
       order.cashAmount = undefined;
       order.gcashAmount = undefined;
       order.paidAmount = undefined;
+      order.amountReceived = undefined;
     }
 
     await order.save();
@@ -1337,6 +1371,11 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
       const appendedOrderTotal = appendedOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       appendedOrder.paidAmount = appendedOrderTotal;
 
+      // Store amount received from request body
+      if (req.body.amountReceived !== undefined) {
+        appendedOrder.amountReceived = req.body.amountReceived;
+      }
+
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
         appendedOrder.cashAmount = req.body.cashAmount || 0;
@@ -1352,6 +1391,7 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
       appendedOrder.cashAmount = undefined;
       appendedOrder.gcashAmount = undefined;
       appendedOrder.paidAmount = undefined;
+      appendedOrder.amountReceived = undefined;
     }
 
     await order.save();

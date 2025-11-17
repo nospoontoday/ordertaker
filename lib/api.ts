@@ -63,6 +63,7 @@ export interface AppendedOrder {
   cashAmount?: number;
   gcashAmount?: number;
   paidAmount?: number;
+  amountReceived?: number;
 }
 
 export interface Withdrawal {
@@ -100,6 +101,7 @@ export interface Order {
   cashAmount?: number;
   gcashAmount?: number;
   paidAmount?: number;
+  amountReceived?: number;
   orderType: "dine-in" | "take-out";
   appendedOrders?: AppendedOrder[];
   totalAmount?: number;
@@ -457,11 +459,14 @@ export const ordersApi = {
   },
 
   /**
-   * Delete an order
+   * Delete an order (super admin only)
+   * @param id - Order ID to delete
+   * @param userId - User ID for authorization (must be super_admin)
    */
-  delete: async (id: string): Promise<void> => {
+  delete: async (id: string, userId: string): Promise<void> => {
     await apiCall(`/orders/${id}`, {
       method: 'DELETE',
+      body: JSON.stringify({ userId }),
     });
   },
 
@@ -472,11 +477,21 @@ export const ordersApi = {
     id: string,
     items: OrderItem[],
     createdAt?: number,
-    isPaid?: boolean
+    isPaid?: boolean,
+    paymentMethod?: "cash" | "gcash" | "split",
+    cashAmount?: number,
+    gcashAmount?: number,
+    amountReceived?: number
   ): Promise<Order> => {
+    const body: any = { items, createdAt, isPaid };
+    if (paymentMethod) body.paymentMethod = paymentMethod;
+    if (cashAmount !== undefined) body.cashAmount = cashAmount;
+    if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
+    if (amountReceived !== undefined) body.amountReceived = amountReceived;
+
     const response = await apiCall<Order>(`/orders/${id}/append`, {
       method: 'POST',
-      body: JSON.stringify({ items, createdAt, isPaid }),
+      body: JSON.stringify(body),
     });
 
     if (!response.data) {
@@ -537,13 +552,15 @@ export const ordersApi = {
     isPaid?: boolean,
     paymentMethod?: "cash" | "gcash" | "split",
     cashAmount?: number,
-    gcashAmount?: number
+    gcashAmount?: number,
+    amountReceived?: number
   ): Promise<Order> => {
     const body: any = {};
     if (isPaid !== undefined) body.isPaid = isPaid;
     if (paymentMethod) body.paymentMethod = paymentMethod;
     if (cashAmount !== undefined) body.cashAmount = cashAmount;
     if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
+    if (amountReceived !== undefined) body.amountReceived = amountReceived;
 
     const response = await apiCall<Order>(`/orders/${id}/payment`, {
       method: 'PUT',
@@ -566,13 +583,15 @@ export const ordersApi = {
     isPaid?: boolean,
     paymentMethod?: "cash" | "gcash" | "split",
     cashAmount?: number,
-    gcashAmount?: number
+    gcashAmount?: number,
+    amountReceived?: number
   ): Promise<Order> => {
     const body: any = {};
     if (isPaid !== undefined) body.isPaid = isPaid;
     if (paymentMethod) body.paymentMethod = paymentMethod;
     if (cashAmount !== undefined) body.cashAmount = cashAmount;
     if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
+    if (amountReceived !== undefined) body.amountReceived = amountReceived;
 
     const response = await apiCall<Order>(`/orders/${orderId}/appended/${appendedId}/payment`, {
       method: 'PUT',

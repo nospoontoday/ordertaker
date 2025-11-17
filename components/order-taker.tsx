@@ -611,10 +611,11 @@ export function OrderTaker({
          const cash = parseFloat(cashAmount || "0")
          const gcash = parseFloat(gcashAmount || "0")
          const total = cash + gcash
-         if (Math.abs(total - currentOrderTotal) > 0.01) {
+         const amountToPay = isAppending ? totalNewItems : currentOrderTotal
+         if (Math.abs(total - amountToPay) > 0.01) {
            toast({
              title: "Error",
-             description: `Split payment amounts must equal the order total (₱${currentOrderTotal.toFixed(2)}).`,
+             description: `Split payment amounts must equal the order total (₱${amountToPay.toFixed(2)}).`,
              variant: "destructive",
            })
            return
@@ -623,14 +624,18 @@ export function OrderTaker({
      }
 
      // Prepare order data for confirmation
+     // When appending, show only the new items and their payment details
+     const itemsToShow = isAppending ? newItems : currentOrder
+     const totalToShow = isAppending ? totalNewItems : currentOrderTotal
+
      const orderData = {
        customerName: customerName.trim(),
-       items: currentOrder,
-       total: currentOrderTotal,
+       items: itemsToShow,
+       total: totalToShow,
        isPaid: isPaid,
        paymentMethod: paymentMethod,
        amountReceived: isPaid ? parseFloat(amountReceived) : 0,
-       change: isPaid ? parseFloat(amountReceived) - currentOrderTotal : 0,
+       change: isPaid ? parseFloat(amountReceived) - totalToShow : 0,
        cashAmount: isPaid && paymentMethod === "split" ? parseFloat(cashAmount || "0") : 0,
        gcashAmount: isPaid && paymentMethod === "split" ? parseFloat(gcashAmount || "0") : 0,
      }
@@ -650,8 +655,17 @@ export function OrderTaker({
         const itemsToAppend = newItems.map((item) => ({ ...item, status: "pending" as const }))
 
         try {
-          // Try to append via API
-          await ordersApi.appendItems(appendingOrderId, itemsToAppend, Date.now(), false)
+          // Try to append via API with payment information
+          await ordersApi.appendItems(
+            appendingOrderId,
+            itemsToAppend,
+            Date.now(),
+            isPaid,
+            paymentMethod || undefined,
+            paymentMethod === 'split' ? parseFloat(cashAmount) : undefined,
+            paymentMethod === 'split' ? parseFloat(gcashAmount) : undefined,
+            isPaid && paymentMethod && paymentMethod !== 'split' ? parseFloat(amountReceived) : undefined
+          )
 
           toast({
             title: "Success!",
@@ -672,7 +686,11 @@ export function OrderTaker({
           id: `appended-${Date.now()}`,
           items: itemsToAppend,
           createdAt: Date.now(),
-          isPaid: false,
+          isPaid: isPaid,
+          paymentMethod: paymentMethod || null,
+          cashAmount: paymentMethod === 'split' ? parseFloat(cashAmount) : undefined,
+          gcashAmount: paymentMethod === 'split' ? parseFloat(gcashAmount) : undefined,
+          amountReceived: isPaid && paymentMethod && paymentMethod !== 'split' ? parseFloat(amountReceived) : undefined,
         }
 
         setOrders(
@@ -731,10 +749,11 @@ export function OrderTaker({
             const cash = parseFloat(cashAmount || "0")
             const gcash = parseFloat(gcashAmount || "0")
             const total = cash + gcash
-            if (Math.abs(total - currentOrderTotal) > 0.01) {
+            const amountToPay = isAppending ? totalNewItems : currentOrderTotal
+            if (Math.abs(total - amountToPay) > 0.01) {
               toast({
                 title: "Error",
-                description: "Split payment amounts must equal the order total (₱" + currentOrderTotal.toFixed(2) + ").",
+                description: "Split payment amounts must equal the order total (₱" + amountToPay.toFixed(2) + ").",
                 variant: "destructive",
               })
               setIsSubmitting(false)
@@ -1144,10 +1163,24 @@ export function OrderTaker({
   const dailySales = useMemo(() => calculateDailySales(), [allOrders, withdrawals])
 
   const totalNewItems = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const totalExistingItems = currentOrder.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+  // Calculate existing items total including previously appended items when appending
+  let totalExistingItems = currentOrder.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  let existingItemCount = currentOrder.reduce((sum, item) => sum + item.quantity, 0)
+
+  if (isAppending && appendingOrder?.appendedOrders) {
+    const previouslyAppendedTotal = appendingOrder.appendedOrders.reduce((sum, appended) =>
+      sum + appended.items.reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0), 0
+    )
+    const previouslyAppendedCount = appendingOrder.appendedOrders.reduce((sum, appended) =>
+      sum + appended.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
+    )
+    totalExistingItems += previouslyAppendedTotal
+    existingItemCount += previouslyAppendedCount
+  }
+
   const totalAll = totalNewItems + totalExistingItems
   const newItemCount = newItems.reduce((sum, item) => sum + item.quantity, 0)
-  const existingItemCount = currentOrder.reduce((sum, item) => sum + item.quantity, 0)
   const currentOrderTotal = isAppending ? totalAll : totalExistingItems
 
   return (
@@ -1549,8 +1582,7 @@ export function OrderTaker({
             )}
 
             {/* Payment Section */}
-            {!isAppending && (
-              <div className="mb-5 pb-5 border-b border-slate-200/80">
+            <div className="mb-5 pb-5 border-b border-slate-200/80">
                 <div className="flex items-center gap-3 mb-4">
                   <input
                     type="checkbox"
@@ -1561,8 +1593,9 @@ export function OrderTaker({
                       if (e.target.checked) {
                         // Set default payment method to Cash when marking as paid
                         setPaymentMethod("cash")
-                        // Set default amount received to total order amount
-                        setAmountReceived(currentOrderTotal.toFixed(2))
+                        // Set default amount received to unpaid amount only (new items when appending)
+                        const amountToPay = isAppending ? totalNewItems : currentOrderTotal
+                        setAmountReceived(amountToPay.toFixed(2))
                       } else {
                         setPaymentMethod(null)
                         setAmountReceived("")
@@ -1598,7 +1631,7 @@ export function OrderTaker({
                       <div className="bg-white p-3 rounded-lg border border-emerald-200/60">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
-                          <span className="text-sm font-bold text-slate-900">₱{currentOrderTotal.toFixed(2)}</span>
+                          <span className="text-sm font-bold text-slate-900">₱{(isAppending ? totalNewItems : currentOrderTotal).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center mt-2">
                           <span className="text-sm font-semibold text-slate-700">Amount Received:</span>
@@ -1606,8 +1639,8 @@ export function OrderTaker({
                         </div>
                         <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
                           <span className="text-sm font-bold text-emerald-700">Change:</span>
-                          <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - currentOrderTotal) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            ₱{(parseFloat(amountReceived || "0") - currentOrderTotal).toFixed(2)}
+                          <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - (isAppending ? totalNewItems : currentOrderTotal)) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            ₱{(parseFloat(amountReceived || "0") - (isAppending ? totalNewItems : currentOrderTotal)).toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -1669,8 +1702,9 @@ export function OrderTaker({
                               const cash = parseFloat(e.target.value || "0")
                               setCashAmount(e.target.value)
                               // Auto-calculate gcash based on total order amount
+                              const amountToPay = isAppending ? totalNewItems : currentOrderTotal
                               if (e.target.value) {
-                                const gcash = Math.max(0, currentOrderTotal - cash)
+                                const gcash = Math.max(0, amountToPay - cash)
                                 setGcashAmount(gcash > 0 ? gcash.toFixed(2) : "")
                               }
                             }}
@@ -1689,8 +1723,9 @@ export function OrderTaker({
                               const gcash = parseFloat(e.target.value || "0")
                               setGcashAmount(e.target.value)
                               // Auto-calculate cash based on total order amount
+                              const amountToPay = isAppending ? totalNewItems : currentOrderTotal
                               if (e.target.value) {
-                                const cash = Math.max(0, currentOrderTotal - gcash)
+                                const cash = Math.max(0, amountToPay - gcash)
                                 setCashAmount(cash > 0 ? cash.toFixed(2) : "")
                               }
                             }}
@@ -1704,13 +1739,13 @@ export function OrderTaker({
                           <div className="bg-slate-50 p-2 rounded border border-slate-200">
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-slate-600">Total Split:</span>
-                              <span className={`font-bold ${Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) < 0.01 ? "text-emerald-600" : "text-amber-600"}`}>
+                              <span className={`font-bold ${Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - (isAppending ? totalNewItems : currentOrderTotal)) < 0.01 ? "text-emerald-600" : "text-amber-600"}`}>
                                 ₱{(parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")).toFixed(2)}
                               </span>
                             </div>
-                            {Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) >= 0.01 && (
+                            {Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - (isAppending ? totalNewItems : currentOrderTotal)) >= 0.01 && (
                               <p className="text-xs text-amber-600 font-semibold mt-1">
-                                ⚠️ Split total must equal order total (₱{currentOrderTotal.toFixed(2)})
+                                ⚠️ Split total must equal order total (₱{(isAppending ? totalNewItems : currentOrderTotal).toFixed(2)})
                               </p>
                             )}
                           </div>
@@ -1720,7 +1755,6 @@ export function OrderTaker({
                   </div>
                 )}
               </div>
-            )}
 
             {isAppending && appendingOrder && (
               <div className="mb-5 pb-5 border-b border-slate-200/80">
@@ -1734,20 +1768,49 @@ export function OrderTaker({
                   )}
                 </div>
                 <div className="space-y-2.5 max-h-40 overflow-y-auto">
-                  {currentOrder.map((item) => (
-                    <div key={item.id} className="bg-slate-50/80 p-3 rounded-lg border border-slate-200/80 text-xs">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-slate-900">{item.name}</span>
-                        <Badge variant="outline" className="text-xs font-bold border-slate-300">x{item.quantity}</Badge>
+                  {/* Main Order Items */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Main Order</p>
+                    {currentOrder.map((item) => (
+                      <div key={item.id} className="bg-slate-50/80 p-3 rounded-lg border border-slate-200/80 text-xs">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-slate-900">{item.name}</span>
+                          <Badge variant="outline" className="text-xs font-bold border-slate-300">x{item.quantity}</Badge>
+                        </div>
+                        {item.status && (
+                          <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                            {getStatusIcon(item.status)}
+                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                          </Badge>
+                        )}
                       </div>
-                      {item.status && (
-                        <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
-                          {getStatusIcon(item.status)}
-                          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                        </Badge>
-                      )}
+                    ))}
+                  </div>
+
+                  {/* Previously Appended Orders */}
+                  {appendingOrder.appendedOrders && appendingOrder.appendedOrders.length > 0 && (
+                    <div className="space-y-2 mt-3 pt-3 border-t border-slate-200">
+                      {appendingOrder.appendedOrders.map((appended, index) => (
+                        <div key={appended.id}>
+                          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Appended Order #{index + 1}</p>
+                          {appended.items.map((item) => (
+                            <div key={item.id} className="bg-blue-50/30 p-3 rounded-lg border border-blue-200/60 text-xs mb-2">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-semibold text-slate-900">{item.name}</span>
+                                <Badge variant="outline" className="text-xs font-bold border-blue-300">x{item.quantity}</Badge>
+                              </div>
+                              {item.status && (
+                                <Badge className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${getStatusColor(item.status)}`}>
+                                  {getStatusIcon(item.status)}
+                                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             )}
@@ -2271,18 +2334,19 @@ export function OrderTaker({
                     </div>
                   )}
 
-                  {!isAppending && (
-                    <div className="mb-5 pb-5 border-b border-slate-200/80">
-                      <div className="flex items-center gap-3 mb-4">
-                        <input
-                          type="checkbox"
-                          id="isPaid-mobile"
+                  <div className="mb-5 pb-5 border-b border-slate-200/80">
+                    <div className="flex items-center gap-3 mb-4">
+                      <input
+                        type="checkbox"
+                        id="isPaid-mobile"
                           checked={isPaid}
                           onChange={(e) => {
                             setIsPaid(e.target.checked)
                             if (e.target.checked) {
                               setPaymentMethod("cash")
-                              setAmountReceived(currentOrderTotal.toFixed(2))
+                              // Set default amount received to unpaid amount only (new items when appending)
+                              const amountToPay = isAppending ? totalNewItems : currentOrderTotal
+                              setAmountReceived(amountToPay.toFixed(2))
                             } else {
                               setPaymentMethod(null)
                               setAmountReceived("")
@@ -2318,7 +2382,7 @@ export function OrderTaker({
                             <div className="bg-white p-3 rounded-lg border border-emerald-200/60">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
-                                <span className="text-sm font-bold text-slate-900">₱{currentOrderTotal.toFixed(2)}</span>
+                                <span className="text-sm font-bold text-slate-900">₱{(isAppending ? totalNewItems : currentOrderTotal).toFixed(2)}</span>
                               </div>
                               <div className="flex justify-between items-center mt-2">
                                 <span className="text-sm font-semibold text-slate-700">Amount Received:</span>
@@ -2326,8 +2390,8 @@ export function OrderTaker({
                               </div>
                               <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
                                 <span className="text-sm font-bold text-emerald-700">Change:</span>
-                                <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - currentOrderTotal) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                  ₱{(parseFloat(amountReceived || "0") - currentOrderTotal).toFixed(2)}
+                                <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - (isAppending ? totalNewItems : currentOrderTotal)) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                  ₱{(parseFloat(amountReceived || "0") - (isAppending ? totalNewItems : currentOrderTotal)).toFixed(2)}
                                 </span>
                               </div>
                             </div>
@@ -2388,8 +2452,9 @@ export function OrderTaker({
                                   onChange={(e) => {
                                     const cash = parseFloat(e.target.value || "0")
                                     setCashAmount(e.target.value)
+                                    const amountToPay = isAppending ? totalNewItems : currentOrderTotal
                                     if (e.target.value) {
-                                      const gcash = Math.max(0, currentOrderTotal - cash)
+                                      const gcash = Math.max(0, amountToPay - cash)
                                       setGcashAmount(gcash > 0 ? gcash.toFixed(2) : "")
                                     }
                                   }}
@@ -2407,8 +2472,9 @@ export function OrderTaker({
                                   onChange={(e) => {
                                     const gcash = parseFloat(e.target.value || "0")
                                     setGcashAmount(e.target.value)
+                                    const amountToPay = isAppending ? totalNewItems : currentOrderTotal
                                     if (e.target.value) {
-                                      const cash = Math.max(0, currentOrderTotal - gcash)
+                                      const cash = Math.max(0, amountToPay - gcash)
                                       setCashAmount(cash > 0 ? cash.toFixed(2) : "")
                                     }
                                   }}
@@ -2422,13 +2488,13 @@ export function OrderTaker({
                                 <div className="bg-slate-50 p-2 rounded border border-slate-200">
                                   <div className="flex justify-between items-center text-xs">
                                     <span className="text-slate-600">Total Split:</span>
-                                    <span className={`font-bold ${Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) < 0.01 ? "text-emerald-600" : "text-amber-600"}`}>
+                                    <span className={`font-bold ${Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - (isAppending ? totalNewItems : currentOrderTotal)) < 0.01 ? "text-emerald-600" : "text-amber-600"}`}>
                                       ₱{(parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")).toFixed(2)}
                                     </span>
                                   </div>
-                                  {Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - currentOrderTotal) >= 0.01 && (
+                                  {Math.abs((parseFloat(cashAmount || "0") + parseFloat(gcashAmount || "0")) - (isAppending ? totalNewItems : currentOrderTotal)) >= 0.01 && (
                                     <p className="text-xs text-amber-600 font-semibold mt-1">
-                                      ⚠️ Split total must equal order total (₱{currentOrderTotal.toFixed(2)})
+                                      ⚠️ Split total must equal order total (₱{(isAppending ? totalNewItems : currentOrderTotal).toFixed(2)})
                                     </p>
                                   )}
                                 </div>
@@ -2438,7 +2504,6 @@ export function OrderTaker({
                         </div>
                       )}
                     </div>
-                  )}
 
                   {isAppending && appendingOrder && (
                     <div className="mb-5 pb-5 border-b border-slate-200">
@@ -2449,14 +2514,37 @@ export function OrderTaker({
                         )}
                       </div>
                       <div className="space-y-2.5">
-                        {currentOrder.map((item) => (
-                          <div key={item.id} className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-semibold text-slate-900">{item.name}</span>
-                              <Badge variant="outline" className="text-xs font-bold">x{item.quantity}</Badge>
+                        {/* Main Order Items */}
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Main Order</p>
+                          {currentOrder.map((item) => (
+                            <div key={item.id} className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-semibold text-slate-900">{item.name}</span>
+                                <Badge variant="outline" className="text-xs font-bold">x{item.quantity}</Badge>
+                              </div>
                             </div>
+                          ))}
+                        </div>
+
+                        {/* Previously Appended Orders */}
+                        {appendingOrder.appendedOrders && appendingOrder.appendedOrders.length > 0 && (
+                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-200">
+                            {appendingOrder.appendedOrders.map((appended, index) => (
+                              <div key={appended.id}>
+                                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Appended Order #{index + 1}</p>
+                                {appended.items.map((item) => (
+                                  <div key={item.id} className="bg-blue-50/30 p-3 rounded-lg border border-blue-200/60 text-xs mb-2">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="font-semibold text-slate-900">{item.name}</span>
+                                      <Badge variant="outline" className="text-xs font-bold border-blue-300">x{item.quantity}</Badge>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
                   )}
