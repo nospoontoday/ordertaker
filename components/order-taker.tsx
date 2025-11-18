@@ -1612,22 +1612,39 @@ export function OrderTaker({
 
                 {isPaid && (
                   <div className="space-y-4 bg-blue-50/50 p-4 rounded-lg border border-blue-200/60">
-                    {/* Amount Received */}
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Amount Received (₱)</label>
-                      <Input
-                        type="number"
-                        value={amountReceived}
-                        onChange={(e) => setAmountReceived(e.target.value)}
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        className="w-full border-slate-200 focus:border-slate-400"
-                      />
-                    </div>
+                    {/* Amount Received - Only show for Cash, hide for GCash */}
+                    {paymentMethod !== "gcash" && (
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">Amount Received (₱)</label>
+                        <Input
+                          type="number"
+                          value={amountReceived}
+                          onChange={(e) => setAmountReceived(e.target.value)}
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                          className="w-full border-slate-200 focus:border-slate-400"
+                        />
+                      </div>
+                    )}
 
-                    {/* Change Display */}
-                    {amountReceived && (
+                    {/* GCash Exact Payment Display */}
+                    {paymentMethod === "gcash" && (
+                      <div className="bg-white p-3 rounded-lg border border-blue-200/60">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
+                          <span className="text-lg font-bold text-blue-600">₱{(isAppending ? totalNewItems : currentOrderTotal).toFixed(2)}</span>
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-slate-200">
+                          <p className="text-xs text-blue-600 font-medium">
+                            ✓ GCash payment (exact amount)
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Change Display - Only show for Cash, hide for GCash */}
+                    {paymentMethod !== "gcash" && amountReceived && (
                       <div className="bg-white p-3 rounded-lg border border-emerald-200/60">
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
@@ -1667,6 +1684,9 @@ export function OrderTaker({
                           onClick={() => {
                             setPaymentMethod("gcash")
                             setCashAmount("")
+                            // GCash pays exact amount
+                            const amountToPay = isAppending ? totalNewItems : currentOrderTotal
+                            setAmountReceived(amountToPay.toFixed(2))
                           }}
                           className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
                             paymentMethod === "gcash"
@@ -2363,22 +2383,39 @@ export function OrderTaker({
 
                       {isPaid && (
                         <div className="space-y-4 bg-blue-50/50 p-4 rounded-lg border border-blue-200/60">
-                          {/* Amount Received */}
-                          <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Amount Received (₱)</label>
-                            <Input
-                              type="number"
-                              value={amountReceived}
-                              onChange={(e) => setAmountReceived(e.target.value)}
-                              placeholder="0.00"
-                              step="0.01"
-                              min="0"
-                              className="w-full border-slate-200 focus:border-slate-400"
-                            />
-                          </div>
+                          {/* Amount Received - Only show for Cash, hide for GCash */}
+                          {paymentMethod !== "gcash" && (
+                            <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-2">Amount Received (₱)</label>
+                              <Input
+                                type="number"
+                                value={amountReceived}
+                                onChange={(e) => setAmountReceived(e.target.value)}
+                                placeholder="0.00"
+                                step="0.01"
+                                min="0"
+                                className="w-full border-slate-200 focus:border-slate-400"
+                              />
+                            </div>
+                          )}
 
-                          {/* Change Display */}
-                          {amountReceived && (
+                          {/* GCash Exact Payment Display */}
+                          {paymentMethod === "gcash" && (
+                            <div className="bg-white p-3 rounded-lg border border-blue-200/60">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
+                                <span className="text-lg font-bold text-blue-600">₱{(isAppending ? totalNewItems : currentOrderTotal).toFixed(2)}</span>
+                              </div>
+                              <div className="mt-2 pt-2 border-t border-slate-200">
+                                <p className="text-xs text-blue-600 font-medium">
+                                  ✓ GCash payment (exact amount)
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Change Display - Only show for Cash, hide for GCash */}
+                          {paymentMethod !== "gcash" && amountReceived && (
                             <div className="bg-white p-3 rounded-lg border border-emerald-200/60">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm font-semibold text-slate-700">Total Amount:</span>
@@ -2418,6 +2455,9 @@ export function OrderTaker({
                                 onClick={() => {
                                   setPaymentMethod("gcash")
                                   setCashAmount("")
+                                  // GCash pays exact amount
+                                  const amountToPay = isAppending ? totalNewItems : currentOrderTotal
+                                  setAmountReceived(amountToPay.toFixed(2))
                                 }}
                                 className={`flex-1 px-3 py-2.5 text-sm rounded-lg font-bold transition-all border ${
                                   paymentMethod === "gcash"

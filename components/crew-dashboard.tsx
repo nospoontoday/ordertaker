@@ -4505,32 +4505,46 @@ export function CrewDashboard({
                   <span className="text-lg font-bold text-emerald-600">₱{paymentConfirmDialog.amount.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="border-t border-slate-200 pt-3">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Amount Received:</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={paymentConfirmDialog.amount}
-                    value={paymentConfirmDialog.amountReceived}
-                    onChange={(e) => {
-                      const value = parseFloat(e.target.value) || 0
-                      setPaymentConfirmDialog({
-                        ...paymentConfirmDialog,
-                        amountReceived: value,
-                      })
-                    }}
-                    className="text-lg font-bold"
-                    placeholder="0.00"
-                  />
-                  {paymentConfirmDialog.amountReceived >= paymentConfirmDialog.amount && (
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                      <span className="text-sm font-medium text-slate-600">Change:</span>
-                      <span className="text-lg font-bold text-blue-600">₱{(paymentConfirmDialog.amountReceived - paymentConfirmDialog.amount).toFixed(2)}</span>
-                    </div>
-                  )}
+              {/* Amount Received - Only show for Cash, hide for GCash */}
+              {paymentConfirmDialog.paymentMethod === "cash" && (
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Amount Received:</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={paymentConfirmDialog.amount}
+                      value={paymentConfirmDialog.amountReceived}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0
+                        setPaymentConfirmDialog({
+                          ...paymentConfirmDialog,
+                          amountReceived: value,
+                        })
+                      }}
+                      className="text-lg font-bold"
+                      placeholder="0.00"
+                    />
+                    {paymentConfirmDialog.amountReceived >= paymentConfirmDialog.amount && (
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                        <span className="text-sm font-medium text-slate-600">Change:</span>
+                        <span className="text-lg font-bold text-blue-600">₱{(paymentConfirmDialog.amountReceived - paymentConfirmDialog.amount).toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* GCash Exact Payment Display */}
+              {paymentConfirmDialog.paymentMethod === "gcash" && (
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                    <p className="text-xs text-blue-600 font-medium">
+                      ✓ GCash payment (exact amount) - No change required
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="border-t border-slate-200 pt-3">
                 <div className="flex items-center gap-2">
                   {paymentConfirmDialog.paymentMethod === "cash" ? (
