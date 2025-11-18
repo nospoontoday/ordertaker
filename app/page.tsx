@@ -58,13 +58,6 @@ export default function Home() {
     }
   }, [mounted])
 
-  // Redirect crew members to kitchen page
-  useEffect(() => {
-    if (mounted && !isLoading && user && isCrew) {
-      router.push("/kitchen")
-    }
-  }, [mounted, isLoading, user, isCrew, router])
-
   // Set default view based on user role (only if no query param was set)
   useEffect(() => {
     if (user && mounted) {
@@ -162,11 +155,6 @@ export default function Home() {
               <span className="text-sm text-slate-600">{user?.email}</span>
               <div className="h-6 w-px bg-slate-300" />
 
-              <Button variant="outline" onClick={() => router.push("/kitchen")}>
-                <ChefHat className="h-4 w-4 mr-2" />
-                Kitchen
-              </Button>
-
               {!isCrew && (
                 <>
                   <Button variant="outline" onClick={() => router.push("/sales-reports")}>
@@ -238,16 +226,6 @@ export default function Home() {
                   </Button>
                 )}
 
-                {/* Kitchen Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push("/kitchen")}
-                  className="min-h-[44px] px-4"
-                >
-                  Kitchen
-                </Button>
-
                 {/* Hamburger Menu */}
                 <Sheet>
                   <SheetTrigger asChild>
@@ -264,14 +242,6 @@ export default function Home() {
                       </SheetDescription>
                     </SheetHeader>
                     <div className="mt-8 space-y-2">
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start h-12"
-                        onClick={() => router.push("/kitchen")}
-                      >
-                        <ChefHat className="h-5 w-5 mr-3" />
-                        Kitchen
-                      </Button>
                       {!isCrew && (
                         <>
                           <Button
