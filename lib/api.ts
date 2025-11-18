@@ -783,8 +783,17 @@ export interface DailySalesSummary {
   withdrawals: Withdrawal[];
   purchases: Withdrawal[];
   totalSales: number;
+  // Gross amounts (before deductions)
+  grossCash: number;
+  grossGcash: number;
+  // Net amounts (after deductions)
   totalCash: number;
   totalGcash: number;
+  // Breakdown by payment method
+  totalCashWithdrawals: number;
+  totalGcashWithdrawals: number;
+  totalCashPurchases: number;
+  totalGcashPurchases: number;
   totalWithdrawals: number;
   totalPurchases: number;
   netSales: number;

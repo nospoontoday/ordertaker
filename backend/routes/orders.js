@@ -428,8 +428,17 @@ router.get('/daily-sales', async (req, res) => {
         withdrawals: daily.withdrawals,
         purchases: daily.purchases,
         totalSales: daily.totalSales,
+        // Gross amounts (before deductions)
+        grossCash: daily.totalCash,
+        grossGcash: daily.totalGcash,
+        // Net amounts (after deductions)
         totalCash: calculatedTotalCash,
         totalGcash: calculatedTotalGcash,
+        // Breakdown by payment method
+        totalCashWithdrawals: daily.totalCashWithdrawals,
+        totalGcashWithdrawals: daily.totalGcashWithdrawals,
+        totalCashPurchases: daily.totalCashPurchases,
+        totalGcashPurchases: daily.totalGcashPurchases,
         totalWithdrawals: daily.totalWithdrawals,
         totalPurchases: daily.totalPurchases,
         netSales: daily.totalSales - daily.totalWithdrawals - daily.totalPurchases,

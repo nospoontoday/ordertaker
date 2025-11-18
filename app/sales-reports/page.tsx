@@ -710,19 +710,59 @@ export default function SalesReportsPage() {
 
                   {/* Payment Method Breakdown */}
                   <div className="mb-4">
-                    <h4 className="text-md font-bold text-slate-900 mb-3">Payment Methods</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
-                        <div className="text-xs text-emerald-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
-                          <span>💵</span> Cash Received
+                    <h4 className="text-md font-bold text-slate-900 mb-3 border-b pb-2">Payment Method Breakdown</h4>
+
+                    {/* Cash Breakdown */}
+                    <div className="mb-4">
+                      <h5 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                        <span>💵</span> Cash
+                      </h5>
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600 font-semibold">Gross Cash (from sales):</span>
+                          <span className="text-slate-900 font-bold">₱{daily.grossCash?.toFixed(2) || "0.00"}</span>
                         </div>
-                        <div className="text-lg font-bold text-emerald-700">₱{daily.totalCash.toFixed(2)}</div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-red-600 font-semibold">Cash Withdrawals:</span>
+                          <span className="text-red-700 font-bold">-₱{daily.totalCashWithdrawals?.toFixed(2) || "0.00"}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-orange-600 font-semibold">Cash Purchases:</span>
+                          <span className="text-orange-700 font-bold">-₱{daily.totalCashPurchases?.toFixed(2) || "0.00"}</span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-300">
+                          <div className="flex justify-between">
+                            <span className="text-emerald-700 font-bold">Net Cash Received:</span>
+                            <span className="text-lg font-bold text-emerald-700">₱{daily.totalCash.toFixed(2)}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                        <div className="text-xs text-blue-600 mb-1 uppercase tracking-wide font-semibold flex items-center gap-1.5">
-                          <span>Ⓖ</span> GCash Received
+                    </div>
+
+                    {/* GCash Breakdown */}
+                    <div>
+                      <h5 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                        <span>Ⓖ</span> GCash
+                      </h5>
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600 font-semibold">Gross GCash (from sales):</span>
+                          <span className="text-slate-900 font-bold">₱{daily.grossGcash?.toFixed(2) || "0.00"}</span>
                         </div>
-                        <div className="text-lg font-bold text-blue-700">₱{daily.totalGcash.toFixed(2)}</div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-red-600 font-semibold">GCash Withdrawals:</span>
+                          <span className="text-red-700 font-bold">-₱{daily.totalGcashWithdrawals?.toFixed(2) || "0.00"}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-orange-600 font-semibold">GCash Purchases:</span>
+                          <span className="text-orange-700 font-bold">-₱{daily.totalGcashPurchases?.toFixed(2) || "0.00"}</span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-300">
+                          <div className="flex justify-between">
+                            <span className="text-blue-700 font-bold">Net GCash Received:</span>
+                            <span className="text-lg font-bold text-blue-700">₱{daily.totalGcash.toFixed(2)}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
