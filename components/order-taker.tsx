@@ -2427,8 +2427,8 @@ export function OrderTaker({
                               </div>
                               <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-200">
                                 <span className="text-sm font-bold text-emerald-700">Change:</span>
-                                <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - (isAppending ? totalNewItems : currentOrderTotal)) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                  ₱{(parseFloat(amountReceived || "0") - (isAppending ? totalNewItems : currentOrderTotal)).toFixed(2)}
+                                <span className={`text-lg font-bold ${(parseFloat(amountReceived || "0") - (paymentMethod === "split" ? parseFloat(cashAmount || "0") : (isAppending ? totalNewItems : currentOrderTotal))) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                  ₱{(parseFloat(amountReceived || "0") - (paymentMethod === "split" ? parseFloat(cashAmount || "0") : (isAppending ? totalNewItems : currentOrderTotal))).toFixed(2)}
                                 </span>
                               </div>
                             </div>
