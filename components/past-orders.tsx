@@ -459,7 +459,11 @@ export function PastOrders() {
                             amountReceived = order.gcashAmount
                           }
 
-                          const change = amountReceived - orderTotal
+                          // For split payments, change = amountReceived - cashAmount
+                          // For cash/gcash payments, change = amountReceived - orderTotal
+                          const change = order.paymentMethod === 'split'
+                            ? amountReceived - (order.cashAmount || 0)
+                            : amountReceived - orderTotal
                           return (
                             <>
                               <div className="flex justify-between">
@@ -565,7 +569,11 @@ export function PastOrders() {
                                   amountReceived = appended.gcashAmount
                                 }
 
-                                const change = amountReceived - appendedTotal
+                                // For split payments, change = amountReceived - cashAmount
+                                // For cash/gcash payments, change = amountReceived - appendedTotal
+                                const change = appended.paymentMethod === 'split'
+                                  ? amountReceived - (appended.cashAmount || 0)
+                                  : amountReceived - appendedTotal
                                 return (
                                   <>
                                     <div className="flex justify-between">

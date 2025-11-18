@@ -12,6 +12,11 @@ export interface Order {
   appendedOrders?: AppendedOrder[];
   synced?: boolean; // Track if synced to server
   lastModified?: number; // Track last modification
+  paymentMethod?: "cash" | "gcash" | "split";
+  paidAmount?: number;
+  amountReceived?: number; // Amount received from customer
+  cashAmount?: number; // For split payments
+  gcashAmount?: number; // For split payments
 }
 
 export interface OrderItem {
@@ -28,6 +33,11 @@ export interface AppendedOrder {
   items: OrderItem[];
   createdAt: number;
   isPaid?: boolean;
+  paymentMethod?: "cash" | "gcash" | "split";
+  paidAmount?: number;
+  amountReceived?: number; // Amount received from customer
+  cashAmount?: number; // For split payments
+  gcashAmount?: number; // For split payments
 }
 
 class OrderDB {

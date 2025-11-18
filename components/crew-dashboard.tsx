@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
@@ -185,6 +186,7 @@ export function CrewDashboard({
     orderId: string | null
     paymentMethod: "cash" | "gcash" | null
     amount: number
+    amountReceived: number
     orderNumber?: number
     customerName?: string
   }>({
@@ -192,6 +194,7 @@ export function CrewDashboard({
     orderId: null,
     paymentMethod: null,
     amount: 0,
+    amountReceived: 0,
   })
 
   const [newNotes, setNewNotes] = useState<Record<string, string>>({})
@@ -932,6 +935,7 @@ export function CrewDashboard({
        orderId,
        paymentMethod,
        amount: pendingAmount,
+       amountReceived: pendingAmount, // Default to pending amount
        orderNumber: order.orderNumber,
        customerName: order.customerName,
      })
@@ -940,14 +944,17 @@ export function CrewDashboard({
    const confirmPayment = async () => {
      if (!paymentConfirmDialog.orderId || !paymentConfirmDialog.paymentMethod) return
 
+     const amountReceived = paymentConfirmDialog.amountReceived
+
      setPaymentConfirmDialog({
        open: false,
        orderId: null,
        paymentMethod: null,
        amount: 0,
+       amountReceived: 0,
      })
 
-     await markAllAsPaid(paymentConfirmDialog.orderId, paymentConfirmDialog.paymentMethod)
+     await markAllAsPaid(paymentConfirmDialog.orderId, paymentConfirmDialog.paymentMethod, amountReceived)
    }
 
    const deleteAppendedOrder = async (orderId: string, appendedOrderId: string) => {
@@ -1005,7 +1012,7 @@ export function CrewDashboard({
     }
   }
 
-  const markAllAsPaid = async (orderId: string, paymentMethod: "cash" | "gcash") => {
+  const markAllAsPaid = async (orderId: string, paymentMethod: "cash" | "gcash", amountReceived: number) => {
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
 
@@ -1023,6 +1030,7 @@ export function CrewDashboard({
           isPaid: true,
           paymentMethod,
           paidAmount: appendedTotal,
+          amountReceived, // Store amount received for appended orders
         }
       }
       return appended
@@ -1042,6 +1050,7 @@ export function CrewDashboard({
               isPaid: true,
               paymentMethod: !mainOrderPaid ? paymentMethod : o.paymentMethod,
               paidAmount: !mainOrderPaid ? mainTotal : o.paidAmount,
+              amountReceived: !mainOrderPaid ? amountReceived : o.amountReceived, // Store amount received
               appendedOrders: updatedAppendedOrders,
             }
           : o,
@@ -1052,7 +1061,7 @@ export function CrewDashboard({
     try {
       // Mark main order as paid with payment method if not already paid
       if (!mainOrderPaid) {
-        await ordersApi.togglePayment(orderId, true, paymentMethod)
+        await ordersApi.togglePayment(orderId, true, paymentMethod, undefined, undefined, amountReceived)
       }
 
       // Mark all unpaid appended orders as paid with payment method
@@ -1060,7 +1069,7 @@ export function CrewDashboard({
         const unpaidAppendedOrders = order.appendedOrders.filter((a) => !a.isPaid)
         if (unpaidAppendedOrders.length > 0) {
           await Promise.all(
-            unpaidAppendedOrders.map((appended) => ordersApi.toggleAppendedPayment(orderId, appended.id, true, paymentMethod)),
+            unpaidAppendedOrders.map((appended) => ordersApi.toggleAppendedPayment(orderId, appended.id, true, paymentMethod, undefined, undefined, amountReceived)),
           )
         }
       }
@@ -1081,7 +1090,7 @@ export function CrewDashboard({
     }
   }
 
-  const markAllAsPaidSplit = async (orderId: string, cashAmount: number, gcashAmount: number) => {
+  const markAllAsPaidSplit = async (orderId: string, cashAmount: number, gcashAmount: number, amountReceived: number) => {
     const order = orders.find((o) => o.id === orderId)
     if (!order) return
 
@@ -1097,6 +1106,7 @@ export function CrewDashboard({
           ...appended,
           isPaid: true,
           paidAmount: appendedTotal,
+          amountReceived, // Store amount received for appended orders
           // Don't set payment method for appended - split is tracked at main order level
         }
       }
@@ -1114,6 +1124,7 @@ export function CrewDashboard({
               cashAmount: !mainOrderPaid ? cashAmount : o.cashAmount,
               gcashAmount: !mainOrderPaid ? gcashAmount : o.gcashAmount,
               paidAmount: !mainOrderPaid ? mainTotal : o.paidAmount,
+              amountReceived: !mainOrderPaid ? amountReceived : o.amountReceived, // Store amount received
               appendedOrders: updatedAppendedOrders,
             }
           : o,
@@ -1124,7 +1135,7 @@ export function CrewDashboard({
     try {
       // Mark main order as paid with split payment if not already paid
       if (!mainOrderPaid) {
-        await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount)
+        await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount, amountReceived)
       }
 
       // Mark all unpaid appended orders as paid
@@ -1133,7 +1144,7 @@ export function CrewDashboard({
         if (unpaidAppendedOrders.length > 0) {
           await Promise.all(
             unpaidAppendedOrders.map((appended) =>
-              ordersApi.toggleAppendedPayment(orderId, appended.id, true)
+              ordersApi.toggleAppendedPayment(orderId, appended.id, true, "split", cashAmount, gcashAmount, amountReceived)
             ),
           )
         }
@@ -1195,9 +1206,9 @@ export function CrewDashboard({
     })
   }
 
-  const handleSplitPaymentConfirm = (cashAmount: number, gcashAmount: number) => {
+  const handleSplitPaymentConfirm = (cashAmount: number, gcashAmount: number, amountReceived: number) => {
     if (splitPaymentDialog.orderId) {
-      markAllAsPaidSplit(splitPaymentDialog.orderId, cashAmount, gcashAmount)
+      markAllAsPaidSplit(splitPaymentDialog.orderId, cashAmount, gcashAmount, amountReceived)
     }
   }
 
@@ -4458,6 +4469,7 @@ export function CrewDashboard({
               orderId: null,
               paymentMethod: null,
               amount: 0,
+              amountReceived: 0,
             })
           }
         }}
@@ -4489,8 +4501,34 @@ export function CrewDashboard({
               )}
               <div className="border-t border-slate-200 pt-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-600">Amount:</span>
+                  <span className="text-sm font-medium text-slate-600">Total Amount:</span>
                   <span className="text-lg font-bold text-emerald-600">₱{paymentConfirmDialog.amount.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Amount Received:</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={paymentConfirmDialog.amount}
+                    value={paymentConfirmDialog.amountReceived}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0
+                      setPaymentConfirmDialog({
+                        ...paymentConfirmDialog,
+                        amountReceived: value,
+                      })
+                    }}
+                    className="text-lg font-bold"
+                    placeholder="0.00"
+                  />
+                  {paymentConfirmDialog.amountReceived >= paymentConfirmDialog.amount && (
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                      <span className="text-sm font-medium text-slate-600">Change:</span>
+                      <span className="text-lg font-bold text-blue-600">₱{(paymentConfirmDialog.amountReceived - paymentConfirmDialog.amount).toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="border-t border-slate-200 pt-3">
@@ -4530,6 +4568,7 @@ export function CrewDashboard({
                   orderId: null,
                   paymentMethod: null,
                   amount: 0,
+                  amountReceived: 0,
                 })
               }}
             >
@@ -4537,7 +4576,8 @@ export function CrewDashboard({
             </Button>
             <Button
               onClick={confirmPayment}
-              className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold"
+              disabled={paymentConfirmDialog.amountReceived < paymentConfirmDialog.amount}
+              className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CreditCard className="w-4 h-4 mr-2" />
               Confirm Payment
