@@ -1791,10 +1791,17 @@ export function CrewDashboard({
   // Filter function for search and filters
   const filterOrders = (ordersList: Order[]) => {
     return ordersList.filter(order => {
-      // Search filter
+      // Search filter - search by customer name, order number, or item names
+      const searchLower = searchQuery.toLowerCase()
       const matchesSearch = !searchQuery ||
-        order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        order.orderNumber?.toString().includes(searchQuery)
+        order.customerName.toLowerCase().includes(searchLower) ||
+        order.orderNumber?.toString().includes(searchQuery) ||
+        // Search in main order items
+        order.items.some(item => item.name.toLowerCase().includes(searchLower)) ||
+        // Search in appended order items
+        (order.appendedOrders?.some(appendedOrder =>
+          appendedOrder.items.some(item => item.name.toLowerCase().includes(searchLower))
+        ) ?? false)
 
       // Payment status filter
       const allPaid = areAllItemsPaid(order)
@@ -1848,6 +1855,7 @@ export function CrewDashboard({
 
   const filteredActiveOrders = filterOrders(activeOrders)
   const filteredServedNotPaidOrders = filterOrders(servedNotPaidOrders)
+  const filteredCompletedOrders = filterOrders(completedOrders)
 
   const shouldShowActiveOrders = filterByStatus === "all" || filterByStatus === "active" || filterByStatus === "pending"
   const shouldShowServedNotPaid = filterByStatus === "all" || filterByStatus === "awaiting"
@@ -1855,7 +1863,7 @@ export function CrewDashboard({
 
   const sortedActiveOrders = [...filteredActiveOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
   const sortedServedNotPaidOrders = [...filteredServedNotPaidOrders].sort((a, b) => getLatestOrderTimestamp(a) - getLatestOrderTimestamp(b))
-  const sortedCompletedOrders = [...completedOrders].sort((a, b) => getLatestOrderTimestamp(b) - getLatestOrderTimestamp(a))
+  const sortedCompletedOrders = [...filteredCompletedOrders].sort((a, b) => getLatestOrderTimestamp(b) - getLatestOrderTimestamp(a))
 
   const toggleCompletedExpanded = (orderId: string) => {
     setExpandedCompleted(expandedCompleted === orderId ? null : orderId)
@@ -2314,7 +2322,7 @@ export function CrewDashboard({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by customer name or order #..."
+                placeholder="Search by customer name, order #, or item..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

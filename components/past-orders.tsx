@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight, Trash2 } from "lucide-react"
+import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight, Trash2, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 const ORDERS_PER_PAGE = 10
@@ -37,6 +37,7 @@ export function PastOrders() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     loadOrders()
@@ -247,11 +248,34 @@ export function PastOrders() {
     )
   }
 
-  // Pagination calculations
-  const totalPages = Math.ceil(orders.length / ORDERS_PER_PAGE)
+  // Filter orders based on search query
+  const filteredOrders = orders.filter((order) => {
+    if (!searchQuery) return true
+
+    const searchLower = searchQuery.toLowerCase()
+
+    // Search by customer name
+    if (order.customerName.toLowerCase().includes(searchLower)) return true
+
+    // Search by order number
+    if (order.orderNumber?.toString().includes(searchQuery)) return true
+
+    // Search by items in main order
+    if (order.items.some((item) => item.name.toLowerCase().includes(searchLower))) return true
+
+    // Search by items in appended orders
+    if (order.appendedOrders?.some((appended) =>
+      appended.items.some((item) => item.name.toLowerCase().includes(searchLower))
+    )) return true
+
+    return false
+  })
+
+  // Pagination calculations (use filtered orders)
+  const totalPages = Math.ceil(filteredOrders.length / ORDERS_PER_PAGE)
   const startIndex = (currentPage - 1) * ORDERS_PER_PAGE
   const endIndex = startIndex + ORDERS_PER_PAGE
-  const paginatedOrders = orders.slice(startIndex, endIndex)
+  const paginatedOrders = filteredOrders.slice(startIndex, endIndex)
 
   const handlePreviousPage = () => {
     setCurrentPage((prev) => Math.max(1, prev - 1))
@@ -270,9 +294,59 @@ export function PastOrders() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Past Orders</h1>
         <div className="text-sm text-gray-600">
-          Showing {startIndex + 1}-{Math.min(endIndex, orders.length)} of {orders.length} orders
+          Showing {filteredOrders.length === 0 ? 0 : startIndex + 1}-{Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
+          {searchQuery && ` (filtered from ${orders.length})`}
         </div>
       </div>
+
+      {/* Search Bar */}
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by customer name, order #, or item..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setCurrentPage(1) // Reset to first page when searching
+            }}
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("")
+                setCurrentPage(1)
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* No results message */}
+      {filteredOrders.length === 0 && searchQuery && (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="text-gray-400 mb-2">
+            <Search className="w-12 h-12 mx-auto mb-3" />
+          </div>
+          <div className="text-lg font-semibold text-gray-700 mb-1">No orders found</div>
+          <div className="text-sm text-gray-500">
+            No orders match your search "{searchQuery}"
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSearchQuery("")}
+            className="mt-4"
+          >
+            Clear search
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {paginatedOrders.map((order) => {
