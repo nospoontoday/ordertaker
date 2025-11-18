@@ -258,20 +258,29 @@ router.get('/daily-sales', async (req, res) => {
 
       // Helper function to calculate payment method totals
       const calculatePaymentTotals = (orderTotal, paymentMethod, cashAmount, gcashAmount) => {
+        let actualPaymentTotal = 0;
+
         if (paymentMethod === "cash") {
           dailySales.totalCash += orderTotal;
+          actualPaymentTotal = orderTotal;
         } else if (paymentMethod === "gcash") {
           dailySales.totalGcash += orderTotal;
+          actualPaymentTotal = orderTotal;
         } else if (paymentMethod === "split") {
           // Ensure proper number conversion for split payments
           const cash = Number(cashAmount) || 0;
           const gcash = Number(gcashAmount) || 0;
           dailySales.totalCash += cash;
           dailySales.totalGcash += gcash;
+          actualPaymentTotal = cash + gcash;
         } else {
           // Default to cash for legacy orders without payment method
           dailySales.totalCash += orderTotal;
+          actualPaymentTotal = orderTotal;
         }
+
+        // Add to total sales based on actual payment received, not item prices
+        dailySales.totalSales += actualPaymentTotal;
       };
 
       // Process main order items
@@ -305,7 +314,7 @@ router.get('/daily-sales', async (req, res) => {
         const itemData = categoryItems.get(itemKey);
         itemData.quantity += item.quantity;
         itemData.total += itemTotal;
-        dailySales.totalSales += itemTotal;
+        // Note: totalSales is now calculated from payment amounts, not item prices
       });
 
       // Process appended orders
@@ -342,7 +351,7 @@ router.get('/daily-sales', async (req, res) => {
               const itemData = categoryItems.get(itemKey);
               itemData.quantity += item.quantity;
               itemData.total += itemTotal;
-              dailySales.totalSales += itemTotal;
+              // Note: totalSales is now calculated from payment amounts, not item prices
             });
           }
         });
@@ -1278,14 +1287,29 @@ router.put('/:id/payment', async (req, res) => {
 
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
-        order.cashAmount = req.body.cashAmount || 0;
-        order.gcashAmount = req.body.gcashAmount || 0;
+        const cashAmount = Number(req.body.cashAmount) || 0;
+        const gcashAmount = Number(req.body.gcashAmount) || 0;
+        const splitTotal = cashAmount + gcashAmount;
+
+        // Validate that split payment amounts match the order total
+        // Allow small rounding differences (0.01)
+        if (Math.abs(splitTotal - mainOrderTotal) > 0.01) {
+          return res.status(400).json({
+            success: false,
+            error: `Split payment amounts (Cash: ₱${cashAmount.toFixed(2)} + GCash: ₱${gcashAmount.toFixed(2)} = ₱${splitTotal.toFixed(2)}) must equal order total (₱${mainOrderTotal.toFixed(2)})`
+          });
+        }
+
+        order.cashAmount = cashAmount;
+        order.gcashAmount = gcashAmount;
         console.log('Saving split payment:', {
           orderId: order.id,
           cashAmount: order.cashAmount,
           gcashAmount: order.gcashAmount,
           paidAmount: order.paidAmount,
-          amountReceived: order.amountReceived
+          amountReceived: order.amountReceived,
+          splitTotal: splitTotal,
+          orderTotal: mainOrderTotal
         });
       } else {
         // Clear split amounts for non-split payments
@@ -1390,8 +1414,21 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
 
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
-        appendedOrder.cashAmount = req.body.cashAmount || 0;
-        appendedOrder.gcashAmount = req.body.gcashAmount || 0;
+        const cashAmount = Number(req.body.cashAmount) || 0;
+        const gcashAmount = Number(req.body.gcashAmount) || 0;
+        const splitTotal = cashAmount + gcashAmount;
+
+        // Validate that split payment amounts match the order total
+        // Allow small rounding differences (0.01)
+        if (Math.abs(splitTotal - appendedOrderTotal) > 0.01) {
+          return res.status(400).json({
+            success: false,
+            error: `Split payment amounts (Cash: ₱${cashAmount.toFixed(2)} + GCash: ₱${gcashAmount.toFixed(2)} = ₱${splitTotal.toFixed(2)}) must equal appended order total (₱${appendedOrderTotal.toFixed(2)})`
+          });
+        }
+
+        appendedOrder.cashAmount = cashAmount;
+        appendedOrder.gcashAmount = gcashAmount;
       } else {
         // Clear split amounts for non-split payments
         appendedOrder.cashAmount = undefined;

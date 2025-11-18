@@ -435,8 +435,8 @@ export function PastOrders() {
                             </div>
                           )
                         })()}
-                        {/* Amount Received - get from backend or calculate from payment fields */}
-                        {(() => {
+                        {/* Amount Received - only show for Cash and Split payments (GCash is always exact) */}
+                        {order.paymentMethod !== 'gcash' && (() => {
                           const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
                           let amountReceived = orderTotal // Default fallback to order total
 
@@ -452,15 +452,13 @@ export function PastOrders() {
                           else if (order.paidAmount !== undefined) {
                             amountReceived = order.paidAmount
                           }
-                          // Priority 4: Use cashAmount or gcashAmount
+                          // Priority 4: Use cashAmount
                           else if (order.cashAmount !== undefined) {
                             amountReceived = order.cashAmount
-                          } else if (order.gcashAmount !== undefined) {
-                            amountReceived = order.gcashAmount
                           }
 
                           // For split payments, change = amountReceived - cashAmount
-                          // For cash/gcash payments, change = amountReceived - orderTotal
+                          // For cash payments, change = amountReceived - orderTotal
                           const change = order.paymentMethod === 'split'
                             ? amountReceived - (order.cashAmount || 0)
                             : amountReceived - orderTotal
@@ -545,8 +543,8 @@ export function PastOrders() {
                                   </div>
                                 )
                               })()}
-                              {/* Amount Received - get from backend or calculate from payment fields */}
-                              {(() => {
+                              {/* Amount Received - only show for Cash and Split payments (GCash is always exact) */}
+                              {appended.paymentMethod !== 'gcash' && (() => {
                                 const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
                                 let amountReceived = appendedTotal // Default fallback to order total
 
@@ -562,15 +560,13 @@ export function PastOrders() {
                                 else if (appended.paidAmount !== undefined) {
                                   amountReceived = appended.paidAmount
                                 }
-                                // Priority 4: Use cashAmount or gcashAmount
+                                // Priority 4: Use cashAmount
                                 else if (appended.cashAmount !== undefined) {
                                   amountReceived = appended.cashAmount
-                                } else if (appended.gcashAmount !== undefined) {
-                                  amountReceived = appended.gcashAmount
                                 }
 
                                 // For split payments, change = amountReceived - cashAmount
-                                // For cash/gcash payments, change = amountReceived - appendedTotal
+                                // For cash payments, change = amountReceived - appendedTotal
                                 const change = appended.paymentMethod === 'split'
                                   ? amountReceived - (appended.cashAmount || 0)
                                   : amountReceived - appendedTotal
