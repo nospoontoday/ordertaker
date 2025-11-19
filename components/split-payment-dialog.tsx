@@ -25,7 +25,8 @@ export function SplitPaymentDialog({
 }: SplitPaymentDialogProps) {
   const [cashAmount, setCashAmount] = useState<string>("")
   const [gcashAmount, setGcashAmount] = useState<number>(totalAmount)
-  const [amountReceived, setAmountReceived] = useState<number>(totalAmount)
+  const [amountReceived, setAmountReceived] = useState<number>(0)
+  const [errorMessage, setErrorMessage] = useState<string>("")
 
   // Quick amount buttons
   const quickAmounts = [50, 100, 200, 500, 1000]
@@ -42,7 +43,8 @@ export function SplitPaymentDialog({
     if (open) {
       setCashAmount("")
       setGcashAmount(totalAmount)
-      setAmountReceived(totalAmount)
+      setAmountReceived(0)
+      setErrorMessage("")
     }
   }, [open, totalAmount])
 
@@ -56,6 +58,10 @@ export function SplitPaymentDialog({
       const numValue = parseFloat(value) || 0
       if (numValue <= totalAmount) {
         setCashAmount(value)
+        // Clear error when user starts typing
+        if (errorMessage) {
+          setErrorMessage("")
+        }
       }
     }
   }
@@ -64,16 +70,29 @@ export function SplitPaymentDialog({
     const cash = parseFloat(cashAmount) || 0
     const gcash = gcashAmount
 
+    // Clear previous error
+    setErrorMessage("")
+
+    // Validate split amounts
     if (cash + gcash !== totalAmount) {
-      return // Invalid split
+      setErrorMessage("Cash and GCash amounts must equal the total amount.")
+      return
     }
 
-    if (cash < 0 || gcash < 0) {
-      return // Negative amounts not allowed
+    if (cash <= 0) {
+      setErrorMessage("Cash amount must be greater than 0 for split payment.")
+      return
     }
 
-    if (amountReceived < totalAmount) {
-      return // Amount received must be >= total
+    if (gcash < 0) {
+      setErrorMessage("GCash amount cannot be negative.")
+      return
+    }
+
+    // Validate amount received - must be at least equal to cash amount
+    if (amountReceived < cash) {
+      setErrorMessage(`Amount received (₱${amountReceived.toFixed(2)}) must be at least equal to the cash amount (₱${cash.toFixed(2)}).`)
+      return
     }
 
     onConfirm(cash, gcash, amountReceived)
@@ -82,7 +101,7 @@ export function SplitPaymentDialog({
 
   const isValid = () => {
     const cash = parseFloat(cashAmount) || 0
-    return cash > 0 && cash < totalAmount && gcashAmount > 0 && amountReceived >= totalAmount
+    return cash > 0 && cash < totalAmount && gcashAmount > 0 && amountReceived >= cash
   }
 
   return (
@@ -116,12 +135,22 @@ export function SplitPaymentDialog({
             <Input
               type="number"
               step="0.01"
-              min={totalAmount}
+              min="0"
               placeholder="0.00"
-              value={amountReceived}
-              onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
+              value={amountReceived || ""}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                setAmountReceived(value)
+                // Clear error when user starts typing
+                if (errorMessage) {
+                  setErrorMessage("")
+                }
+              }}
               className="text-2xl font-bold text-center h-14 border-2 border-purple-200 focus:border-purple-500"
             />
+            {errorMessage && (
+              <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>
+            )}
           </div>
 
           {/* Cash Amount Input */}
