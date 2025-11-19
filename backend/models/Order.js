@@ -130,6 +130,11 @@ const appendedOrderSchema = new mongoose.Schema(
       type: Number,
       required: false,
       min: [0, 'Amount received cannot be negative']
+    },
+    paidAsWholeOrder: {
+      type: Boolean,
+      required: false,
+      default: false
     }
   },
   { _id: false } // Don't create _id for subdocuments
@@ -203,6 +208,11 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       required: false,
       min: [0, 'Amount received cannot be negative']
+    },
+    paidAsWholeOrder: {
+      type: Boolean,
+      required: false,
+      default: false
     },
     orderType: {
       type: String,

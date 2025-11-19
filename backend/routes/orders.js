@@ -1285,6 +1285,11 @@ router.put('/:id/payment', async (req, res) => {
         order.amountReceived = req.body.amountReceived;
       }
 
+      // Store paidAsWholeOrder flag from request body
+      if (req.body.paidAsWholeOrder !== undefined) {
+        order.paidAsWholeOrder = req.body.paidAsWholeOrder;
+      }
+
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
         const cashAmount = Number(req.body.cashAmount) || 0;
@@ -1323,6 +1328,7 @@ router.put('/:id/payment', async (req, res) => {
       order.gcashAmount = undefined;
       order.paidAmount = undefined;
       order.amountReceived = undefined;
+      order.paidAsWholeOrder = undefined;
     }
 
     await order.save();
@@ -1412,6 +1418,11 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
         appendedOrder.amountReceived = req.body.amountReceived;
       }
 
+      // Store paidAsWholeOrder flag from request body
+      if (req.body.paidAsWholeOrder !== undefined) {
+        appendedOrder.paidAsWholeOrder = req.body.paidAsWholeOrder;
+      }
+
       // Set split payment amounts if provided
       if (req.body.paymentMethod === 'split') {
         const cashAmount = Number(req.body.cashAmount) || 0;
@@ -1441,6 +1452,7 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
       appendedOrder.gcashAmount = undefined;
       appendedOrder.paidAmount = undefined;
       appendedOrder.amountReceived = undefined;
+      appendedOrder.paidAsWholeOrder = undefined;
     }
 
     await order.save();
