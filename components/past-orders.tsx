@@ -43,12 +43,95 @@ export function PastOrders() {
     loadOrders()
   }, [])
 
+  const migrateLegacyOrders = async (orders: Order[]) => {
+    // Migrate legacy orders that don't have paidAsWholeOrder flag
+    const ordersToUpdate: Order[] = []
+
+    for (const order of orders) {
+      // Skip if no appended orders or already has the flag
+      if (!order.appendedOrders || order.appendedOrders.length === 0 || order.paidAsWholeOrder) {
+        continue
+      }
+
+      // Check if all orders are paid
+      const mainPaid = order.isPaid
+      const allAppendedPaid = order.appendedOrders.every(a => a.isPaid)
+
+      if (!mainPaid || !allAppendedPaid) {
+        continue
+      }
+
+      // Calculate totals
+      const mainTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+      const appendedTotal = order.appendedOrders.reduce((sum, appended) => {
+        return sum + appended.items.reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0)
+      }, 0)
+      const overallTotal = mainTotal + appendedTotal
+
+      // Check if this looks like a whole order payment
+      // Criteria: Main order has amountReceived and it's >= overall total
+      if (order.amountReceived !== undefined && order.amountReceived >= overallTotal) {
+        // This is likely a whole order payment - migrate it
+        ordersToUpdate.push(order)
+      }
+    }
+
+    // Update orders in database
+    if (ordersToUpdate.length > 0) {
+      console.log(`Migrating ${ordersToUpdate.length} legacy orders to add paidAsWholeOrder flag`)
+
+      for (const order of ordersToUpdate) {
+        try {
+          // Update main order
+          await ordersApi.togglePayment(
+            order.id,
+            true,
+            order.paymentMethod || undefined,
+            order.cashAmount,
+            order.gcashAmount,
+            order.amountReceived,
+            true // paidAsWholeOrder
+          )
+
+          // Update all appended orders
+          if (order.appendedOrders) {
+            for (const appended of order.appendedOrders) {
+              if (appended.isPaid) {
+                await ordersApi.toggleAppendedPayment(
+                  order.id,
+                  appended.id,
+                  true,
+                  appended.paymentMethod || undefined,
+                  appended.cashAmount,
+                  appended.gcashAmount,
+                  appended.amountReceived,
+                  true // paidAsWholeOrder
+                )
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error migrating order ${order.id}:`, error)
+        }
+      }
+
+      console.log(`Successfully migrated ${ordersToUpdate.length} orders`)
+    }
+  }
+
   const loadOrders = async () => {
     try {
       setLoading(true)
       const allOrders = await ordersApi.getAll()
+
+      // Run migration for legacy orders
+      await migrateLegacyOrders(allOrders)
+
+      // Reload orders after migration to get updated data
+      const updatedOrders = await ordersApi.getAll()
+
       // Sort orders from newest to oldest
-      const sortedOrders = allOrders.sort((a, b) => b.createdAt - a.createdAt)
+      const sortedOrders = updatedOrders.sort((a, b) => b.createdAt - a.createdAt)
       setOrders(sortedOrders)
     } catch (error) {
       console.error("Error loading past orders:", error)
