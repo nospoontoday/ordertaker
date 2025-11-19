@@ -495,7 +495,20 @@ export function PastOrders() {
                   </div>
                   {renderOrderItems(order.items, order.id)}
 
-                  {/* Payment Information - Only show if not part of whole order payment */}
+                  {/* Order Total - Always show when paid */}
+                  {order.isPaid && (() => {
+                    const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                    return (
+                      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex justify-between">
+                          <span className="text-gray-700 font-semibold">Total:</span>
+                          <span className="font-semibold text-blue-900">₱{orderTotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Payment Details - Only show if not part of whole order payment */}
                   {order.isPaid && !order.paidAsWholeOrder && (
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
@@ -508,16 +521,6 @@ export function PastOrders() {
                             </span>
                           </div>
                         )}
-                        {/* Order Total */}
-                        {(() => {
-                          const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-                          return (
-                            <div className="flex justify-between pt-1 border-t border-blue-200">
-                              <span className="text-gray-700 font-semibold">Total:</span>
-                              <span className="font-semibold text-blue-900">₱{orderTotal.toFixed(2)}</span>
-                            </div>
-                          )
-                        })()}
                         {/* Amount Received - only show for Cash and Split payments (GCash is always exact) */}
                         {order.paymentMethod !== 'gcash' && (() => {
                           const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
@@ -603,7 +606,20 @@ export function PastOrders() {
                         </div>
                         {renderOrderItems(appended.items, order.id, true, appended.id)}
 
-                        {/* Appended Order Payment Information - Only show if not part of whole order payment */}
+                        {/* Appended Order Total - Always show when paid */}
+                        {appended.isPaid && (() => {
+                          const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+                          return (
+                            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="flex justify-between">
+                                <span className="text-gray-700 font-semibold">Total:</span>
+                                <span className="font-semibold text-blue-900">₱{appendedTotal.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                        {/* Appended Order Payment Details - Only show if not part of whole order payment */}
                         {appended.isPaid && !appended.paidAsWholeOrder && (
                           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
@@ -616,16 +632,6 @@ export function PastOrders() {
                                   </span>
                                 </div>
                               )}
-                              {/* Appended Order Total */}
-                              {(() => {
-                                const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-                                return (
-                                  <div className="flex justify-between pt-1 border-t border-blue-200">
-                                    <span className="text-gray-700 font-semibold">Total:</span>
-                                    <span className="font-semibold text-blue-900">₱{appendedTotal.toFixed(2)}</span>
-                                  </div>
-                                )
-                              })()}
                               {/* Amount Received - only show for Cash and Split payments (GCash is always exact) */}
                               {appended.paymentMethod !== 'gcash' && (() => {
                                 const appendedTotal = appended.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
