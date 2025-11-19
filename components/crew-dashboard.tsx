@@ -1031,6 +1031,7 @@ export function CrewDashboard({
           paymentMethod,
           paidAmount: appendedTotal,
           amountReceived, // Store amount received for appended orders
+          paidAsWholeOrder: true, // Flag to indicate this was paid as part of whole order
         }
       }
       return appended
@@ -1051,6 +1052,7 @@ export function CrewDashboard({
               paymentMethod: !mainOrderPaid ? paymentMethod : o.paymentMethod,
               paidAmount: !mainOrderPaid ? mainTotal : o.paidAmount,
               amountReceived: !mainOrderPaid ? amountReceived : o.amountReceived, // Store amount received
+              paidAsWholeOrder: !mainOrderPaid ? true : o.paidAsWholeOrder, // Flag to indicate this was paid as part of whole order
               appendedOrders: updatedAppendedOrders,
             }
           : o,
@@ -1061,7 +1063,7 @@ export function CrewDashboard({
     try {
       // Mark main order as paid with payment method if not already paid
       if (!mainOrderPaid) {
-        await ordersApi.togglePayment(orderId, true, paymentMethod, undefined, undefined, amountReceived)
+        await ordersApi.togglePayment(orderId, true, paymentMethod, undefined, undefined, amountReceived, true)
       }
 
       // Mark all unpaid appended orders as paid with payment method
@@ -1069,7 +1071,7 @@ export function CrewDashboard({
         const unpaidAppendedOrders = order.appendedOrders.filter((a) => !a.isPaid)
         if (unpaidAppendedOrders.length > 0) {
           await Promise.all(
-            unpaidAppendedOrders.map((appended) => ordersApi.toggleAppendedPayment(orderId, appended.id, true, paymentMethod, undefined, undefined, amountReceived)),
+            unpaidAppendedOrders.map((appended) => ordersApi.toggleAppendedPayment(orderId, appended.id, true, paymentMethod, undefined, undefined, amountReceived, true)),
           )
         }
       }
@@ -1107,6 +1109,7 @@ export function CrewDashboard({
           isPaid: true,
           paidAmount: appendedTotal,
           amountReceived, // Store amount received for appended orders
+          paidAsWholeOrder: true, // Flag to indicate this was paid as part of whole order
           // Don't set payment method for appended - split is tracked at main order level
         }
       }
@@ -1125,6 +1128,7 @@ export function CrewDashboard({
               gcashAmount: !mainOrderPaid ? gcashAmount : o.gcashAmount,
               paidAmount: !mainOrderPaid ? mainTotal : o.paidAmount,
               amountReceived: !mainOrderPaid ? amountReceived : o.amountReceived, // Store amount received
+              paidAsWholeOrder: !mainOrderPaid ? true : o.paidAsWholeOrder, // Flag to indicate this was paid as part of whole order
               appendedOrders: updatedAppendedOrders,
             }
           : o,
@@ -1135,7 +1139,7 @@ export function CrewDashboard({
     try {
       // Mark main order as paid with split payment if not already paid
       if (!mainOrderPaid) {
-        await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount, amountReceived)
+        await ordersApi.togglePayment(orderId, true, "split", cashAmount, gcashAmount, amountReceived, true)
       }
 
       // Mark all unpaid appended orders as paid
@@ -1144,7 +1148,7 @@ export function CrewDashboard({
         if (unpaidAppendedOrders.length > 0) {
           await Promise.all(
             unpaidAppendedOrders.map((appended) =>
-              ordersApi.toggleAppendedPayment(orderId, appended.id, true, "split", cashAmount, gcashAmount, amountReceived)
+              ordersApi.toggleAppendedPayment(orderId, appended.id, true, "split", cashAmount, gcashAmount, amountReceived, true)
             ),
           )
         }

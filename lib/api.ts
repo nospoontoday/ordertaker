@@ -64,6 +64,7 @@ export interface AppendedOrder {
   gcashAmount?: number;
   paidAmount?: number;
   amountReceived?: number;
+  paidAsWholeOrder?: boolean;
 }
 
 export interface Withdrawal {
@@ -102,6 +103,7 @@ export interface Order {
   gcashAmount?: number;
   paidAmount?: number;
   amountReceived?: number;
+  paidAsWholeOrder?: boolean;
   orderType: "dine-in" | "take-out";
   appendedOrders?: AppendedOrder[];
   totalAmount?: number;
@@ -553,7 +555,8 @@ export const ordersApi = {
     paymentMethod?: "cash" | "gcash" | "split",
     cashAmount?: number,
     gcashAmount?: number,
-    amountReceived?: number
+    amountReceived?: number,
+    paidAsWholeOrder?: boolean
   ): Promise<Order> => {
     const body: any = {};
     if (isPaid !== undefined) body.isPaid = isPaid;
@@ -561,6 +564,7 @@ export const ordersApi = {
     if (cashAmount !== undefined) body.cashAmount = cashAmount;
     if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
     if (amountReceived !== undefined) body.amountReceived = amountReceived;
+    if (paidAsWholeOrder !== undefined) body.paidAsWholeOrder = paidAsWholeOrder;
 
     const response = await apiCall<Order>(`/orders/${id}/payment`, {
       method: 'PUT',
@@ -584,7 +588,8 @@ export const ordersApi = {
     paymentMethod?: "cash" | "gcash" | "split",
     cashAmount?: number,
     gcashAmount?: number,
-    amountReceived?: number
+    amountReceived?: number,
+    paidAsWholeOrder?: boolean
   ): Promise<Order> => {
     const body: any = {};
     if (isPaid !== undefined) body.isPaid = isPaid;
@@ -592,6 +597,7 @@ export const ordersApi = {
     if (cashAmount !== undefined) body.cashAmount = cashAmount;
     if (gcashAmount !== undefined) body.gcashAmount = gcashAmount;
     if (amountReceived !== undefined) body.amountReceived = amountReceived;
+    if (paidAsWholeOrder !== undefined) body.paidAsWholeOrder = paidAsWholeOrder;
 
     const response = await apiCall<Order>(`/orders/${orderId}/appended/${appendedId}/payment`, {
       method: 'PUT',

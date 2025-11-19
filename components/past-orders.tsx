@@ -411,9 +411,9 @@ export function PastOrders() {
                     </Button>
                   </div>
                   {renderOrderItems(order.items, order.id)}
-                  
-                  {/* Payment Information */}
-                  {order.isPaid && (
+
+                  {/* Payment Information - Only show if not part of whole order payment */}
+                  {order.isPaid && !order.paidAsWholeOrder && (
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
                       <div className="space-y-1 text-sm">
@@ -520,8 +520,8 @@ export function PastOrders() {
                         </div>
                         {renderOrderItems(appended.items, order.id, true, appended.id)}
 
-                        {/* Appended Order Payment Information */}
-                        {appended.isPaid && (
+                        {/* Appended Order Payment Information - Only show if not part of whole order payment */}
+                        {appended.isPaid && !appended.paidAsWholeOrder && (
                           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
                             <div className="space-y-1 text-sm">
@@ -656,7 +656,15 @@ export function PastOrders() {
                   // Only show overall summary if there are multiple orders (main + appended)
                   const hasMultipleOrders = order.appendedOrders && order.appendedOrders.length > 0
 
+                  // Check if this was a whole order payment
+                  const isPaidAsWholeOrder = order.paidAsWholeOrder ||
+                    (order.appendedOrders && order.appendedOrders.some(a => a.paidAsWholeOrder))
+
                   if (hasMultipleOrders) {
+                    // Get payment method from main order (where whole order payment details are stored)
+                    const paymentMethod = order.paymentMethod
+                    const amountReceived = order.amountReceived
+
                     return (
                       <div className="mt-6 p-4 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg border-2 border-emerald-200">
                         <div className="text-base font-bold text-emerald-900 mb-3">Overall Payment Summary</div>
@@ -676,6 +684,21 @@ export function PastOrders() {
                               <span className="text-gray-700 font-semibold">Ⓖ GCash:</span>
                               <span className="font-semibold text-blue-800">₱{totalGcash.toFixed(2)}</span>
                             </div>
+                          )}
+                          {/* Show amount received and change only when paid as whole order */}
+                          {isPaidAsWholeOrder && amountReceived !== undefined && paymentMethod !== 'gcash' && (
+                            <>
+                              <div className="flex justify-between items-center pt-2 border-t-2 border-emerald-300">
+                                <span className="text-gray-700 font-semibold">Amount Received:</span>
+                                <span className="font-semibold text-purple-800">₱{amountReceived.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-700 font-semibold">Change:</span>
+                                <span className={`font-semibold ${(amountReceived - (paymentMethod === 'split' ? totalCash : overallTotal)) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  ₱{(amountReceived - (paymentMethod === 'split' ? totalCash : overallTotal)).toFixed(2)}
+                                </span>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
