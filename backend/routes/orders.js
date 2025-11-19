@@ -1296,12 +1296,28 @@ router.put('/:id/payment', async (req, res) => {
         const gcashAmount = Number(req.body.gcashAmount) || 0;
         const splitTotal = cashAmount + gcashAmount;
 
-        // Validate that split payment amounts match the order total
+        // Calculate total amount to validate against
+        // If paidAsWholeOrder flag is set, validate against main order + all unpaid appended orders
+        let validationTotal = mainOrderTotal;
+        if (req.body.paidAsWholeOrder && order.appendedOrders && order.appendedOrders.length > 0) {
+          // Only include unpaid appended orders in validation total
+          const unpaidAppendedTotal = order.appendedOrders.reduce((sum, appended) => {
+            if (!appended.isPaid) {
+              return sum + appended.items.reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0);
+            }
+            return sum;
+          }, 0);
+          
+          // Validate against main order total + unpaid appended orders
+          validationTotal = mainOrderTotal + unpaidAppendedTotal;
+        }
+
+        // Validate that split payment amounts match the validation total
         // Allow small rounding differences (0.01)
-        if (Math.abs(splitTotal - mainOrderTotal) > 0.01) {
+        if (Math.abs(splitTotal - validationTotal) > 0.01) {
           return res.status(400).json({
             success: false,
-            error: `Split payment amounts (Cash: ₱${cashAmount.toFixed(2)} + GCash: ₱${gcashAmount.toFixed(2)} = ₱${splitTotal.toFixed(2)}) must equal order total (₱${mainOrderTotal.toFixed(2)})`
+            error: `Split payment amounts (Cash: ₱${cashAmount.toFixed(2)} + GCash: ₱${gcashAmount.toFixed(2)} = ₱${splitTotal.toFixed(2)}) must equal order total (₱${validationTotal.toFixed(2)})`
           });
         }
 
@@ -1314,7 +1330,9 @@ router.put('/:id/payment', async (req, res) => {
           paidAmount: order.paidAmount,
           amountReceived: order.amountReceived,
           splitTotal: splitTotal,
-          orderTotal: mainOrderTotal
+          orderTotal: mainOrderTotal,
+          validationTotal: validationTotal,
+          paidAsWholeOrder: req.body.paidAsWholeOrder
         });
       } else {
         // Clear split amounts for non-split payments

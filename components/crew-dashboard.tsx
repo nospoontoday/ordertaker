@@ -1143,12 +1143,13 @@ export function CrewDashboard({
       }
 
       // Mark all unpaid appended orders as paid
+      // Note: Don't pass split payment details to appended orders - split is tracked at main order level
       if (order.appendedOrders && order.appendedOrders.length > 0) {
         const unpaidAppendedOrders = order.appendedOrders.filter((a) => !a.isPaid)
         if (unpaidAppendedOrders.length > 0) {
           await Promise.all(
             unpaidAppendedOrders.map((appended) =>
-              ordersApi.toggleAppendedPayment(orderId, appended.id, true, "split", cashAmount, gcashAmount, amountReceived, true)
+              ordersApi.toggleAppendedPayment(orderId, appended.id, true, undefined, undefined, undefined, amountReceived, true)
             ),
           )
         }
