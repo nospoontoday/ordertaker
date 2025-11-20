@@ -160,32 +160,9 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
         }
       }
 
-      // Calculate appended orders totals
-      if (order.appendedOrders) {
-        order.appendedOrders.forEach((appended) => {
-          const appendedTotal = appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-          if (appended.isPaid) {
-            if (appended.paymentMethod === "cash") {
-              totalCash += appendedTotal
-              userSales[userKey].cash += appendedTotal
-            } else if (appended.paymentMethod === "gcash") {
-              totalGcash += appendedTotal
-              userSales[userKey].gcash += appendedTotal
-            } else if (appended.paymentMethod === "split") {
-              const cashAmt = appended.cashAmount || 0
-              const gcashAmt = appended.gcashAmount || 0
-              totalCash += cashAmt
-              totalGcash += gcashAmt
-              userSales[userKey].cash += cashAmt
-              userSales[userKey].gcash += gcashAmt
-            } else {
-              // Legacy orders without payment method
-              totalCash += appendedTotal
-              userSales[userKey].cash += appendedTotal
-            }
-          }
-        })
-      }
+      // Note: Appended orders are part of the same transaction as the main order.
+      // Their payment is already included in the main order's payment totals,
+      // so we should NOT add their payment amounts again to avoid double-counting.
     })
 
     // Calculate withdrawals/purchases for the month
