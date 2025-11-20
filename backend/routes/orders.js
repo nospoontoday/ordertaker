@@ -283,10 +283,28 @@ router.get('/daily-sales', async (req, res) => {
         dailySales.totalSales += actualPaymentTotal;
       };
 
-      // Process main order items
+      // Calculate total of all items (main + appended) for this order
       const mainOrderTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      calculatePaymentTotals(mainOrderTotal, order.paymentMethod, order.cashAmount, order.gcashAmount);
+      
+      // Calculate appended items total if they exist and are paid
+      let appendedOrdersTotal = 0;
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        order.appendedOrders.forEach((appended) => {
+          if (appended.isPaid) {
+            appendedOrdersTotal += appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+          }
+        });
+      }
+      
+      // Total amount for payment calculation (main + appended)
+      const totalOrderAmount = mainOrderTotal + appendedOrdersTotal;
+      
+      // Process payment for the entire order (main + appended)
+      // For split payments, cashAmount and gcashAmount already contain the full amounts
+      // For cash/gcash payments, use the total of all items
+      calculatePaymentTotals(totalOrderAmount, order.paymentMethod, order.cashAmount, order.gcashAmount);
 
+      // Track main order items
       order.items.forEach((item) => {
         const category = getItemCategory(item);
         const owner = getItemOwner(item);
@@ -314,17 +332,12 @@ router.get('/daily-sales', async (req, res) => {
         const itemData = categoryItems.get(itemKey);
         itemData.quantity += item.quantity;
         itemData.total += itemTotal;
-        // Note: totalSales is now calculated from payment amounts, not item prices
       });
 
-      // Process appended orders
-      // NOTE: Appended orders are part of the same transaction as the main order.
-      // Their items should be tracked, but payment totals should NOT be added again
-      // since the payment was already processed with the main order.
+      // Track appended order items
       if (order.appendedOrders && order.appendedOrders.length > 0) {
         order.appendedOrders.forEach((appended) => {
           if (appended.isPaid) {
-            // Track items only - do NOT add payment totals again
             appended.items.forEach((item) => {
               const category = getItemCategory(item);
               const owner = getItemOwner(item);
@@ -352,7 +365,6 @@ router.get('/daily-sales', async (req, res) => {
               const itemData = categoryItems.get(itemKey);
               itemData.quantity += item.quantity;
               itemData.total += itemTotal;
-              // Note: Payment totals are handled by main order only
             });
           }
         });

@@ -135,18 +135,30 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
       // Increment order count
       userSales[userKey].orderCount++
 
-      // Calculate main order total
+      // Calculate total of all items (main + appended)
       const mainTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      
+      let appendedTotal = 0
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        order.appendedOrders.forEach((appended) => {
+          if (appended.isPaid) {
+            appendedTotal += appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+          }
+        })
+      }
+      
+      const totalOrderAmount = mainTotal + appendedTotal
 
       // Add to overall totals and user totals
       if (order.isPaid) {
         if (order.paymentMethod === "cash") {
-          totalCash += mainTotal
-          userSales[userKey].cash += mainTotal
+          totalCash += totalOrderAmount
+          userSales[userKey].cash += totalOrderAmount
         } else if (order.paymentMethod === "gcash") {
-          totalGcash += mainTotal
-          userSales[userKey].gcash += mainTotal
+          totalGcash += totalOrderAmount
+          userSales[userKey].gcash += totalOrderAmount
         } else if (order.paymentMethod === "split") {
+          // For split payments, use actual amounts (already includes appended orders)
           const cashAmt = order.cashAmount || 0
           const gcashAmt = order.gcashAmount || 0
           totalCash += cashAmt
@@ -155,14 +167,10 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
           userSales[userKey].gcash += gcashAmt
         } else {
           // Legacy orders without payment method
-          totalCash += mainTotal
-          userSales[userKey].cash += mainTotal
+          totalCash += totalOrderAmount
+          userSales[userKey].cash += totalOrderAmount
         }
       }
-
-      // Note: Appended orders are part of the same transaction as the main order.
-      // Their payment is already included in the main order's payment totals,
-      // so we should NOT add their payment amounts again to avoid double-counting.
     })
 
     // Calculate withdrawals/purchases for the month

@@ -1069,28 +1069,35 @@ export function OrderTaker({
     let totalGcash = 0
 
     completedOrders.forEach((order) => {
-      // Calculate main order total
+      // Calculate total of all items (main + appended)
       const mainTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      
+      let appendedTotal = 0
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        order.appendedOrders.forEach((appended) => {
+          if (appended.isPaid) {
+            appendedTotal += appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+          }
+        })
+      }
+      
+      const totalOrderAmount = mainTotal + appendedTotal
 
       // Add to cash or gcash based on payment method
       if (order.isPaid) {
         if (order.paymentMethod === "cash") {
-          totalCash += mainTotal
+          totalCash += totalOrderAmount
         } else if (order.paymentMethod === "gcash") {
-          totalGcash += mainTotal
+          totalGcash += totalOrderAmount
         } else if (order.paymentMethod === "split") {
-          // For split payments, use the actual split amounts
+          // For split payments, use the actual split amounts (already includes appended orders)
           totalCash += order.cashAmount || 0
           totalGcash += order.gcashAmount || 0
         } else {
           // If order is paid but no paymentMethod is set, treat as cash (legacy orders)
-          totalCash += mainTotal
+          totalCash += totalOrderAmount
         }
       }
-
-      // Note: Appended orders are part of the same transaction as the main order.
-      // Their payment is already included in the main order's payment totals,
-      // so we should NOT add their payment amounts again to avoid double-counting.
     })
 
     // Calculate withdrawals/purchases for the business day
