@@ -508,8 +508,8 @@ export function PastOrders() {
                     )
                   })()}
 
-                  {/* Payment Details - Only show if not part of whole order payment */}
-                  {order.isPaid && !order.paidAsWholeOrder && (
+                  {/* Payment Details - Show if order is paid and has payment method */}
+                  {order.isPaid && order.paymentMethod && (
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
                       <div className="space-y-1 text-sm">
@@ -619,8 +619,8 @@ export function PastOrders() {
                           )
                         })()}
 
-                        {/* Appended Order Payment Details - Only show if not part of whole order payment */}
-                        {appended.isPaid && !appended.paidAsWholeOrder && (
+                        {/* Appended Order Payment Details - Show if order is paid and has payment method */}
+                        {appended.isPaid && appended.paymentMethod && (
                           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="text-sm font-semibold text-blue-900 mb-2">Payment Details</div>
                             <div className="space-y-1 text-sm">
