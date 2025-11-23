@@ -68,6 +68,7 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/cart', require('./routes/cart'));
+app.use('/api/dtr', require('./routes/dtr'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -92,6 +93,7 @@ app.get('/', (req, res) => {
       withdrawals: '/api/withdrawals',
       inventory: '/api/inventory',
       cart: '/api/cart',
+      dtr: '/api/dtr',
       images: '/uploads/:filename'
     }
   });
@@ -150,6 +152,7 @@ server.listen(PORT, () => {
   - Orders:       http://localhost:${PORT}/api/orders
   - Withdrawals:  http://localhost:${PORT}/api/withdrawals
   - Inventory:    http://localhost:${PORT}/api/inventory
+  - DTR:          http://localhost:${PORT}/api/dtr
   - Images:       http://localhost:${PORT}/uploads/:filename
 
   WebSocket:

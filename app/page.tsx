@@ -8,7 +8,7 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock } from "lucide-react"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
   Sheet,
@@ -155,6 +155,13 @@ export default function Home() {
               <span className="text-sm text-slate-600">{user?.email}</span>
               <div className="h-6 w-px bg-slate-300" />
 
+              {isCrew && (
+                <Button variant="outline" onClick={() => router.push("/dtr")}>
+                  <Clock className="h-4 w-4 mr-2" />
+                  DTR
+                </Button>
+              )}
+
               {!isCrew && (
                 <>
                   <Button variant="outline" onClick={() => router.push("/sales-reports")}>
@@ -183,10 +190,16 @@ export default function Home() {
                     </DropdownMenuItem>
                   )}
                   {canAccessAdmin && (
-                    <DropdownMenuItem onClick={() => router.push("/admin")}>
-                      <Settings className="h-4 w-4 mr-2" />
-                      Admin
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => router.push("/admin")}>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Admin
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push("/dtr/admin")}>
+                        <Clock className="h-4 w-4 mr-2" />
+                        DTR Management
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {(!isCrew || canAccessAdmin) && <DropdownMenuSeparator />}
                   <DropdownMenuItem onClick={() => router.push("/change-password")}>
@@ -290,15 +303,35 @@ export default function Home() {
                           </Button>
                         </SheetClose>
                       )}
-                      {canAccessAdmin && (
+                      {isCrew && (
                         <Button
                           variant="ghost"
                           className="w-full justify-start h-12"
-                          onClick={() => router.push("/admin")}
+                          onClick={() => router.push("/dtr")}
                         >
-                          <Settings className="h-5 w-5 mr-3" />
-                          Admin Panel
+                          <Clock className="h-5 w-5 mr-3" />
+                          DTR
                         </Button>
+                      )}
+                      {canAccessAdmin && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/admin")}
+                          >
+                            <Settings className="h-5 w-5 mr-3" />
+                            Admin Panel
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/dtr/admin")}
+                          >
+                            <Clock className="h-5 w-5 mr-3" />
+                            DTR Management
+                          </Button>
+                        </>
                       )}
                       <Separator className="my-4" />
                       <Button

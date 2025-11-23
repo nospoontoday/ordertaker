@@ -5,21 +5,21 @@ const User = require('../models/User');
 
 /**
  * Seed Script to Create All Required Users
- * Clears all existing users and creates the predefined users
+ * Checks if users exist before creating them (safe for production)
  * Safe to run while backend server is running
  */
 
 const seedUsers = async () => {
   let shouldCloseConnection = false;
-  
+
   try {
     // Check if already connected
     const wasConnected = mongoose.connection.readyState === 1;
-    
+
     if (!wasConnected) {
       // Connect to MongoDB only if not already connected
       const mongoUri = process.env.MONGODB_URI;
-      
+
       if (!mongoUri) {
         console.error('❌ Error: MONGODB_URI environment variable is not set');
         process.exit(1);
@@ -44,11 +44,6 @@ const seedUsers = async () => {
     console.log('Starting User Database Seed');
     console.log('========================================\n');
 
-    // Clear all existing users
-    console.log('Clearing existing users...');
-    const deleteResult = await User.deleteMany({});
-    console.log(`✓ Deleted ${deleteResult.deletedCount} existing users\n`);
-
     const salt = await bcrypt.genSalt(10);
 
     // Static passwords for all users
@@ -57,54 +52,69 @@ const seedUsers = async () => {
       admin: STATIC_PASSWORD,
       elwin: STATIC_PASSWORD,
       krisnela: STATIC_PASSWORD,
-      jowicks: STATIC_PASSWORD
+      jowicks: STATIC_PASSWORD,
+      allen: STATIC_PASSWORD
+    };
+
+    // Helper function to create user if not exists
+    const createUserIfNotExists = async (userData, password) => {
+      const existingUser = await User.findOne({ email: userData.email });
+      if (existingUser) {
+        console.log(`⊘ User ${userData.email} already exists - skipping`);
+        return existingUser;
+      }
+
+      const hashedPassword = await bcrypt.hash(password, salt);
+      const user = new User({
+        ...userData,
+        password: hashedPassword
+      });
+      await user.save();
+      console.log(`✓ Created user: ${userData.email} (${userData.role})`);
+      return user;
     };
 
     // 1. Admin user
-    const adminPassword = await bcrypt.hash(passwords.admin, salt);
-    const admin = new User({
+    const admin = await createUserIfNotExists({
       email: 'oliverjohnpr2013@gmail.com',
-      password: adminPassword,
       role: 'super_admin',
       name: 'John (Admin)',
       isActive: true
-    });
-    await admin.save();
+    }, passwords.admin);
 
     // 2. Elwin - Order Taker + Crew
-    const elwinPassword = await bcrypt.hash(passwords.elwin, salt);
-    const elwin = new User({
+    const elwin = await createUserIfNotExists({
       email: 'elwin@mail.com',
-      password: elwinPassword,
       role: 'order_taker_crew',
       name: 'Elwin',
       isActive: true
-    });
-    await elwin.save();
+    }, passwords.elwin);
 
     // 3. Krisnela - Order Taker + Crew
-    const krisnelaPassword = await bcrypt.hash(passwords.krisnela, salt);
-    const krisnela = new User({
+    const krisnela = await createUserIfNotExists({
       email: 'krisnela@mail.com',
-      password: krisnelaPassword,
       role: 'order_taker_crew',
       name: 'Krisnela',
       isActive: true
-    });
-    await krisnela.save();
+    }, passwords.krisnela);
 
     // 4. Jowicks - Crew
-    const jowicksPassword = await bcrypt.hash(passwords.jowicks, salt);
-    const jowicks = new User({
+    const jowicks = await createUserIfNotExists({
       email: 'jowicks@mail.com',
-      password: jowicksPassword,
       role: 'crew',
       name: 'Jowicks',
       isActive: true
-    });
-    await jowicks.save();
+    }, passwords.jowicks);
 
-    console.log('\n✓ All users created successfully\n');
+    // 5. Allen - Crew
+    const allen = await createUserIfNotExists({
+      email: 'allen@mail.com',
+      role: 'crew',
+      name: 'Allen',
+      isActive: true
+    }, passwords.allen);
+
+    console.log('\n✓ User seeding completed successfully\n');
     console.log('User Credentials:');
     console.log('=================');
     console.log(`1. Admin (Super Admin)`);
@@ -122,6 +132,10 @@ const seedUsers = async () => {
     console.log(`4. Jowicks (Crew)`);
     console.log(`   Email: ${jowicks.email}`);
     console.log(`   Password: ${passwords.jowicks}`);
+    console.log('');
+    console.log(`5. Allen (Crew)`);
+    console.log(`   Email: ${allen.email}`);
+    console.log(`   Password: ${passwords.allen}`);
     console.log('');
     console.log('⚠️  IMPORTANT: Save these passwords securely!');
     console.log('⚠️  Users should change their passwords after first login!');
