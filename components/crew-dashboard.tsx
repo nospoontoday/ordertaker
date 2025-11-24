@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X } from "lucide-react"
+import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, Minus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -198,6 +198,10 @@ export function CrewDashboard({
   })
 
   const [newNotes, setNewNotes] = useState<Record<string, string>>({})
+
+  // Partial quantity selection for preparing items
+  // Key format: "itemName|itemType", Value: selected quantity to mark as ready
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({})
 
   const { toast } = useToast()
   const { user } = useAuth()
@@ -633,6 +637,22 @@ export function CrewDashboard({
       const status = calculateKitchenStatus()
       onKitchenStatusChange(status)
     }
+  }, [orders])
+
+  // Initialize selected quantities for preparing items
+  useEffect(() => {
+    const summary = getPreparingItemsSummary()
+    const newQuantities: Record<string, number> = {}
+    summary.forEach(item => {
+      const key = `${item.name}|${item.itemType}`
+      // Only set if not already set (preserve user's selection)
+      if (selectedQuantities[key] === undefined) {
+        newQuantities[key] = item.quantity
+      } else {
+        newQuantities[key] = selectedQuantities[key]
+      }
+    })
+    setSelectedQuantities(newQuantities)
   }, [orders])
 
   const toggleOrderExpanded = (orderId: string) => {
@@ -2014,15 +2034,25 @@ export function CrewDashboard({
 
   // Calculate preparing items summary grouped by item name and type
   const getPreparingItemsSummary = () => {
-    const preparingMap = new Map<string, { quantity: number; orders: Array<{ orderNumber: number; customerName: string }> }>()
-    
+    const preparingMap = new Map<string, {
+      quantity: number;
+      orders: Array<{ orderNumber: number; customerName: string }>
+      items: Array<{ orderId: string; itemId: string; appendedOrderId?: string; quantity: number; preparingAt?: number }>
+    }>()
+
     orders.forEach(order => {
       // Main order items
       order.items.forEach(item => {
         if (item.status === "preparing") {
           const key = `${item.name}|${item.itemType || "dine-in"}`
-          const existing = preparingMap.get(key) || { quantity: 0, orders: [] }
+          const existing = preparingMap.get(key) || { quantity: 0, orders: [], items: [] }
           existing.quantity += item.quantity
+          existing.items.push({
+            orderId: order.id,
+            itemId: item.id,
+            quantity: item.quantity,
+            preparingAt: item.preparingAt
+          })
           if (order.orderNumber) {
             // Check if this order is already in the list
             if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
@@ -2032,14 +2062,21 @@ export function CrewDashboard({
           preparingMap.set(key, existing)
         }
       })
-      
+
       // Appended order items
       order.appendedOrders?.forEach(appended => {
         appended.items.forEach(item => {
           if (item.status === "preparing") {
             const key = `${item.name}|${item.itemType || "dine-in"}`
-            const existing = preparingMap.get(key) || { quantity: 0, orders: [] }
+            const existing = preparingMap.get(key) || { quantity: 0, orders: [], items: [] }
             existing.quantity += item.quantity
+            existing.items.push({
+              orderId: order.id,
+              itemId: item.id,
+              appendedOrderId: appended.id,
+              quantity: item.quantity,
+              preparingAt: item.preparingAt
+            })
             if (order.orderNumber) {
               // Check if this order is already in the list
               if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
@@ -2051,54 +2088,205 @@ export function CrewDashboard({
         })
       })
     })
-    
+
     return Array.from(preparingMap.entries()).map(([key, data]) => {
       const [name, itemType] = key.split("|")
       return {
         name,
         itemType: itemType as "dine-in" | "take-out",
         quantity: data.quantity,
-        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber)
+        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber),
+        items: data.items.sort((a, b) => (a.preparingAt || 0) - (b.preparingAt || 0))
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
   }
 
   // Mark ready items of a specific type
-  const markReadyItemType = async (itemName: string, itemType: "dine-in" | "take-out") => {
+  const markReadyItemType = async (itemName: string, itemType: "dine-in" | "take-out", quantityToMark?: number) => {
     try {
-      // Collect all preparing items matching this name and type
-      const itemsToUpdate: Array<{ orderId: string; itemId: string; appendedOrderId?: string }> = []
-      
+      // Collect all preparing items matching this name and type, sorted by preparingAt timestamp (oldest first)
+      interface ItemToUpdate {
+        orderId: string
+        itemId: string
+        appendedOrderId?: string
+        quantity: number
+        preparingAt?: number
+        item: OrderItem
+      }
+
+      const allItems: ItemToUpdate[] = []
+
       orders.forEach(order => {
         // Main order items
         order.items.forEach(item => {
           if (item.status === "preparing" && item.name === itemName && item.itemType === itemType) {
-            itemsToUpdate.push({ orderId: order.id, itemId: item.id })
+            allItems.push({
+              orderId: order.id,
+              itemId: item.id,
+              quantity: item.quantity,
+              preparingAt: item.preparingAt,
+              item: item
+            })
           }
         })
-        
+
         // Appended order items
         order.appendedOrders?.forEach(appended => {
           appended.items.forEach(item => {
             if (item.status === "preparing" && item.name === itemName && item.itemType === itemType) {
-              itemsToUpdate.push({ orderId: order.id, itemId: item.id, appendedOrderId: appended.id })
+              allItems.push({
+                orderId: order.id,
+                itemId: item.id,
+                appendedOrderId: appended.id,
+                quantity: item.quantity,
+                preparingAt: item.preparingAt,
+                item: item
+              })
             }
           })
         })
       })
-      
-      // Update all matching items to "ready" status
-      for (const item of itemsToUpdate) {
-        if (item.appendedOrderId) {
-          await updateAppendedItemStatus(item.orderId, item.appendedOrderId, item.itemId, "ready")
+
+      // Sort by preparingAt timestamp (oldest first)
+      allItems.sort((a, b) => (a.preparingAt || 0) - (b.preparingAt || 0))
+
+      // Determine how many to mark as ready
+      const totalQuantity = allItems.reduce((sum, item) => sum + item.quantity, 0)
+      const targetQuantity = quantityToMark && quantityToMark < totalQuantity ? quantityToMark : totalQuantity
+
+      // Process items and split if necessary
+      let remainingToMark = targetQuantity
+
+      for (const itemInfo of allItems) {
+        if (remainingToMark <= 0) break
+
+        const { orderId, itemId, appendedOrderId, quantity, item } = itemInfo
+
+        if (quantity <= remainingToMark) {
+          // Mark entire item as ready
+          if (appendedOrderId) {
+            await updateAppendedItemStatus(orderId, appendedOrderId, itemId, "ready")
+          } else {
+            await updateItemStatus(orderId, itemId, "ready")
+          }
+          remainingToMark -= quantity
         } else {
-          await updateItemStatus(item.orderId, item.itemId, "ready")
+          // Split item: keep some preparing, mark rest as ready
+          const qtyToMarkFromThis = remainingToMark
+          const qtyToKeepPreparing = quantity - qtyToMarkFromThis
+
+          // Update orders state to split the item
+          setOrders(prevOrders => prevOrders.map(order => {
+            if (order.id !== orderId) return order
+
+            if (!appendedOrderId) {
+              // Main order item
+              return {
+                ...order,
+                items: order.items.flatMap(i => {
+                  if (i.id !== itemId) return [i]
+
+                  // Split into two items
+                  return [
+                    // Keep this one preparing with reduced quantity
+                    { ...i, quantity: qtyToKeepPreparing },
+                    // Create new item marked as ready
+                    {
+                      ...i,
+                      id: `${i.id}-split-${Date.now()}`,
+                      quantity: qtyToMarkFromThis,
+                      status: "ready" as ItemStatus,
+                      readyAt: Date.now()
+                    }
+                  ]
+                })
+              }
+            } else {
+              // Appended order item
+              return {
+                ...order,
+                appendedOrders: order.appendedOrders?.map(appended => {
+                  if (appended.id !== appendedOrderId) return appended
+
+                  return {
+                    ...appended,
+                    items: appended.items.flatMap(i => {
+                      if (i.id !== itemId) return [i]
+
+                      // Split into two items
+                      return [
+                        // Keep this one preparing with reduced quantity
+                        { ...i, quantity: qtyToKeepPreparing },
+                        // Create new item marked as ready
+                        {
+                          ...i,
+                          id: `${i.id}-split-${Date.now()}`,
+                          quantity: qtyToMarkFromThis,
+                          status: "ready" as ItemStatus,
+                          readyAt: Date.now()
+                        }
+                      ]
+                    })
+                  }
+                })
+              }
+            }
+          }))
+
+          // Sync to API - update the original item's quantity and create new ready item
+          try {
+            if (appendedOrderId) {
+              // For appended items, we need to update via the API
+              const order = orders.find(o => o.id === orderId)
+              const appended = order?.appendedOrders?.find(a => a.id === appendedOrderId)
+              if (appended) {
+                await ordersApi.updateOrder(orderId, {
+                  appendedOrders: order.appendedOrders?.map(a =>
+                    a.id === appendedOrderId
+                      ? {
+                          ...a,
+                          items: appended.items.flatMap(i =>
+                            i.id === itemId
+                              ? [
+                                  { ...i, quantity: qtyToKeepPreparing },
+                                  { ...i, id: `${i.id}-split-${Date.now()}`, quantity: qtyToMarkFromThis, status: "ready", readyAt: Date.now() }
+                                ]
+                              : [i]
+                          )
+                        }
+                      : a
+                  )
+                })
+              }
+            } else {
+              // For main items
+              const order = orders.find(o => o.id === orderId)
+              if (order) {
+                await ordersApi.updateOrder(orderId, {
+                  items: order.items.flatMap(i =>
+                    i.id === itemId
+                      ? [
+                          { ...i, quantity: qtyToKeepPreparing },
+                          { ...i, id: `${i.id}-split-${Date.now()}`, quantity: qtyToMarkFromThis, status: "ready", readyAt: Date.now() }
+                        ]
+                      : [i]
+                  )
+                })
+              }
+            }
+            setIsOnline(true)
+          } catch (error) {
+            console.error("Error syncing split item:", error)
+            setIsOnline(false)
+          }
+
+          remainingToMark = 0
         }
       }
-      
+
       toast({
         title: "Ready to Serve",
-        description: `Marked ${itemsToUpdate.length} ${itemName}${itemsToUpdate.length !== 1 ? 's' : ''} as ready.`,
+        description: `Marked ${targetQuantity} ${itemName}${targetQuantity !== 1 ? 's' : ''} as ready.`,
       })
     } catch (error) {
       console.error("Error marking items as ready:", error)
@@ -2244,17 +2432,71 @@ export function CrewDashboard({
                       ))}
                     </div>
                     {isCrew && (
-                      <Button
-                        onClick={() => markReadyItemType(item.name, item.itemType)}
-                        size="sm"
-                        className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all relative group/btn overflow-hidden"
-                      >
-                        <span className="relative z-10 flex items-center justify-center gap-1.5">
-                          <Clock className="w-3 h-3 animate-spin" />
-                          Mark Ready
-                        </span>
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-                      </Button>
+                      <>
+                        {/* Quantity Selector */}
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-xs font-medium text-slate-600">Mark Ready:</span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              onClick={() => {
+                                const key = `${item.name}|${item.itemType}`
+                                const currentQty = selectedQuantities[key] || item.quantity
+                                if (currentQty > 1) {
+                                  setSelectedQuantities(prev => ({
+                                    ...prev,
+                                    [key]: currentQty - 1
+                                  }))
+                                }
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="h-7 w-7 p-0 border-orange-300 hover:bg-orange-100"
+                              disabled={(selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity) <= 1}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <div className="w-12 text-center">
+                              <span className="text-sm font-bold text-orange-700">
+                                {selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity}
+                              </span>
+                              <span className="text-xs text-slate-500">/{item.quantity}</span>
+                            </div>
+                            <Button
+                              onClick={() => {
+                                const key = `${item.name}|${item.itemType}`
+                                const currentQty = selectedQuantities[key] || item.quantity
+                                if (currentQty < item.quantity) {
+                                  setSelectedQuantities(prev => ({
+                                    ...prev,
+                                    [key]: currentQty + 1
+                                  }))
+                                }
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="h-7 w-7 p-0 border-orange-300 hover:bg-orange-100"
+                              disabled={(selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity) >= item.quantity}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            const key = `${item.name}|${item.itemType}`
+                            const qtyToMark = selectedQuantities[key] || item.quantity
+                            markReadyItemType(item.name, item.itemType, qtyToMark)
+                          }}
+                          size="sm"
+                          className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all relative group/btn overflow-hidden"
+                        >
+                          <span className="relative z-10 flex items-center justify-center gap-1.5">
+                            <Clock className="w-3 h-3 animate-spin" />
+                            Mark Ready
+                          </span>
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
