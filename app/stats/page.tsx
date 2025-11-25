@@ -17,6 +17,14 @@ interface OwnerStats {
   net: number
 }
 
+interface DailyOwnerStats extends OwnerStats {
+  avgGrossSales: number
+  avgWithdrawals: number
+  avgPurchases: number
+  avgNet: number
+  totalDays: number
+}
+
 interface ItemAverage {
   name: string
   averagePerDay: number
@@ -35,6 +43,8 @@ export default function StatsPage() {
   const [totalOrders, setTotalOrders] = useState(0)
   const [johnStats, setJohnStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
   const [elwinStats, setElwinStats] = useState<OwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0 })
+  const [johnDailyStats, setJohnDailyStats] = useState<DailyOwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0, avgGrossSales: 0, avgWithdrawals: 0, avgPurchases: 0, avgNet: 0, totalDays: 0 })
+  const [elwinDailyStats, setElwinDailyStats] = useState<DailyOwnerStats>({ grossSales: 0, withdrawals: 0, purchases: 0, net: 0, avgGrossSales: 0, avgWithdrawals: 0, avgPurchases: 0, avgNet: 0, totalDays: 0 })
   const [itemAverages, setItemAverages] = useState<ItemAverage[]>([])
 
   useEffect(() => {
@@ -213,6 +223,175 @@ export default function StatsPage() {
     }
 
     loadOwnerStats()
+  }, [])
+
+  // Calculate daily financial summary for John and Elwin
+  useEffect(() => {
+    const loadDailyOwnerStats = async () => {
+      try {
+        // Fetch all data
+        const [orders, menuItems, withdrawals] = await Promise.all([
+          ordersApi.getAll(),
+          menuItemsApi.getAll(),
+          withdrawalsApi.getAll()
+        ])
+
+        // Create menu item lookup by name with owner info
+        const menuItemMap = new Map<string, MenuItem>()
+        menuItems.forEach(item => {
+          menuItemMap.set(item.name, item)
+        })
+
+        // Get today's date string for comparison
+        const today = new Date().toISOString().split('T')[0]
+
+        // Track daily stats by date for each owner
+        const johnDailyData: Map<string, { gross: number; withdrawals: number; purchases: number }> = new Map()
+        const elwinDailyData: Map<string, { gross: number; withdrawals: number; purchases: number }> = new Map()
+
+        const initDayData = () => ({ gross: 0, withdrawals: 0, purchases: 0 })
+
+        // Process orders for gross sales
+        orders.forEach(order => {
+          if (!order.isPaid) return // Only count paid orders
+          const orderDate = new Date(order.createdAt).toISOString().split('T')[0]
+
+          if (!johnDailyData.has(orderDate)) johnDailyData.set(orderDate, initDayData())
+          if (!elwinDailyData.has(orderDate)) elwinDailyData.set(orderDate, initDayData())
+
+          const johnData = johnDailyData.get(orderDate)!
+          const elwinData = elwinDailyData.get(orderDate)!
+
+          // Calculate main order items
+          order.items.forEach(item => {
+            const menuItem = menuItemMap.get(item.name)
+            const itemTotal = item.price * item.quantity
+
+            if (menuItem?.owner === "john") {
+              johnData.gross += itemTotal
+            } else if (menuItem?.owner === "elwin") {
+              elwinData.gross += itemTotal
+            } else {
+              johnData.gross += itemTotal / 2
+              elwinData.gross += itemTotal / 2
+            }
+          })
+
+          // Calculate appended orders items
+          order.appendedOrders?.forEach(appended => {
+            if (appended.isPaid) {
+              appended.items.forEach(item => {
+                const menuItem = menuItemMap.get(item.name)
+                const itemTotal = item.price * item.quantity
+
+                if (menuItem?.owner === "john") {
+                  johnData.gross += itemTotal
+                } else if (menuItem?.owner === "elwin") {
+                  elwinData.gross += itemTotal
+                } else {
+                  johnData.gross += itemTotal / 2
+                  elwinData.gross += itemTotal / 2
+                }
+              })
+            }
+          })
+        })
+
+        // Process withdrawals and purchases
+        withdrawals.forEach(withdrawal => {
+          const wDate = new Date(withdrawal.createdAt).toISOString().split('T')[0]
+          const amount = withdrawal.amount
+
+          if (!johnDailyData.has(wDate)) johnDailyData.set(wDate, initDayData())
+          if (!elwinDailyData.has(wDate)) elwinDailyData.set(wDate, initDayData())
+
+          const johnData = johnDailyData.get(wDate)!
+          const elwinData = elwinDailyData.get(wDate)!
+
+          if (withdrawal.chargedTo === "john") {
+            if (withdrawal.type === "withdrawal") {
+              johnData.withdrawals += amount
+            } else {
+              johnData.purchases += amount
+            }
+          } else if (withdrawal.chargedTo === "elwin") {
+            if (withdrawal.type === "withdrawal") {
+              elwinData.withdrawals += amount
+            } else {
+              elwinData.purchases += amount
+            }
+          } else if (withdrawal.chargedTo === "all") {
+            if (withdrawal.type === "withdrawal") {
+              johnData.withdrawals += amount / 2
+              elwinData.withdrawals += amount / 2
+            } else {
+              johnData.purchases += amount / 2
+              elwinData.purchases += amount / 2
+            }
+          }
+        })
+
+        // Collect all unique dates
+        const allDates = new Set<string>()
+        johnDailyData.forEach((_, date) => allDates.add(date))
+        elwinDailyData.forEach((_, date) => allDates.add(date))
+        const totalDays = allDates.size
+
+        // Calculate totals for averages (exclude today for fairer comparison)
+        let johnTotalGross = 0, johnTotalWithdrawals = 0, johnTotalPurchases = 0
+        let elwinTotalGross = 0, elwinTotalWithdrawals = 0, elwinTotalPurchases = 0
+        let daysForAverage = 0
+
+        allDates.forEach(date => {
+          if (date !== today) {
+            daysForAverage++
+            const johnData = johnDailyData.get(date) || initDayData()
+            const elwinData = elwinDailyData.get(date) || initDayData()
+            johnTotalGross += johnData.gross
+            johnTotalWithdrawals += johnData.withdrawals
+            johnTotalPurchases += johnData.purchases
+            elwinTotalGross += elwinData.gross
+            elwinTotalWithdrawals += elwinData.withdrawals
+            elwinTotalPurchases += elwinData.purchases
+          }
+        })
+
+        // Get today's data
+        const johnToday = johnDailyData.get(today) || initDayData()
+        const elwinToday = elwinDailyData.get(today) || initDayData()
+
+        // Calculate averages (use daysForAverage, or 1 if only today exists)
+        const avgDays = daysForAverage > 0 ? daysForAverage : 1
+
+        setJohnDailyStats({
+          grossSales: johnToday.gross,
+          withdrawals: johnToday.withdrawals,
+          purchases: johnToday.purchases,
+          net: johnToday.gross - johnToday.withdrawals - johnToday.purchases,
+          avgGrossSales: johnTotalGross / avgDays,
+          avgWithdrawals: johnTotalWithdrawals / avgDays,
+          avgPurchases: johnTotalPurchases / avgDays,
+          avgNet: (johnTotalGross - johnTotalWithdrawals - johnTotalPurchases) / avgDays,
+          totalDays
+        })
+
+        setElwinDailyStats({
+          grossSales: elwinToday.gross,
+          withdrawals: elwinToday.withdrawals,
+          purchases: elwinToday.purchases,
+          net: elwinToday.gross - elwinToday.withdrawals - elwinToday.purchases,
+          avgGrossSales: elwinTotalGross / avgDays,
+          avgWithdrawals: elwinTotalWithdrawals / avgDays,
+          avgPurchases: elwinTotalPurchases / avgDays,
+          avgNet: (elwinTotalGross - elwinTotalWithdrawals - elwinTotalPurchases) / avgDays,
+          totalDays
+        })
+      } catch (error) {
+        console.error("Error loading daily owner stats:", error)
+      }
+    }
+
+    loadDailyOwnerStats()
   }, [])
 
   useEffect(() => {
@@ -403,6 +582,143 @@ export default function StatsPage() {
             </p>
           </div>
         )}
+
+        {/* Daily Financial Summary for John and Elwin */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-2 text-gray-800">Daily Financial Summary</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Today&apos;s financial breakdown vs daily averages ({johnDailyStats.totalDays > 1 ? `${johnDailyStats.totalDays - 1} days of history` : 'No historical data yet'})
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* John's Daily Stats */}
+            <div className="border border-blue-200 rounded-lg p-4 bg-blue-50/30">
+              <h3 className="text-lg font-semibold mb-3 text-blue-600">John&apos;s Today</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Gross Sales:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-green-600">₱{johnDailyStats.grossSales.toFixed(2)}</span>
+                    {johnDailyStats.avgGrossSales > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        johnDailyStats.grossSales >= johnDailyStats.avgGrossSales
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {johnDailyStats.grossSales >= johnDailyStats.avgGrossSales ? '+' : ''}
+                        {((johnDailyStats.grossSales - johnDailyStats.avgGrossSales) / johnDailyStats.avgGrossSales * 100).toFixed(0)}% vs avg
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Withdrawals:</span>
+                  <span className="font-semibold text-red-600">₱{johnDailyStats.withdrawals.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Purchases:</span>
+                  <span className="font-semibold text-orange-600">₱{johnDailyStats.purchases.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-blue-200">
+                  <span className="text-gray-800 font-medium">Net:</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold text-lg ${johnDailyStats.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ₱{johnDailyStats.net.toFixed(2)}
+                    </span>
+                    {johnDailyStats.avgNet !== 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        johnDailyStats.net >= johnDailyStats.avgNet
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {johnDailyStats.net >= johnDailyStats.avgNet ? '+' : ''}
+                        ₱{(johnDailyStats.net - johnDailyStats.avgNet).toFixed(0)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 pt-1">
+                  Avg daily: ₱{johnDailyStats.avgGrossSales.toFixed(0)} sales, ₱{johnDailyStats.avgNet.toFixed(0)} net
+                </div>
+              </div>
+            </div>
+
+            {/* Elwin's Daily Stats */}
+            <div className="border border-purple-200 rounded-lg p-4 bg-purple-50/30">
+              <h3 className="text-lg font-semibold mb-3 text-purple-600">Elwin&apos;s Today</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Gross Sales:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-green-600">₱{elwinDailyStats.grossSales.toFixed(2)}</span>
+                    {elwinDailyStats.avgGrossSales > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        elwinDailyStats.grossSales >= elwinDailyStats.avgGrossSales
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {elwinDailyStats.grossSales >= elwinDailyStats.avgGrossSales ? '+' : ''}
+                        {((elwinDailyStats.grossSales - elwinDailyStats.avgGrossSales) / elwinDailyStats.avgGrossSales * 100).toFixed(0)}% vs avg
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Withdrawals:</span>
+                  <span className="font-semibold text-red-600">₱{elwinDailyStats.withdrawals.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 text-sm">Purchases:</span>
+                  <span className="font-semibold text-orange-600">₱{elwinDailyStats.purchases.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-purple-200">
+                  <span className="text-gray-800 font-medium">Net:</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold text-lg ${elwinDailyStats.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ₱{elwinDailyStats.net.toFixed(2)}
+                    </span>
+                    {elwinDailyStats.avgNet !== 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        elwinDailyStats.net >= elwinDailyStats.avgNet
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {elwinDailyStats.net >= elwinDailyStats.avgNet ? '+' : ''}
+                        ₱{(elwinDailyStats.net - elwinDailyStats.avgNet).toFixed(0)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 pt-1">
+                  Avg daily: ₱{elwinDailyStats.avgGrossSales.toFixed(0)} sales, ₱{elwinDailyStats.avgNet.toFixed(0)} net
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Combined Daily Total */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex flex-wrap justify-between items-center gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-gray-600 font-medium">Combined Today:</span>
+                <span className="text-lg font-bold text-green-600">
+                  ₱{(johnDailyStats.grossSales + elwinDailyStats.grossSales).toFixed(2)} sales
+                </span>
+                <span className={`text-lg font-bold ${(johnDailyStats.net + elwinDailyStats.net) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  ₱{(johnDailyStats.net + elwinDailyStats.net).toFixed(2)} net
+                </span>
+              </div>
+              {(johnDailyStats.avgNet + elwinDailyStats.avgNet) !== 0 && (
+                <span className={`px-3 py-1 rounded-full font-semibold ${
+                  (johnDailyStats.net + elwinDailyStats.net) >= (johnDailyStats.avgNet + elwinDailyStats.avgNet)
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-red-100 text-red-700'
+                }`}>
+                  {(johnDailyStats.net + elwinDailyStats.net) >= (johnDailyStats.avgNet + elwinDailyStats.avgNet) ? 'Above' : 'Below'} daily average
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Combined Total Stats */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
