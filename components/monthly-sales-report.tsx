@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, DollarSign, TrendingUp, Users } from "lucide-react"
-import { ordersApi, withdrawalsApi, type Withdrawal } from "@/lib/api"
+import { Calendar, TrendingUp, Users } from "lucide-react"
+import { ordersApi, withdrawalsApi, menuItemsApi, type Withdrawal, type MenuItem } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 
 interface Order {
@@ -50,6 +50,7 @@ interface MonthlySalesReportProps {
 export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
   const [orders, setOrders] = useState<Order[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
@@ -65,12 +66,14 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
   const fetchData = async () => {
     setIsLoading(true)
     try {
-      const [ordersData, withdrawalsData] = await Promise.all([
+      const [ordersData, withdrawalsData, menuItemsData] = await Promise.all([
         ordersApi.getAll(),
         withdrawalsApi.getAll(),
+        menuItemsApi.getAll(),
       ])
       setOrders(ordersData)
       setWithdrawals(withdrawalsData)
+      setMenuItems(menuItemsData)
     } catch (error) {
       console.error("Error fetching data:", error)
       toast({
@@ -107,37 +110,22 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
       return isInMonth && mainOrderPaid && allAppendedPaid
     })
 
-    // Calculate overall totals
+    // Create menu item lookup by name with owner info
+    const menuItemMap = new Map<string, MenuItem>()
+    menuItems.forEach(item => {
+      menuItemMap.set(item.name, item)
+    })
+
+    // Calculate overall totals and owner-specific sales
     let totalCash = 0
     let totalGcash = 0
-    const userSales: Record<
-      string,
-      { name: string; email: string; cash: number; gcash: number; orderCount: number }
-    > = {}
+    let johnGrossSales = 0
+    let elwinGrossSales = 0
 
     completedOrders.forEach((order) => {
-      // Get user identifier
-      const userName = order.orderTakerName || "Unknown"
-      const userEmail = order.orderTakerEmail || ""
-      const userKey = userEmail || userName
-
-      // Initialize user if not exists
-      if (!userSales[userKey]) {
-        userSales[userKey] = {
-          name: userName,
-          email: userEmail,
-          cash: 0,
-          gcash: 0,
-          orderCount: 0,
-        }
-      }
-
-      // Increment order count
-      userSales[userKey].orderCount++
-
       // Calculate total of all items (main + appended)
       const mainTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-      
+
       let appendedTotal = 0
       if (order.appendedOrders && order.appendedOrders.length > 0) {
         order.appendedOrders.forEach((appended) => {
@@ -146,36 +134,71 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
           }
         })
       }
-      
+
       const totalOrderAmount = mainTotal + appendedTotal
 
-      // Add to overall totals and user totals
+      // Add to overall cash/gcash totals
       if (order.isPaid) {
         if (order.paymentMethod === "cash") {
           totalCash += totalOrderAmount
-          userSales[userKey].cash += totalOrderAmount
         } else if (order.paymentMethod === "gcash") {
           totalGcash += totalOrderAmount
-          userSales[userKey].gcash += totalOrderAmount
         } else if (order.paymentMethod === "split") {
-          // For split payments, use actual amounts (already includes appended orders)
+          // For split payments, use actual amounts
           const cashAmt = order.cashAmount || 0
           const gcashAmt = order.gcashAmount || 0
           totalCash += cashAmt
           totalGcash += gcashAmt
-          userSales[userKey].cash += cashAmt
-          userSales[userKey].gcash += gcashAmt
         } else {
           // Legacy orders without payment method
           totalCash += totalOrderAmount
-          userSales[userKey].cash += totalOrderAmount
         }
       }
+
+      // Calculate owner-specific gross sales based on menu item ownership
+      order.items.forEach(item => {
+        const menuItem = menuItemMap.get(item.name)
+        const itemTotal = item.price * item.quantity
+
+        if (menuItem?.owner === "john") {
+          johnGrossSales += itemTotal
+        } else if (menuItem?.owner === "elwin") {
+          elwinGrossSales += itemTotal
+        } else {
+          // If no owner specified, split 50/50
+          johnGrossSales += itemTotal / 2
+          elwinGrossSales += itemTotal / 2
+        }
+      })
+
+      // Calculate appended orders items
+      order.appendedOrders?.forEach(appended => {
+        if (appended.isPaid) {
+          appended.items.forEach(item => {
+            const menuItem = menuItemMap.get(item.name)
+            const itemTotal = item.price * item.quantity
+
+            if (menuItem?.owner === "john") {
+              johnGrossSales += itemTotal
+            } else if (menuItem?.owner === "elwin") {
+              elwinGrossSales += itemTotal
+            } else {
+              // If no owner specified, split 50/50
+              johnGrossSales += itemTotal / 2
+              elwinGrossSales += itemTotal / 2
+            }
+          })
+        }
+      })
     })
 
-    // Calculate withdrawals/purchases for the month
+    // Calculate withdrawals/purchases for the month per owner
     let totalWithdrawals = 0
     let totalPurchases = 0
+    let johnWithdrawals = 0
+    let johnPurchases = 0
+    let elwinWithdrawals = 0
+    let elwinPurchases = 0
 
     withdrawals.forEach((withdrawal) => {
       let withdrawalTime: number
@@ -188,10 +211,36 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
       const isInMonth = withdrawalTime >= monthStart.getTime() && withdrawalTime <= monthEnd.getTime()
 
       if (isInMonth) {
+        const amount = withdrawal.amount
+
         if (withdrawal.type === "withdrawal") {
-          totalWithdrawals += withdrawal.amount
+          totalWithdrawals += amount
         } else if (withdrawal.type === "purchase") {
-          totalPurchases += withdrawal.amount
+          totalPurchases += amount
+        }
+
+        // Allocate to owners
+        if (withdrawal.chargedTo === "john") {
+          if (withdrawal.type === "withdrawal") {
+            johnWithdrawals += amount
+          } else {
+            johnPurchases += amount
+          }
+        } else if (withdrawal.chargedTo === "elwin") {
+          if (withdrawal.type === "withdrawal") {
+            elwinWithdrawals += amount
+          } else {
+            elwinPurchases += amount
+          }
+        } else if (withdrawal.chargedTo === "all") {
+          // Split 50/50
+          if (withdrawal.type === "withdrawal") {
+            johnWithdrawals += amount / 2
+            elwinWithdrawals += amount / 2
+          } else {
+            johnPurchases += amount / 2
+            elwinPurchases += amount / 2
+          }
         }
       }
     })
@@ -199,6 +248,10 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
     const totalDeductions = totalWithdrawals + totalPurchases
     const totalSales = totalCash + totalGcash
     const netSales = totalSales - totalDeductions
+
+    // Calculate net for each owner
+    const johnNet = johnGrossSales - johnWithdrawals - johnPurchases
+    const elwinNet = elwinGrossSales - elwinWithdrawals - elwinPurchases
 
     return {
       totalCash,
@@ -208,18 +261,22 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
       totalPurchases,
       totalDeductions,
       netSales,
-      userSales: Object.values(userSales).sort((a, b) => (b.cash + b.gcash) - (a.cash + a.gcash)),
       orderCount: completedOrders.length,
+      johnStats: {
+        grossSales: johnGrossSales,
+        withdrawals: johnWithdrawals,
+        purchases: johnPurchases,
+        net: johnNet,
+      },
+      elwinStats: {
+        grossSales: elwinGrossSales,
+        withdrawals: elwinWithdrawals,
+        purchases: elwinPurchases,
+        net: elwinNet,
+      },
     }
-  }, [orders, withdrawals, month, year])
+  }, [orders, withdrawals, menuItems, month, year])
 
-  // Filter for John and Elwin specifically
-  const johnSales = monthlySales.userSales.find(
-    (user) => user.name.toLowerCase().includes("john") || user.email.toLowerCase().includes("john")
-  )
-  const elwinSales = monthlySales.userSales.find(
-    (user) => user.name.toLowerCase().includes("elwin") || user.email.toLowerCase().includes("elwin")
-  )
 
   if (isLoading) {
     return (
@@ -331,118 +388,63 @@ export function MonthlySalesReport({ month, year }: MonthlySalesReportProps) {
       </Card>
 
       {/* John's Summary */}
-      {johnSales && (
-        <Card className="p-6 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border border-blue-200 shadow-sm">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
-            <Users className="w-5 h-5 text-blue-600" />
-            John's Financial Summary
-          </h3>
+      <Card className="p-6 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border border-blue-200 shadow-sm">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-blue-600">
+          <Users className="w-5 h-5" />
+          John&apos;s Financial Summary
+        </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Total Sales</div>
-              <div className="text-xl font-bold text-slate-900">
-                ₱{(johnSales.cash + johnSales.gcash).toFixed(2)}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">{johnSales.orderCount} orders</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Cash</div>
-              <div className="text-xl font-bold text-emerald-600">₱{johnSales.cash.toFixed(2)}</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">GCash</div>
-              <div className="text-xl font-bold text-blue-500">₱{johnSales.gcash.toFixed(2)}</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Contribution</div>
-              <div className="text-xl font-bold text-blue-600">
-                {monthlySales.totalSales > 0
-                  ? (((johnSales.cash + johnSales.gcash) / monthlySales.totalSales) * 100).toFixed(1)
-                  : 0}
-                %
-              </div>
-            </div>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center pb-2 border-b bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-slate-600 font-medium">Gross Sales:</span>
+            <span className="text-xl font-bold text-emerald-600">₱{monthlySales.johnStats.grossSales.toFixed(2)}</span>
           </div>
-        </Card>
-      )}
+          <div className="flex justify-between items-center pb-2 border-b bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-slate-600 font-medium">Withdrawals:</span>
+            <span className="text-xl font-bold text-red-600">₱{monthlySales.johnStats.withdrawals.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center pb-2 border-b bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-slate-600 font-medium">Purchases:</span>
+            <span className="text-xl font-bold text-orange-600">₱{monthlySales.johnStats.purchases.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t-2 border-blue-300 bg-white rounded-lg p-4 shadow-md">
+            <span className="text-slate-800 font-bold">Net Total:</span>
+            <span className={`text-2xl font-bold ${monthlySales.johnStats.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              ₱{monthlySales.johnStats.net.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </Card>
 
       {/* Elwin's Summary */}
-      {elwinSales && (
-        <Card className="p-6 bg-gradient-to-br from-purple-50/50 to-pink-50/50 border border-purple-200 shadow-sm">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
-            <Users className="w-5 h-5 text-purple-600" />
-            Elwin's Financial Summary
-          </h3>
+      <Card className="p-6 bg-gradient-to-br from-purple-50/50 to-pink-50/50 border border-purple-200 shadow-sm">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-purple-600">
+          <Users className="w-5 h-5" />
+          Elwin&apos;s Financial Summary
+        </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Total Sales</div>
-              <div className="text-xl font-bold text-slate-900">
-                ₱{(elwinSales.cash + elwinSales.gcash).toFixed(2)}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">{elwinSales.orderCount} orders</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Cash</div>
-              <div className="text-xl font-bold text-emerald-600">₱{elwinSales.cash.toFixed(2)}</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">GCash</div>
-              <div className="text-xl font-bold text-blue-500">₱{elwinSales.gcash.toFixed(2)}</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm">
-              <div className="text-xs text-slate-600 mb-1 uppercase tracking-wide font-semibold">Contribution</div>
-              <div className="text-xl font-bold text-purple-600">
-                {monthlySales.totalSales > 0
-                  ? (((elwinSales.cash + elwinSales.gcash) / monthlySales.totalSales) * 100).toFixed(1)
-                  : 0}
-                %
-              </div>
-            </div>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center pb-2 border-b bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-slate-600 font-medium">Gross Sales:</span>
+            <span className="text-xl font-bold text-emerald-600">₱{monthlySales.elwinStats.grossSales.toFixed(2)}</span>
           </div>
-        </Card>
-      )}
-
-      {/* All Users Summary */}
-      {monthlySales.userSales.length > 0 && (
-        <Card className="p-6 bg-white border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
-            <DollarSign className="w-5 h-5" />
-            All Users Summary
-          </h3>
-
-          <div className="space-y-3">
-            {monthlySales.userSales.map((user, index) => (
-              <div key={index} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <div className="font-semibold text-slate-900">{user.name}</div>
-                    {user.email && <div className="text-xs text-slate-500">{user.email}</div>}
-                  </div>
-                  <Badge variant="outline" className="text-slate-700 font-semibold">
-                    {user.orderCount} orders
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <div className="text-xs text-slate-600">Total</div>
-                    <div className="font-bold text-slate-900">₱{(user.cash + user.gcash).toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-600">Cash</div>
-                    <div className="font-bold text-emerald-600">₱{user.cash.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-600">GCash</div>
-                    <div className="font-bold text-blue-500">₱{user.gcash.toFixed(2)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="flex justify-between items-center pb-2 border-b bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-slate-600 font-medium">Withdrawals:</span>
+            <span className="text-xl font-bold text-red-600">₱{monthlySales.elwinStats.withdrawals.toFixed(2)}</span>
           </div>
-        </Card>
-      )}
+          <div className="flex justify-between items-center pb-2 border-b bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-slate-600 font-medium">Purchases:</span>
+            <span className="text-xl font-bold text-orange-600">₱{monthlySales.elwinStats.purchases.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t-2 border-purple-300 bg-white rounded-lg p-4 shadow-md">
+            <span className="text-slate-800 font-bold">Net Total:</span>
+            <span className={`text-2xl font-bold ${monthlySales.elwinStats.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              ₱{monthlySales.elwinStats.net.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </Card>
+
     </div>
   )
 }

@@ -22,6 +22,7 @@ interface ItemAverage {
   averagePerDay: number
   totalQuantity: number
   totalDays: number
+  todayQuantity: number
 }
 
 const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -223,6 +224,7 @@ export default function StatsPage() {
         // Track item quantities per date
         const itemsByDate = new Map<string, Map<string, number>>() // date -> itemName -> quantity
         const allDates = new Set<string>()
+        const today = new Date().toISOString().split('T')[0]
 
         orders.forEach(order => {
           const dateKey = new Date(order.createdAt).toISOString().split('T')[0]
@@ -259,9 +261,11 @@ export default function StatsPage() {
 
         const totalDays = allDates.size
         const averages: ItemAverage[] = []
+        const todayItems = itemsByDate.get(today) || new Map()
 
         itemTotals.forEach((totalQuantity, itemName) => {
           const averagePerDay = totalQuantity / totalDays
+          const todayQuantity = todayItems.get(itemName) || 0
 
           // Only include items with average > 1 per day
           if (averagePerDay > 1) {
@@ -269,7 +273,8 @@ export default function StatsPage() {
               name: itemName,
               averagePerDay,
               totalQuantity,
-              totalDays
+              totalDays,
+              todayQuantity
             })
           }
         })
@@ -324,36 +329,77 @@ export default function StatsPage() {
           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Daily Preparation Guide</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Average orders per day for items with more than 1 order per day. Prepare at least these quantities to serve orders quickly.
+              Track today&apos;s orders vs historical averages. Green indicators show items performing above average, red shows below average.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Item Name</th>
+                    <th className="text-right py-3 px-4 font-semibold text-gray-700">Today</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-700">Avg Per Day</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-700">Total Orders</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-700">Days</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {itemAverages.map((item, index) => (
-                    <tr key={item.name} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50' : ''}`}>
-                      <td className="py-3 px-4 font-medium">{item.name}</td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="inline-flex items-center justify-center min-w-[60px] px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-bold">
-                          {Math.ceil(item.averagePerDay)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-600">{item.totalQuantity}</td>
-                      <td className="py-3 px-4 text-right text-gray-600">{item.totalDays}</td>
-                    </tr>
-                  ))}
+                  {itemAverages.map((item, index) => {
+                    const avgDiff = item.todayQuantity - item.averagePerDay
+                    const avgPercentDiff = item.averagePerDay > 0 ? (avgDiff / item.averagePerDay) * 100 : 0
+                    const totalDiff = item.todayQuantity - (item.totalQuantity / item.totalDays)
+
+                    return (
+                      <tr key={item.name} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50' : ''}`}>
+                        <td className="py-3 px-4 font-medium">{item.name}</td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="inline-flex items-center justify-center min-w-[60px] px-3 py-1 rounded-full bg-purple-100 text-purple-800 font-bold">
+                            {item.todayQuantity}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="inline-flex items-center justify-center min-w-[60px] px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-bold">
+                              {Math.ceil(item.averagePerDay)}
+                            </span>
+                            {avgDiff !== 0 && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${
+                                avgDiff > 0
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {avgDiff > 0 ? '+' : ''}{avgDiff.toFixed(1)}
+                                <span className="text-[10px]">
+                                  ({avgDiff > 0 ? '+' : ''}{avgPercentDiff.toFixed(0)}%)
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="text-gray-600 font-medium">{item.totalQuantity}</span>
+                            {totalDiff !== 0 && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${
+                                totalDiff > 0
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {totalDiff > 0 ? '+' : ''}{totalDiff.toFixed(1)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-600">{item.totalDays}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
             <p className="text-xs text-gray-500 mt-4">
-              💡 Tip: The &quot;Avg Per Day&quot; column shows the rounded-up quantity to prepare each day.
+              💡 Tip: <span className="font-semibold">Today</span> shows current day orders.
+              <span className="text-green-700 font-bold"> +Numbers</span> indicate above average performance,
+              <span className="text-red-700 font-bold"> -Numbers</span> indicate below average.
             </p>
           </div>
         )}
