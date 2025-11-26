@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp, ShoppingCart, Utensils, ShoppingBag } from "lucide-react"
+import { X, Plus, Minus, AlertCircle, Clock, Check, CreditCard, RefreshCw, Loader2, DollarSign, Calendar, TrendingUp, ShoppingCart, Utensils, ShoppingBag, Search } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -155,6 +155,7 @@ export function OrderTaker({
   const [appendingOrder, setAppendingOrder] = useState<Order | null>(null)
   const [todayDate, setTodayDate] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
   // Payment state
   const [isPaid, setIsPaid] = useState(false)
@@ -912,6 +913,14 @@ export function OrderTaker({
   }
 
   const getDisplayedItems = () => {
+    // If there's a search query, search across ALL items (ignore category)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      return menuItems.filter((item) =>
+        item.name.toLowerCase().includes(query)
+      )
+    }
+    // Otherwise, filter by category or show best sellers
     if (selectedCategory) {
       return menuItems.filter((item) => item.category === selectedCategory)
     }
@@ -1334,8 +1343,36 @@ export function OrderTaker({
             </div>
           ) : (
             <>
+              {/* Search Bar - Prominently Placed for Quick Item Finding */}
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <Input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search menu items..."
+                    className="w-full pl-12 pr-12 h-14 text-lg border-2 border-slate-200 focus:border-blue-500 rounded-xl shadow-sm"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-full transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                    </button>
+                  )}
+                </div>
+                {searchQuery && (
+                  <p className="mt-2 text-sm text-slate-500 font-medium">
+                    {getDisplayedItems().length} result{getDisplayedItems().length !== 1 ? 's' : ''} for "{searchQuery}"
+                  </p>
+                )}
+              </div>
+
               {/* Improved Categories Section with Clear Visual Distinction */}
-              <div className="mb-8 bg-gradient-to-br from-slate-100 to-slate-50 p-4 rounded-2xl border-2 border-slate-200">
+              <div className={`mb-8 bg-gradient-to-br from-slate-100 to-slate-50 p-4 rounded-2xl border-2 border-slate-200 ${searchQuery ? 'opacity-50' : ''}`}>
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
@@ -1349,11 +1386,14 @@ export function OrderTaker({
                     <div className="flex gap-2 pb-2">
                       {/* Best Sellers */}
                       <button
-                        onClick={() => setSelectedCategory(null)}
+                        onClick={() => {
+                          setSelectedCategory(null)
+                          setSearchQuery("")
+                        }}
                         className={cn(
                           "flex items-center gap-2 px-4 py-2.5 rounded-full transition-all flex-shrink-0",
                           "font-semibold text-sm whitespace-nowrap min-h-[44px] border",
-                          selectedCategory === null
+                          selectedCategory === null && !searchQuery
                             ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
                             : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 active:scale-95"
                         )}
@@ -1366,11 +1406,14 @@ export function OrderTaker({
                       {categories.map((category) => (
                         <button
                           key={category.id}
-                          onClick={() => setSelectedCategory(category.id)}
+                          onClick={() => {
+                            setSelectedCategory(category.id)
+                            setSearchQuery("")
+                          }}
                           className={cn(
                             "flex items-center gap-2 px-4 py-2.5 rounded-full transition-all flex-shrink-0",
                             "font-semibold text-sm whitespace-nowrap min-h-[44px] border",
-                            selectedCategory === category.id
+                            selectedCategory === category.id && !searchQuery
                               ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
                               : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 active:scale-95"
                           )}
@@ -1392,11 +1435,14 @@ export function OrderTaker({
                 <div className="hidden lg:flex lg:flex-wrap gap-2">
                   {/* Best Sellers */}
                   <button
-                    onClick={() => setSelectedCategory(null)}
+                    onClick={() => {
+                      setSelectedCategory(null)
+                      setSearchQuery("")
+                    }}
                     className={cn(
                       "flex items-center gap-2 px-5 py-3 rounded-full transition-all border",
                       "font-semibold text-sm",
-                      selectedCategory === null
+                      selectedCategory === null && !searchQuery
                         ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
                         : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50"
                     )}
@@ -1409,11 +1455,14 @@ export function OrderTaker({
                   {categories.map((category) => (
                     <button
                       key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
+                      onClick={() => {
+                        setSelectedCategory(category.id)
+                        setSearchQuery("")
+                      }}
                       className={cn(
                         "flex items-center gap-2 px-5 py-3 rounded-full transition-all border",
                         "font-semibold text-sm",
-                        selectedCategory === category.id
+                        selectedCategory === category.id && !searchQuery
                           ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200"
                           : "bg-white border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50"
                       )}
@@ -1431,6 +1480,21 @@ export function OrderTaker({
 
               {/* Improved Menu Items Grid */}
               <TooltipProvider>
+                {getDisplayedItems().length === 0 && searchQuery ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Search className="h-12 w-12 text-slate-300 mb-4" />
+                    <p className="text-lg font-semibold text-slate-600 mb-2">No items found</p>
+                    <p className="text-sm text-slate-500 mb-4">No menu items match "{searchQuery}"</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setSearchQuery("")}
+                      className="gap-2"
+                    >
+                      <X className="h-4 w-4" />
+                      Clear search
+                    </Button>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4 pb-28 lg:pb-0">
                   {getDisplayedItems().map((item) => (
                     <div
@@ -1531,6 +1595,7 @@ export function OrderTaker({
                     </div>
                   ))}
                 </div>
+                )}
               </TooltipProvider>
             </>
           )}
