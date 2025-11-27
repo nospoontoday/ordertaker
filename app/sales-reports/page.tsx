@@ -1,15 +1,16 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { dailySalesApi, type DailySalesSummary } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2, Pencil } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2, Pencil, BarChart3, PieChart, LineChart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { EditDailySalesDialog } from "@/components/edit-daily-sales-dialog"
+import { LineChart as RechartsLineChart, Line, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from "recharts"
 
 export default function SalesReportsPage() {
   const router = useRouter()
@@ -27,11 +28,122 @@ export default function SalesReportsPage() {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingDate, setEditingDate] = useState<string | null>(null)
+  const [showAnalytics, setShowAnalytics] = useState(true)
+  const [allDailySales, setAllDailySales] = useState<DailySalesSummary[]>([])
 
   // Check if user can access (all roles except crew)
   const canAccess = user?.role !== "crew"
   // Check if user is super admin
   const isSuperAdmin = user?.role === "super_admin"
+
+  // Analytics Data - Computed from all sales data
+  const analyticsData = useMemo(() => {
+    if (allDailySales.length === 0) return null
+
+    // Sort by date (oldest to newest for trends)
+    const sortedSales = [...allDailySales].sort((a, b) => a.date.localeCompare(b.date))
+
+    // 1. Sales Trend Data
+    const salesTrend = sortedSales.map(day => ({
+      date: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      sales: day.totalSales,
+      net: day.netSales,
+      expenses: day.totalPurchases + day.totalWithdrawals
+    }))
+
+    // 2. Category Performance
+    const categoryTotals: Record<string, number> = {}
+    allDailySales.forEach(day => {
+      Object.entries(day.itemsByCategory).forEach(([category, items]) => {
+        if (!categoryTotals[category]) categoryTotals[category] = 0
+        items.forEach(item => {
+          categoryTotals[category] += item.total
+        })
+      })
+    })
+    const categoryData = Object.entries(categoryTotals).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value: parseFloat(value.toFixed(2))
+    })).sort((a, b) => b.value - a.value)
+
+    // 3. Top Selling Items
+    const itemTotals: Record<string, { quantity: number; revenue: number }> = {}
+    allDailySales.forEach(day => {
+      Object.values(day.itemsByCategory).forEach(items => {
+        items.forEach(item => {
+          if (!itemTotals[item.name]) {
+            itemTotals[item.name] = { quantity: 0, revenue: 0 }
+          }
+          itemTotals[item.name].quantity += item.quantity
+          itemTotals[item.name].revenue += item.total
+        })
+      })
+    })
+    const topItems = Object.entries(itemTotals)
+      .map(([name, data]) => ({ name, quantity: data.quantity, revenue: data.revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10)
+
+    // 4. Payment Method Distribution
+    const totalCash = allDailySales.reduce((sum, day) => sum + day.totalCash, 0)
+    const totalGcash = allDailySales.reduce((sum, day) => sum + day.totalGcash, 0)
+    const paymentMethodData = [
+      { name: 'Cash', value: parseFloat(totalCash.toFixed(2)) },
+      { name: 'GCash', value: parseFloat(totalGcash.toFixed(2)) }
+    ]
+
+    // 5. Owner Performance
+    const johnTotal = allDailySales.reduce((sum, day) => sum + (day.netTotalsByOwner?.john || 0), 0)
+    const elwinTotal = allDailySales.reduce((sum, day) => sum + (day.netTotalsByOwner?.elwin || 0), 0)
+    const ownerData = [
+      { name: 'John', net: parseFloat(johnTotal.toFixed(2)) },
+      { name: 'Elwin', net: parseFloat(elwinTotal.toFixed(2)) }
+    ]
+
+    // 6. Summary Statistics
+    const totalRevenue = allDailySales.reduce((sum, day) => sum + day.totalSales, 0)
+    const totalExpenses = allDailySales.reduce((sum, day) => sum + day.totalPurchases + day.totalWithdrawals, 0)
+    const totalNet = allDailySales.reduce((sum, day) => sum + day.netSales, 0)
+    const avgDailySales = totalRevenue / allDailySales.length
+    const avgDailyNet = totalNet / allDailySales.length
+
+    // 7. Weekly comparison (if we have enough data)
+    const today = new Date()
+    const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const previousWeek = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
+    
+    const lastWeekSales = allDailySales
+      .filter(day => new Date(day.date) >= lastWeek)
+      .reduce((sum, day) => sum + day.totalSales, 0)
+    
+    const previousWeekSales = allDailySales
+      .filter(day => {
+        const date = new Date(day.date)
+        return date >= previousWeek && date < lastWeek
+      })
+      .reduce((sum, day) => sum + day.totalSales, 0)
+    
+    const weekOverWeekGrowth = previousWeekSales > 0 
+      ? ((lastWeekSales - previousWeekSales) / previousWeekSales) * 100 
+      : 0
+
+    return {
+      salesTrend,
+      categoryData,
+      topItems,
+      paymentMethodData,
+      ownerData,
+      summary: {
+        totalRevenue,
+        totalExpenses,
+        totalNet,
+        avgDailySales,
+        avgDailyNet,
+        weekOverWeekGrowth,
+        daysTracked: allDailySales.length
+      }
+    }
+  }, [allDailySales])
 
   useEffect(() => {
     setMounted(true)
@@ -63,6 +175,16 @@ export default function SalesReportsPage() {
       // Expand the latest (first) date by default
       if (response.data.length > 0) {
         setExpandedDates(new Set([response.data[0].date]))
+      }
+
+      // Fetch all sales data for analytics (limit to last 30 days for performance)
+      if (page === 1) {
+        try {
+          const allDataResponse = await dailySalesApi.getDailySales(1, 30)
+          setAllDailySales(allDataResponse.data)
+        } catch (err) {
+          console.error("Error fetching analytics data:", err)
+        }
       }
     } catch (error) {
       console.error("Error fetching daily sales:", error)
@@ -260,11 +382,387 @@ export default function SalesReportsPage() {
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>
 
+        {/* Analytics Dashboard */}
+        {analyticsData && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-slate-600" />
+                <h2 className="text-xl font-bold text-slate-900">Analytics Dashboard</h2>
+                <Badge className="bg-blue-100 text-blue-700 text-xs">
+                  Last {analyticsData.summary.daysTracked} days
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAnalytics(!showAnalytics)}
+              >
+                {showAnalytics ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            {showAnalytics && (
+              <div className="space-y-6">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-blue-700">Total Revenue</span>
+                      <TrendingUp className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="text-2xl font-bold text-blue-900">
+                      ₱{analyticsData.summary.totalRevenue.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      Avg: ₱{analyticsData.summary.avgDailySales.toFixed(2)}/day
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-orange-700">Total Expenses</span>
+                      <TrendingDown className="h-4 w-4 text-orange-600" />
+                    </div>
+                    <div className="text-2xl font-bold text-orange-900">
+                      ₱{analyticsData.summary.totalExpenses.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-orange-600 mt-1">
+                      Purchases + Withdrawals
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-emerald-700">Net Profit</span>
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div className="text-2xl font-bold text-emerald-900">
+                      ₱{analyticsData.summary.totalNet.toFixed(2)}
+                    </div>
+                    <div className="text-xs text-emerald-600 mt-1">
+                      Avg: ₱{analyticsData.summary.avgDailyNet.toFixed(2)}/day
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-purple-700">Growth Rate</span>
+                      {analyticsData.summary.weekOverWeekGrowth >= 0 ? (
+                        <TrendingUp className="h-4 w-4 text-purple-600" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4 text-purple-600" />
+                      )}
+                    </div>
+                    <div className={`text-2xl font-bold ${
+                      analyticsData.summary.weekOverWeekGrowth >= 0 ? 'text-purple-900' : 'text-red-700'
+                    }`}>
+                      {analyticsData.summary.weekOverWeekGrowth >= 0 ? '+' : ''}
+                      {analyticsData.summary.weekOverWeekGrowth.toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-purple-600 mt-1">
+                      Week over week
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Charts Row 1: Sales Trend and Net Profit Trend */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Sales Trend Chart */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <LineChart className="h-5 w-5 text-blue-600" />
+                      Sales Trend
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={analyticsData.salesTrend}>
+                        <defs>
+                          <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis 
+                          dataKey="date" 
+                          tick={{ fontSize: 12 }}
+                          stroke="#64748b"
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12 }}
+                          stroke="#64748b"
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => `₱${value.toFixed(2)}`}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="sales" 
+                          stroke="#3b82f6" 
+                          strokeWidth={2}
+                          fill="url(#colorSales)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </Card>
+
+                  {/* Net Profit Trend */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <LineChart className="h-5 w-5 text-emerald-600" />
+                      Net Profit Trend
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <RechartsLineChart data={analyticsData.salesTrend}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis 
+                          dataKey="date" 
+                          tick={{ fontSize: 12 }}
+                          stroke="#64748b"
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12 }}
+                          stroke="#64748b"
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => `₱${value.toFixed(2)}`}
+                        />
+                        <Legend />
+                        <Line 
+                          type="monotone" 
+                          dataKey="net" 
+                          stroke="#10b981" 
+                          strokeWidth={2}
+                          name="Net Profit"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="expenses" 
+                          stroke="#f59e0b" 
+                          strokeWidth={2}
+                          name="Expenses"
+                        />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </div>
+
+                {/* Charts Row 2: Top Items and Category Performance */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Top Selling Items */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-purple-600" />
+                      Top 10 Selling Items
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={analyticsData.topItems} layout="horizontal">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" tick={{ fontSize: 12 }} stroke="#64748b" />
+                        <YAxis 
+                          type="category" 
+                          dataKey="name" 
+                          tick={{ fontSize: 11 }}
+                          stroke="#64748b"
+                          width={100}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => `₱${value.toFixed(2)}`}
+                        />
+                        <Bar dataKey="revenue" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Card>
+
+                  {/* Category Performance */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <PieChart className="h-5 w-5 text-rose-600" />
+                      Sales by Category
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <RechartsPieChart>
+                        <Pie
+                          data={analyticsData.categoryData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={(entry: any) => `${entry.name} (${(entry.percent * 100).toFixed(0)}%)`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {analyticsData.categoryData.map((entry, index) => {
+                            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899']
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                          })}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => `₱${value.toFixed(2)}`}
+                        />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </div>
+
+                {/* Charts Row 3: Payment Methods and Owner Performance */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Payment Method Distribution */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <PieChart className="h-5 w-5 text-blue-600" />
+                      Payment Method Distribution
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <RechartsPieChart>
+                        <Pie
+                          data={analyticsData.paymentMethodData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={(entry: any) => `${entry.name} (${(entry.percent * 100).toFixed(0)}%)`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          <Cell fill="#10b981" />
+                          <Cell fill="#3b82f6" />
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => `₱${value.toFixed(2)}`}
+                        />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </Card>
+
+                  {/* Owner Performance Comparison */}
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-indigo-600" />
+                      Owner Performance
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={analyticsData.ownerData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis 
+                          dataKey="name" 
+                          tick={{ fontSize: 12 }}
+                          stroke="#64748b"
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12 }}
+                          stroke="#64748b"
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number) => `₱${value.toFixed(2)}`}
+                        />
+                        <Bar dataKey="net" fill="#6366f1" radius={[8, 8, 0, 0]}>
+                          <Cell fill="#9333ea" />
+                          <Cell fill="#6366f1" />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </Card>
+                </div>
+
+                {/* Key Insights */}
+                <Card className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">📊 Key Insights & Recommendations</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <h4 className="font-semibold text-slate-900 mb-2">Best Performing Category</h4>
+                      <p className="text-sm text-slate-600">
+                        {analyticsData.categoryData[0]?.name} leads with ₱{analyticsData.categoryData[0]?.value.toFixed(2)} in revenue. 
+                        Consider stocking more items in this category.
+                      </p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <h4 className="font-semibold text-slate-900 mb-2">Top Revenue Generator</h4>
+                      <p className="text-sm text-slate-600">
+                        {analyticsData.topItems[0]?.name} is your top seller with ₱{analyticsData.topItems[0]?.revenue.toFixed(2)}. 
+                        Ensure this item is always in stock.
+                      </p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <h4 className="font-semibold text-slate-900 mb-2">Payment Preference</h4>
+                      <p className="text-sm text-slate-600">
+                        {analyticsData.paymentMethodData[0].value > analyticsData.paymentMethodData[1].value ? 
+                          `Customers prefer ${analyticsData.paymentMethodData[0].name} (${((analyticsData.paymentMethodData[0].value / (analyticsData.paymentMethodData[0].value + analyticsData.paymentMethodData[1].value)) * 100).toFixed(0)}%)` :
+                          `Customers prefer ${analyticsData.paymentMethodData[1].name} (${((analyticsData.paymentMethodData[1].value / (analyticsData.paymentMethodData[0].value + analyticsData.paymentMethodData[1].value)) * 100).toFixed(0)}%)`
+                        }. Optimize for this payment method.
+                      </p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <h4 className="font-semibold text-slate-900 mb-2">Growth Trend</h4>
+                      <p className="text-sm text-slate-600">
+                        {analyticsData.summary.weekOverWeekGrowth >= 0 ? 
+                          `Sales are growing by ${analyticsData.summary.weekOverWeekGrowth.toFixed(1)}%! Keep up the great work.` :
+                          `Sales declined by ${Math.abs(analyticsData.summary.weekOverWeekGrowth).toFixed(1)}%. Consider promotional strategies.`
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Loading State */}
         {isLoadingData && (
           <div className="flex flex-col items-center justify-center py-24">
             <RefreshCw className="h-10 w-10 animate-spin text-slate-400 mb-4" />
             <p className="text-base font-medium text-slate-500">Loading sales reports...</p>
+          </div>
+        )}
+
+        {/* Daily Sales Section Header */}
+        {!isLoadingData && dailySales.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-slate-600" />
+              Daily Sales Details
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Detailed breakdown of sales, expenses, and transactions by date
+            </p>
+            <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent mt-4" />
           </div>
         )}
 
