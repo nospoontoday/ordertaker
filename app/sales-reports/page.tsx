@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2, Pencil, BarChart3, PieChart, LineChart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { EditDailySalesDialog } from "@/components/edit-daily-sales-dialog"
-import { LineChart as RechartsLineChart, Line, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from "recharts"
+import { LineChart as RechartsLineChart, Line, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, ReferenceLine } from "recharts"
 
 export default function SalesReportsPage() {
   const router = useRouter()
@@ -466,9 +466,8 @@ export default function SalesReportsPage() {
                   </Card>
                 </div>
 
-                {/* Charts Row 1: Sales Trend and Net Profit Trend */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Sales Trend Chart */}
+                {/* Sales Trend Chart */}
+                <div className="mb-6">
                   <Card className="p-6">
                     <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                       <LineChart className="h-5 w-5 text-blue-600" />
@@ -501,135 +500,34 @@ export default function SalesReportsPage() {
                           }}
                           formatter={(value: number) => `₱${value.toFixed(2)}`}
                         />
+                        <Legend />
+                        <ReferenceLine 
+                          y={analyticsData.summary.avgDailySales} 
+                          stroke="#ef4444" 
+                          strokeDasharray="5 5"
+                          strokeWidth={2}
+                          label={{ 
+                            value: `Avg: ₱${analyticsData.summary.avgDailySales.toFixed(2)}`, 
+                            position: 'insideTopRight',
+                            fill: '#ef4444',
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                          }}
+                        />
                         <Area 
                           type="monotone" 
                           dataKey="sales" 
                           stroke="#3b82f6" 
                           strokeWidth={2}
                           fill="url(#colorSales)"
+                          name="Daily Sales"
                         />
                       </AreaChart>
                     </ResponsiveContainer>
                   </Card>
-
-                  {/* Net Profit Trend */}
-                  <Card className="p-6">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                      <LineChart className="h-5 w-5 text-emerald-600" />
-                      Net Profit Trend
-                    </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <RechartsLineChart data={analyticsData.salesTrend}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis 
-                          dataKey="date" 
-                          tick={{ fontSize: 12 }}
-                          stroke="#64748b"
-                        />
-                        <YAxis 
-                          tick={{ fontSize: 12 }}
-                          stroke="#64748b"
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#fff',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                          formatter={(value: number) => `₱${value.toFixed(2)}`}
-                        />
-                        <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="net" 
-                          stroke="#10b981" 
-                          strokeWidth={2}
-                          name="Net Profit"
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="expenses" 
-                          stroke="#f59e0b" 
-                          strokeWidth={2}
-                          name="Expenses"
-                        />
-                      </RechartsLineChart>
-                    </ResponsiveContainer>
-                  </Card>
                 </div>
 
-                {/* Charts Row 2: Top Items and Category Performance */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Top Selling Items */}
-                  <Card className="p-6">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5 text-purple-600" />
-                      Top 10 Selling Items
-                    </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={analyticsData.topItems} layout="horizontal">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis type="number" tick={{ fontSize: 12 }} stroke="#64748b" />
-                        <YAxis 
-                          type="category" 
-                          dataKey="name" 
-                          tick={{ fontSize: 11 }}
-                          stroke="#64748b"
-                          width={100}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#fff',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                          formatter={(value: number) => `₱${value.toFixed(2)}`}
-                        />
-                        <Bar dataKey="revenue" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Card>
-
-                  {/* Category Performance */}
-                  <Card className="p-6">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                      <PieChart className="h-5 w-5 text-rose-600" />
-                      Sales by Category
-                    </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <RechartsPieChart>
-                        <Pie
-                          data={analyticsData.categoryData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={(entry: any) => `${entry.name} (${(entry.percent * 100).toFixed(0)}%)`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {analyticsData.categoryData.map((entry, index) => {
-                            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899']
-                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                          })}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#fff',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                          formatter={(value: number) => `₱${value.toFixed(2)}`}
-                        />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-                  </Card>
-                </div>
-
-                {/* Charts Row 3: Payment Methods and Owner Performance */}
+                {/* Payment Methods and Owner Performance */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Payment Method Distribution */}
                   <Card className="p-6">
