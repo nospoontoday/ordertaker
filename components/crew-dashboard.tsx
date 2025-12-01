@@ -1914,7 +1914,7 @@ export function CrewDashboard({
 
   // Calculate pending items summary grouped by item name and type
   const getPendingItemsSummary = () => {
-    const pendingMap = new Map<string, { quantity: number; orderDetails: Array<{ orderNumber: number; customerName: string; notes: string[] }> }>()
+    const pendingMap = new Map<string, { quantity: number; orderDetails: Array<{ orderNumber: number; customerName: string; notes: OrderNote[] }> }>()
     
     orders.forEach(order => {
       // Main order items
@@ -1933,10 +1933,18 @@ export function CrewDashboard({
                 notes: []
               }
               existing.orderDetails.push(orderDetail)
+              // Add order-level notes when creating the order detail entry
+              if (order.notes && order.notes.length > 0) {
+                orderDetail.notes.push(...order.notes)
+              }
             }
-            // Add note if it exists
-            if (item.note && !orderDetail.notes.includes(item.note)) {
-              orderDetail.notes.push(item.note)
+            // Add item-level note if it exists
+            if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
+              orderDetail.notes.push({
+                id: `item-note-${item.id}`,
+                content: item.note,
+                createdAt: Date.now()
+              })
             }
           }
           pendingMap.set(key, existing)
@@ -1960,10 +1968,18 @@ export function CrewDashboard({
                   notes: []
                 }
                 existing.orderDetails.push(orderDetail)
+                // Add order-level notes when creating the order detail entry
+                if (order.notes && order.notes.length > 0) {
+                  orderDetail.notes.push(...order.notes)
+                }
               }
-              // Add note if it exists
-              if (item.note && !orderDetail.notes.includes(item.note)) {
-                orderDetail.notes.push(item.note)
+              // Add item-level note if it exists
+              if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
+                orderDetail.notes.push({
+                  id: `item-note-${item.id}`,
+                  content: item.note,
+                  createdAt: Date.now()
+                })
               }
             }
             pendingMap.set(key, existing)
@@ -2036,7 +2052,7 @@ export function CrewDashboard({
   const getPreparingItemsSummary = () => {
     const preparingMap = new Map<string, {
       quantity: number;
-      orders: Array<{ orderNumber: number; customerName: string }>
+      orders: Array<{ orderNumber: number; customerName: string; notes: OrderNote[] }>
       items: Array<{ orderId: string; itemId: string; appendedOrderId?: string; quantity: number; preparingAt?: number }>
     }>()
 
@@ -2055,8 +2071,26 @@ export function CrewDashboard({
           })
           if (order.orderNumber) {
             // Check if this order is already in the list
-            if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
-              existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+            let orderDetail = existing.orders.find(o => o.orderNumber === order.orderNumber)
+            if (!orderDetail) {
+              orderDetail = {
+                orderNumber: order.orderNumber,
+                customerName: order.customerName,
+                notes: []
+              }
+              existing.orders.push(orderDetail)
+              // Add order-level notes when creating the order detail entry
+              if (order.notes && order.notes.length > 0) {
+                orderDetail.notes.push(...order.notes)
+              }
+            }
+            // Add item-level note if it exists
+            if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
+              orderDetail.notes.push({
+                id: `item-note-${item.id}`,
+                content: item.note,
+                createdAt: Date.now()
+              })
             }
           }
           preparingMap.set(key, existing)
@@ -2079,8 +2113,26 @@ export function CrewDashboard({
             })
             if (order.orderNumber) {
               // Check if this order is already in the list
-              if (!existing.orders.some(o => o.orderNumber === order.orderNumber)) {
-                existing.orders.push({ orderNumber: order.orderNumber, customerName: order.customerName })
+              let orderDetail = existing.orders.find(o => o.orderNumber === order.orderNumber)
+              if (!orderDetail) {
+                orderDetail = {
+                  orderNumber: order.orderNumber,
+                  customerName: order.customerName,
+                  notes: []
+                }
+                existing.orders.push(orderDetail)
+                // Add order-level notes when creating the order detail entry
+                if (order.notes && order.notes.length > 0) {
+                  orderDetail.notes.push(...order.notes)
+                }
+              }
+              // Add item-level note if it exists
+              if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
+                orderDetail.notes.push({
+                  id: `item-note-${item.id}`,
+                  content: item.note,
+                  createdAt: Date.now()
+                })
               }
             }
             preparingMap.set(key, existing)
@@ -2366,13 +2418,28 @@ export function CrewDashboard({
                          <span>#{order.orderNumber}</span>
                          <span className="text-slate-500 font-medium"> - {order.customerName}</span>
                        </div>
-                       {order.notes.length > 0 && (
-                         <div className="mt-1 ml-2 pl-2 border-l-2 border-amber-300 space-y-0.5">
-                           {order.notes.map((note, noteIdx) => (
-                             <div key={noteIdx} className="text-xs text-amber-700 italic">
-                               📝 Note: {note}
-                             </div>
-                           ))}
+                       {order.notes && order.notes.length > 0 && (
+                         <div className="mt-1 ml-2 space-y-1">
+                           {order.notes.map((note, noteIdx) => {
+                             // Check if this is an item note (ID starts with "item-note-") or order note
+                             const isItemNote = note.id.startsWith("item-note-")
+                             return (
+                               <div 
+                                 key={noteIdx} 
+                                 className={`text-xs pl-2 border-l-2 ${
+                                   isItemNote 
+                                     ? "border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r" 
+                                     : "border-blue-400 text-blue-700 bg-blue-50/50 py-0.5 rounded-r font-medium"
+                                 }`}
+                               >
+                                 {isItemNote ? (
+                                   <span className="italic">📝 Item Note: {note.content}</span>
+                                 ) : (
+                                   <span>📋 Order Note: {note.content}</span>
+                                 )}
+                               </div>
+                             )
+                           })}
                          </div>
                        )}
                      </div>
@@ -2426,8 +2493,34 @@ export function CrewDashboard({
                     <div className="text-xs text-slate-600 font-medium space-y-1 flex-1 mb-2">
                       {item.orders.map((order, idx) => (
                         <div key={idx} className="text-xs">
-                          <span className="font-bold text-slate-900">#{order.orderNumber}</span>
-                          <span className="text-slate-500"> - {order.customerName}</span>
+                          <div className="font-bold text-slate-900">
+                            <span>#{order.orderNumber}</span>
+                            <span className="text-slate-500 font-medium"> - {order.customerName}</span>
+                          </div>
+                          {order.notes && order.notes.length > 0 && (
+                            <div className="mt-1 ml-2 space-y-1">
+                              {order.notes.map((note, noteIdx) => {
+                                // Check if this is an item note (ID starts with "item-note-") or order note
+                                const isItemNote = note.id.startsWith("item-note-")
+                                return (
+                                  <div 
+                                    key={noteIdx} 
+                                    className={`text-xs pl-2 border-l-2 ${
+                                      isItemNote 
+                                        ? "border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r" 
+                                        : "border-blue-400 text-blue-700 bg-blue-50/50 py-0.5 rounded-r font-medium"
+                                    }`}
+                                  >
+                                    {isItemNote ? (
+                                      <span className="italic">📝 Item Note: {note.content}</span>
+                                    ) : (
+                                      <span>📋 Order Note: {note.content}</span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

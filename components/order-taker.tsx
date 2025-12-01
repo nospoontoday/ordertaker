@@ -639,6 +639,7 @@ export function OrderTaker({
        change: isPaid ? (paymentMethod === "split" ? parseFloat(amountReceived) - parseFloat(cashAmount || "0") : parseFloat(amountReceived) - totalToShow) : 0,
        cashAmount: isPaid && paymentMethod === "split" ? parseFloat(cashAmount || "0") : 0,
        gcashAmount: isPaid && paymentMethod === "split" ? parseFloat(gcashAmount || "0") : 0,
+       orderNote: orderNote.trim(), // Include order note in confirmation data
      }
 
      // Show confirmation dialog
@@ -724,7 +725,11 @@ export function OrderTaker({
         onAppendComplete()
       } else {
         // Create new order
-        const currentOrderNote = orderNote.trim(); // Capture current note value
+        // Use orderNote from orderData if available (from confirmation dialog), otherwise use state
+        const currentOrderNote = (orderData?.orderNote || orderNote || "").trim();
+        console.log('🔍 DEBUG - orderNote state:', orderNote)
+        console.log('🔍 DEBUG - orderData.orderNote:', orderData?.orderNote)
+        console.log('🔍 DEBUG - currentOrderNote:', currentOrderNote)
         
         // Validate payment data if marked as paid
         if (isPaid) {
@@ -782,11 +787,12 @@ export function OrderTaker({
           }] : [],
         }
 
+        console.log('🔍 DEBUG - newOrder.notes:', newOrder.notes)
         console.log('Order items before submit:', newOrder.items)
 
         try {
           // Try to save to API first
-          await ordersApi.create({
+          const orderPayload = {
             id: newOrder.id,
             customerName: newOrder.customerName,
             items: newOrder.items.map((item) => ({
@@ -804,7 +810,10 @@ export function OrderTaker({
             orderTakerName: user?.name,
             orderTakerEmail: user?.email,
             notes: newOrder.notes,
-          })
+          }
+          console.log('🔍 DEBUG - Order payload being sent to API:', orderPayload)
+          console.log('🔍 DEBUG - Order payload notes:', orderPayload.notes)
+          await ordersApi.create(orderPayload)
 
           toast({
             title: "Order Submitted!",
@@ -2309,6 +2318,14 @@ export function OrderTaker({
                     )}
                   </div>
                 </div>
+
+                {/* Order Note */}
+                {pendingOrderData.orderNote && pendingOrderData.orderNote.trim() && (
+                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Order Note</p>
+                    <p className="text-sm text-slate-900 font-medium">{pendingOrderData.orderNote}</p>
+                  </div>
+                )}
 
                 {/* Payment Method */}
                 {pendingOrderData.isPaid && (

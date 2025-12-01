@@ -780,6 +780,9 @@ router.post('/', async (req, res) => {
   try {
     const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount, notes } = req.body;
 
+    console.log('🔍 BACKEND DEBUG - Received order notes:', notes)
+    console.log('🔍 BACKEND DEBUG - Full request body:', JSON.stringify(req.body, null, 2))
+
     // Validation
     if (!id) {
       return res.status(400).json({
@@ -842,7 +845,11 @@ router.post('/', async (req, res) => {
       notes: notes || []
     });
 
+    console.log('🔍 BACKEND DEBUG - Order object before save, notes:', order.notes)
+
     await order.save();
+    
+    console.log('🔍 BACKEND DEBUG - Order saved successfully, notes:', order.notes)
 
     // Emit WebSocket event for new order
     const io = req.app.get('io');
