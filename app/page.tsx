@@ -8,7 +8,7 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb } from "lucide-react"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
   Sheet,
@@ -184,10 +184,16 @@ export default function Home() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   {!isCrew && (
-                    <DropdownMenuItem onClick={() => router.push("/stats")}>
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Statistics
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => router.push("/insights")}>
+                        <Lightbulb className="h-4 w-4 mr-2" />
+                        Business Insights
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push("/stats")}>
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Statistics
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {canAccessAdmin && (
                     <>
@@ -264,6 +270,14 @@ export default function Home() {
                           >
                             <FileText className="h-5 w-5 mr-3" />
                             Sales Reports
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/insights")}
+                          >
+                            <Lightbulb className="h-5 w-5 mr-3" />
+                            Business Insights
                           </Button>
                           <Button
                             variant="ghost"

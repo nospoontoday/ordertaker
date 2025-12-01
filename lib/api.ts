@@ -906,3 +906,195 @@ export const dailySalesApi = {
     });
   },
 };
+
+// Business Intelligence Insights Types
+export interface BusinessInsights {
+  executiveSummary: string[];
+  productPerformance: {
+    topSellersByRevenue: Array<{
+      name: string;
+      quantity: number;
+      revenue: number;
+      orderCount: number;
+      avgPrepTime: number | null;
+      avgRevenuePerOrder: number;
+    }>;
+    topSellersByQuantity: Array<{
+      name: string;
+      quantity: number;
+      revenue: number;
+      orderCount: number;
+      avgPrepTime: number | null;
+      avgRevenuePerOrder: number;
+    }>;
+    slowMovingItems: Array<{
+      name: string;
+      quantity: number;
+      revenue: number;
+      orderCount: number;
+      avgPrepTime: number | null;
+      avgRevenuePerOrder: number;
+    }>;
+    trendingUp: Array<{
+      name: string;
+      quantity: number;
+      revenue: number;
+      orderCount: number;
+      avgPrepTime: number | null;
+      avgRevenuePerOrder: number;
+      growth: number;
+    }>;
+    trendingDown: Array<{
+      name: string;
+      quantity: number;
+      revenue: number;
+      orderCount: number;
+      avgPrepTime: number | null;
+      avgRevenuePerOrder: number;
+      growth: number;
+    }>;
+  };
+  peakTimes: {
+    busiestHours: Array<{
+      hour: number;
+      orders: number;
+      revenue: number;
+      avgOrderValue: number;
+    }>;
+    slowestHours: Array<{
+      hour: number;
+      orders: number;
+      revenue: number;
+      avgOrderValue: number;
+    }>;
+    dayOfWeekPerformance: Array<{
+      day: number;
+      dayName: string;
+      orders: number;
+      revenue: number;
+      avgOrderValue: number;
+    }>;
+    hourlyBreakdown: Array<{
+      hour: number;
+      orders: number;
+      revenue: number;
+      avgOrderValue: number;
+    }>;
+  };
+  customerInsights: {
+    highValueCustomers: Array<{
+      name: string;
+      orders: number;
+      revenue: number;
+      avgOrderValue: number;
+      uniqueItems: number;
+    }>;
+    avgRevenuePerCustomer: number;
+    totalCustomers: number;
+    popularCombinations: Array<{
+      item1: string;
+      item2: string;
+      count: number;
+    }>;
+  };
+  preparationTime: {
+    overallAverage: number | null;
+    slowestItems: Array<{
+      itemName: string;
+      avgPrepTime: number;
+      minPrepTime: number;
+      maxPrepTime: number;
+      count: number;
+    }>;
+    unit: string;
+  };
+  categoryPerformance: Array<{
+    category: string;
+    revenue: number;
+    quantity: number;
+  }>;
+  recommendations: Array<{
+    type: string;
+    priority: string;
+    title: string;
+    description: string;
+    [key: string]: any;
+  }>;
+  alerts: Array<{
+    type: string;
+    severity: string;
+    message: string;
+    [key: string]: any;
+  }>;
+  summary: {
+    totalRevenue: number;
+    totalOrders: number;
+    avgOrderValue: number;
+    uniqueCustomers: number;
+    totalItemsSold: number;
+    revenueTrend: number;
+    dateRange: {
+      start: string;
+      end: string;
+      days: number;
+    };
+  };
+  dailyRevenue: Array<{
+    date: string;
+    revenue: number;
+    orders: number;
+  }>;
+}
+
+export const insightsApi = {
+  /**
+   * Get comprehensive business intelligence insights
+   */
+  getInsights: async (): Promise<BusinessInsights> => {
+    const response = await apiCall<BusinessInsights>('/orders/insights');
+    return response.data || {
+      executiveSummary: [],
+      productPerformance: {
+        topSellersByRevenue: [],
+        topSellersByQuantity: [],
+        slowMovingItems: [],
+        trendingUp: [],
+        trendingDown: []
+      },
+      peakTimes: {
+        busiestHours: [],
+        slowestHours: [],
+        dayOfWeekPerformance: [],
+        hourlyBreakdown: []
+      },
+      customerInsights: {
+        highValueCustomers: [],
+        avgRevenuePerCustomer: 0,
+        totalCustomers: 0,
+        popularCombinations: []
+      },
+      preparationTime: {
+        overallAverage: null,
+        slowestItems: [],
+        unit: 'minutes'
+      },
+      categoryPerformance: [],
+      recommendations: [],
+      alerts: [],
+      summary: {
+        totalRevenue: 0,
+        totalOrders: 0,
+        avgOrderValue: 0,
+        uniqueCustomers: 0,
+        totalItemsSold: 0,
+        revenueTrend: 0,
+        dateRange: {
+          start: '',
+          end: '',
+          days: 90
+        }
+      },
+      dailyRevenue: []
+    };
+  },
+};
