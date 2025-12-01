@@ -431,6 +431,10 @@ export const ordersApi = {
     appendedOrders?: AppendedOrder[];
     orderTakerName?: string;
     orderTakerEmail?: string;
+    notes?: OrderNote[];
+    cashAmount?: number;
+    gcashAmount?: number;
+    amountReceived?: number;
   }): Promise<Order> => {
     const response = await apiCall<Order>('/orders', {
       method: 'POST',

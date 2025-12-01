@@ -778,7 +778,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount } = req.body;
+    const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount, notes } = req.body;
 
     // Validation
     if (!id) {
@@ -838,7 +838,8 @@ router.post('/', async (req, res) => {
       orderType: orderType || 'dine-in',
       appendedOrders: appendedOrders || [],
       orderTakerName: orderTakerName || null,
-      orderTakerEmail: orderTakerEmail || null
+      orderTakerEmail: orderTakerEmail || null,
+      notes: notes || []
     });
 
     await order.save();

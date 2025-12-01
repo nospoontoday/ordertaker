@@ -803,6 +803,7 @@ export function OrderTaker({
             appendedOrders: [],
             orderTakerName: user?.name,
             orderTakerEmail: user?.email,
+            notes: newOrder.notes,
           })
 
           toast({
