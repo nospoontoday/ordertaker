@@ -261,6 +261,12 @@ export function PastOrders() {
           <div className="text-sm text-gray-600">
             Qty: {item.quantity} × ₱{item.price} = ₱{item.quantity * item.price}
           </div>
+          {/* Item-level note */}
+          {item.note && (
+            <div className="mt-1 text-xs pl-2 border-l-2 border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r italic">
+              📝 Item Note: {item.note}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Select
@@ -495,6 +501,33 @@ export function PastOrders() {
                   </div>
                   {renderOrderItems(order.items, order.id)}
 
+                  {/* Order-level notes */}
+                  {order.notes && order.notes.length > 0 && (
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-sm font-semibold text-blue-900 mb-2">Order Notes</div>
+                      <div className="space-y-2">
+                        {order.notes.map((note) => (
+                          <div 
+                            key={note.id} 
+                            className="text-xs pl-2 border-l-2 border-blue-400 text-blue-700 bg-blue-50/50 py-1 rounded-r font-medium"
+                          >
+                            📋 Order Note: {note.content}
+                            {note.createdBy && (
+                              <span className="text-blue-600 ml-2 text-xs">
+                                - {note.createdBy}
+                                {note.createdAt && (
+                                  <span className="text-blue-500 ml-1">
+                                    ({new Date(note.createdAt).toLocaleString()})
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Order Total - Always show when paid */}
                   {order.isPaid && (() => {
                     const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
@@ -605,6 +638,9 @@ export function PastOrders() {
                           </Button>
                         </div>
                         {renderOrderItems(appended.items, order.id, true, appended.id)}
+
+                        {/* Appended Order Notes - if appended orders have their own notes in the future */}
+                        {/* Note: Currently appended orders share the main order's notes, which are displayed above */}
 
                         {/* Appended Order Total - Always show when paid */}
                         {appended.isPaid && (() => {
