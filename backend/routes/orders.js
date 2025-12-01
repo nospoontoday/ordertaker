@@ -742,6 +742,521 @@ router.delete('/daily-sales/:date', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/orders/insights
+ * @desc    Get comprehensive business intelligence insights from last 90 days of order data
+ * @access  Public (should be protected in production)
+ */
+router.get('/insights', async (req, res) => {
+  try {
+    const MenuItem = require('../models/MenuItem');
+    
+    // Calculate date range (last 90 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 90);
+    const startTimestamp = startDate.getTime();
+    const endTimestamp = endDate.getTime();
+
+    // Fetch all orders from last 90 days
+    const orders = await Order.find({
+      createdAt: { $gte: startTimestamp, $lte: endTimestamp },
+      isPaid: true // Only analyze paid orders
+    }).sort({ createdAt: 1 });
+
+    // Get menu items for category mapping
+    const menuItems = await MenuItem.find({});
+    const menuItemMap = new Map();
+    menuItems.forEach(item => {
+      menuItemMap.set(item._id.toString(), item);
+      menuItemMap.set(item.name.toLowerCase(), item);
+    });
+
+    // Initialize data structures
+    const itemStats = new Map(); // item name -> { quantity, revenue, orders, prepTimes }
+    const hourlyStats = new Map(); // hour -> { orders, revenue, count }
+    const dayOfWeekStats = new Map(); // day (0-6) -> { orders, revenue, count }
+    const customerStats = new Map(); // customerName -> { orders, revenue, avgOrderValue, items }
+    const itemCombinations = new Map(); // "item1|item2" -> count
+    const prepTimeData = []; // { itemName, prepTime }
+    const dailyRevenue = []; // { date, revenue, orders }
+    const categoryStats = new Map(); // category -> { revenue, quantity }
+
+    // Process each order
+    orders.forEach(order => {
+      const orderDate = new Date(order.createdAt);
+      const hour = orderDate.getHours();
+      const dayOfWeek = orderDate.getDay();
+      const dateKey = formatLocalDate(orderDate);
+      
+      // Daily revenue tracking
+      const dailyIndex = dailyRevenue.findIndex(d => d.date === dateKey);
+      if (dailyIndex === -1) {
+        dailyRevenue.push({ date: dateKey, revenue: 0, orders: 0 });
+      }
+      const dailyRecord = dailyRevenue[dailyIndex === -1 ? dailyRevenue.length - 1 : dailyIndex];
+      dailyRecord.orders += 1;
+
+      // Hourly stats
+      if (!hourlyStats.has(hour)) {
+        hourlyStats.set(hour, { orders: 0, revenue: 0, count: 0 });
+      }
+      const hourStat = hourlyStats.get(hour);
+      hourStat.count += 1;
+
+      // Day of week stats
+      if (!dayOfWeekStats.has(dayOfWeek)) {
+        dayOfWeekStats.set(dayOfWeek, { orders: 0, revenue: 0, count: 0 });
+      }
+      const dayStat = dayOfWeekStats.get(dayOfWeek);
+      dayStat.count += 1;
+
+      // Customer stats
+      const customerName = order.customerName?.toLowerCase() || 'unknown';
+      if (!customerStats.has(customerName)) {
+        customerStats.set(customerName, { orders: 0, revenue: 0, items: new Set() });
+      }
+      const customerStat = customerStats.get(customerName);
+      customerStat.orders += 1;
+
+      // Process main order items
+      const orderItems = [...order.items];
+      if (order.appendedOrders && order.appendedOrders.length > 0) {
+        order.appendedOrders.forEach(appended => {
+          if (appended.items) {
+            orderItems.push(...appended.items);
+          }
+        });
+      }
+
+      let orderTotal = 0;
+      const orderItemNames = [];
+
+      orderItems.forEach(item => {
+        const itemName = item.name;
+        orderItemNames.push(itemName);
+        const itemRevenue = item.price * item.quantity;
+        orderTotal += itemRevenue;
+
+        // Item statistics
+        if (!itemStats.has(itemName)) {
+          itemStats.set(itemName, {
+            name: itemName,
+            quantity: 0,
+            revenue: 0,
+            orders: new Set(),
+            prepTimes: []
+          });
+        }
+        const itemStat = itemStats.get(itemName);
+        itemStat.quantity += item.quantity;
+        itemStat.revenue += itemRevenue;
+        itemStat.orders.add(order.id);
+
+        // Preparation time tracking
+        if (item.preparingAt && item.readyAt) {
+          const prepTime = (item.readyAt - item.preparingAt) / 1000 / 60; // minutes
+          itemStat.prepTimes.push(prepTime);
+          prepTimeData.push({ itemName, prepTime });
+        }
+
+        // Category stats
+        const menuItem = menuItemMap.get(itemName.toLowerCase()) || 
+                        Array.from(menuItemMap.values()).find(m => m.name.toLowerCase() === itemName.toLowerCase());
+        if (menuItem && menuItem.category) {
+          if (!categoryStats.has(menuItem.category)) {
+            categoryStats.set(menuItem.category, { revenue: 0, quantity: 0 });
+          }
+          const catStat = categoryStats.get(menuItem.category);
+          catStat.revenue += itemRevenue;
+          catStat.quantity += item.quantity;
+        }
+
+        // Track item combinations (pairs)
+        orderItemNames.forEach(otherItem => {
+          if (otherItem !== itemName) {
+            const comboKey = [itemName, otherItem].sort().join('|');
+            itemCombinations.set(comboKey, (itemCombinations.get(comboKey) || 0) + 1);
+          }
+        });
+      });
+
+      // Update customer stats
+      customerStat.revenue += orderTotal;
+      orderItemNames.forEach(item => customerStat.items.add(item));
+
+      // Update hourly and daily stats with revenue
+      hourStat.revenue += orderTotal;
+      dayStat.revenue += orderTotal;
+      dailyRecord.revenue += orderTotal;
+    });
+
+    // Convert item stats to array and calculate averages
+    const itemStatsArray = Array.from(itemStats.values()).map(stat => ({
+      name: stat.name,
+      quantity: stat.quantity,
+      revenue: stat.revenue,
+      orderCount: stat.orders.size,
+      avgPrepTime: stat.prepTimes.length > 0
+        ? stat.prepTimes.reduce((a, b) => a + b, 0) / stat.prepTimes.length
+        : null,
+      avgRevenuePerOrder: stat.orders.size > 0 ? stat.revenue / stat.orders.size : 0
+    }));
+
+    // Top 10 best sellers by revenue
+    const topSellers = [...itemStatsArray]
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+
+    // Top 10 best sellers by quantity
+    const topSellersByQuantity = [...itemStatsArray]
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 10);
+
+    // Slowest moving items (bottom 10 by revenue, but only if they have at least 1 order)
+    const slowMoving = [...itemStatsArray]
+      .filter(item => item.orderCount > 0)
+      .sort((a, b) => a.revenue - b.revenue)
+      .slice(0, 10);
+
+    // Trending analysis: Compare first 45 days vs last 45 days
+    const midPoint = Math.floor(orders.length / 2);
+    const firstHalf = orders.slice(0, midPoint);
+    const secondHalf = orders.slice(midPoint);
+
+    const firstHalfItems = new Map();
+    const secondHalfItems = new Map();
+
+    [firstHalf, secondHalf].forEach((half, index) => {
+      const map = index === 0 ? firstHalfItems : secondHalfItems;
+      half.forEach(order => {
+        const orderItems = [...order.items];
+        if (order.appendedOrders) {
+          order.appendedOrders.forEach(appended => {
+            if (appended.items) orderItems.push(...appended.items);
+          });
+        }
+        orderItems.forEach(item => {
+          const itemName = item.name;
+          const revenue = item.price * item.quantity;
+          map.set(itemName, (map.get(itemName) || 0) + revenue);
+        });
+      });
+    });
+
+    const trendingUp = [];
+    const trendingDown = [];
+
+    itemStatsArray.forEach(item => {
+      const firstHalfRevenue = firstHalfItems.get(item.name) || 0;
+      const secondHalfRevenue = secondHalfItems.get(item.name) || 0;
+      const growth = firstHalfRevenue > 0
+        ? ((secondHalfRevenue - firstHalfRevenue) / firstHalfRevenue) * 100
+        : (secondHalfRevenue > 0 ? 100 : 0);
+
+      if (secondHalfRevenue > 0) {
+        if (growth > 20) {
+          trendingUp.push({ ...item, growth: parseFloat(growth.toFixed(1)) });
+        } else if (growth < -20 && firstHalfRevenue > 0) {
+          trendingDown.push({ ...item, growth: parseFloat(growth.toFixed(1)) });
+        }
+      }
+    });
+
+    trendingUp.sort((a, b) => b.growth - a.growth);
+    trendingDown.sort((a, b) => a.growth - b.growth);
+
+    // Peak hours analysis
+    const hourlyArray = Array.from(hourlyStats.entries())
+      .map(([hour, stats]) => ({
+        hour,
+        orders: stats.count,
+        revenue: stats.revenue,
+        avgOrderValue: stats.count > 0 ? stats.revenue / stats.count : 0
+      }))
+      .sort((a, b) => b.orders - a.orders);
+
+    const busiestHours = hourlyArray.slice(0, 5);
+    const slowestHours = hourlyArray.slice(-5).reverse();
+
+    // Day of week analysis
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeekArray = Array.from(dayOfWeekStats.entries())
+      .map(([day, stats]) => ({
+        day,
+        dayName: dayNames[day],
+        orders: stats.count,
+        revenue: stats.revenue,
+        avgOrderValue: stats.count > 0 ? stats.revenue / stats.count : 0
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Customer insights
+    const customerArray = Array.from(customerStats.entries())
+      .map(([name, stats]) => ({
+        name: name === 'unknown' ? 'Unknown' : name.charAt(0).toUpperCase() + name.slice(1),
+        orders: stats.orders,
+        revenue: stats.revenue,
+        avgOrderValue: stats.orders > 0 ? stats.revenue / stats.orders : 0,
+        uniqueItems: stats.items.size
+      }))
+      .filter(c => c.orders > 0)
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const highValueCustomers = customerArray.slice(0, 10);
+    const avgRevenuePerCustomer = customerArray.length > 0
+      ? customerArray.reduce((sum, c) => sum + c.avgOrderValue, 0) / customerArray.length
+      : 0;
+
+    // Popular item combinations
+    const topCombinations = Array.from(itemCombinations.entries())
+      .map(([combo, count]) => {
+        const [item1, item2] = combo.split('|');
+        return { item1, item2, count };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Preparation time analysis
+    const prepTimeByItem = new Map();
+    prepTimeData.forEach(({ itemName, prepTime }) => {
+      if (!prepTimeByItem.has(itemName)) {
+        prepTimeByItem.set(itemName, []);
+      }
+      prepTimeByItem.get(itemName).push(prepTime);
+    });
+
+    const prepTimeStats = Array.from(prepTimeByItem.entries())
+      .map(([itemName, times]) => ({
+        itemName,
+        avgPrepTime: times.reduce((a, b) => a + b, 0) / times.length,
+        minPrepTime: Math.min(...times),
+        maxPrepTime: Math.max(...times),
+        count: times.length
+      }))
+      .sort((a, b) => b.avgPrepTime - a.avgPrepTime)
+      .slice(0, 10);
+
+    const overallAvgPrepTime = prepTimeData.length > 0
+      ? prepTimeData.reduce((sum, d) => sum + d.prepTime, 0) / prepTimeData.length
+      : null;
+
+    // Category performance
+    const categoryArray = Array.from(categoryStats.entries())
+      .map(([category, stats]) => ({
+        category,
+        revenue: stats.revenue,
+        quantity: stats.quantity
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    // Calculate trends for daily revenue
+    const dailyRevenueSorted = [...dailyRevenue].sort((a, b) => a.date.localeCompare(b.date));
+    const recentDays = dailyRevenueSorted.slice(-7);
+    const previousDays = dailyRevenueSorted.slice(-14, -7);
+    const recentAvg = recentDays.length > 0
+      ? recentDays.reduce((sum, d) => sum + d.revenue, 0) / recentDays.length
+      : 0;
+    const previousAvg = previousDays.length > 0
+      ? previousDays.reduce((sum, d) => sum + d.revenue, 0) / previousDays.length
+      : 0;
+    const revenueTrend = previousAvg > 0 ? ((recentAvg - previousAvg) / previousAvg) * 100 : 0;
+
+    // Generate alerts
+    const alerts = [];
+
+    // Sales drop alert
+    if (revenueTrend < -15) {
+      alerts.push({
+        type: 'sales_drop',
+        severity: 'high',
+        message: `Sales have dropped ${Math.abs(revenueTrend).toFixed(1)}% compared to previous week. Consider promotional strategies.`,
+        value: revenueTrend
+      });
+    }
+
+    // Trending item alerts
+    trendingUp.slice(0, 3).forEach(item => {
+      alerts.push({
+        type: 'trending_up',
+        severity: 'info',
+        message: `${item.name} is trending up ${item.growth}%! Consider promoting or increasing stock.`,
+        itemName: item.name,
+        growth: item.growth
+      });
+    });
+
+    // Preparation time spike alert
+    const highPrepTimeItems = prepTimeStats.filter(item => item.avgPrepTime > overallAvgPrepTime * 1.5);
+    if (highPrepTimeItems.length > 0 && overallAvgPrepTime) {
+      alerts.push({
+        type: 'prep_time_spike',
+        severity: 'medium',
+        message: `${highPrepTimeItems[0].itemName} has high preparation time (${highPrepTimeItems[0].avgPrepTime.toFixed(1)} min). Review kitchen efficiency.`,
+        itemName: highPrepTimeItems[0].itemName,
+        prepTime: highPrepTimeItems[0].avgPrepTime
+      });
+    }
+
+    // Revenue per customer change
+    const recentCustomers = customerArray.filter(c => c.orders >= 2);
+    const recentAvgOrderValue = recentCustomers.length > 0
+      ? recentCustomers.reduce((sum, c) => sum + c.avgOrderValue, 0) / recentCustomers.length
+      : 0;
+    if (recentAvgOrderValue < avgRevenuePerCustomer * 0.85) {
+      alerts.push({
+        type: 'revenue_per_customer',
+        severity: 'medium',
+        message: `Average order value has decreased. Consider upselling strategies.`,
+        currentValue: recentAvgOrderValue,
+        previousValue: avgRevenuePerCustomer
+      });
+    }
+
+    // Generate recommendations
+    const recommendations = [];
+
+    // Promotion recommendations
+    if (slowMoving.length > 0) {
+      recommendations.push({
+        type: 'promotion',
+        priority: 'high',
+        title: 'Promote Slow-Moving Items',
+        description: `Consider promoting: ${slowMoving.slice(0, 3).map(i => i.name).join(', ')}. These items have low sales volume.`,
+        items: slowMoving.slice(0, 3).map(i => i.name)
+      });
+    }
+
+    // Inventory recommendations
+    topSellers.slice(0, 5).forEach(item => {
+      recommendations.push({
+        type: 'inventory',
+        priority: 'high',
+        title: 'Ensure Stock Availability',
+        description: `${item.name} is a top seller (₱${item.revenue.toFixed(2)} revenue). Ensure adequate inventory.`,
+        itemName: item.name
+      });
+    });
+
+    // Menu/pricing recommendations
+    if (trendingUp.length > 0) {
+      recommendations.push({
+        type: 'menu',
+        priority: 'medium',
+        title: 'Capitalize on Trending Items',
+        description: `${trendingUp[0].name} is trending up ${trendingUp[0].growth}%. Consider featuring it prominently or creating bundles.`,
+        itemName: trendingUp[0].name
+      });
+    }
+
+    // Staffing recommendations
+    const peakHour = busiestHours[0];
+    if (peakHour) {
+      recommendations.push({
+        type: 'staffing',
+        priority: 'high',
+        title: 'Optimize Staffing Schedule',
+        description: `Peak hours are ${peakHour.hour}:00 (${peakHour.orders} orders). Ensure adequate staff during these times.`,
+        peakHours: busiestHours.map(h => h.hour)
+      });
+    }
+
+    // Upsell recommendations
+    if (topCombinations.length > 0) {
+      recommendations.push({
+        type: 'upsell',
+        priority: 'medium',
+        title: 'Create Bundle Offers',
+        description: `Popular combination: ${topCombinations[0].item1} + ${topCombinations[0].item2} (ordered together ${topCombinations[0].count} times). Create a bundle deal.`,
+        combination: { item1: topCombinations[0].item1, item2: topCombinations[0].item2 }
+      });
+    }
+
+    // Executive summary
+    const totalRevenue = orders.reduce((sum, order) => {
+      const mainTotal = order.items.reduce((s, item) => s + (item.price * item.quantity), 0);
+      const appendedTotal = (order.appendedOrders || []).reduce((s, appended) => {
+        return s + (appended.items || []).reduce((is, item) => is + (item.price * item.quantity), 0);
+      }, 0);
+      return sum + mainTotal + appendedTotal;
+    }, 0);
+
+    const totalOrders = orders.length;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const uniqueCustomers = customerStats.size;
+    const totalItemsSold = itemStatsArray.reduce((sum, item) => sum + item.quantity, 0);
+
+    const executiveSummary = [
+      `Total revenue of ₱${totalRevenue.toFixed(2)} from ${totalOrders} orders over the last 90 days`,
+      `Average order value: ₱${avgOrderValue.toFixed(2)}`,
+      `${uniqueCustomers} unique customers with ${totalItemsSold} items sold`,
+      revenueTrend >= 0
+        ? `Sales trending ${revenueTrend.toFixed(1)}% higher than previous period`
+        : `Sales trending ${Math.abs(revenueTrend).toFixed(1)}% lower than previous period - attention needed`,
+      topSellers.length > 0
+        ? `Top seller: ${topSellers[0].name} generating ₱${topSellers[0].revenue.toFixed(2)}`
+        : 'No sales data available',
+      busiestHours.length > 0
+        ? `Peak business hours: ${busiestHours.slice(0, 3).map(h => `${h.hour}:00`).join(', ')}`
+        : 'No peak hour data available'
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        executiveSummary,
+        productPerformance: {
+          topSellersByRevenue: topSellers,
+          topSellersByQuantity: topSellersByQuantity,
+          slowMovingItems: slowMoving,
+          trendingUp: trendingUp.slice(0, 10),
+          trendingDown: trendingDown.slice(0, 10)
+        },
+        peakTimes: {
+          busiestHours,
+          slowestHours,
+          dayOfWeekPerformance: dayOfWeekArray,
+          hourlyBreakdown: hourlyArray
+        },
+        customerInsights: {
+          highValueCustomers,
+          avgRevenuePerCustomer: parseFloat(avgRevenuePerCustomer.toFixed(2)),
+          totalCustomers: uniqueCustomers,
+          popularCombinations: topCombinations
+        },
+        preparationTime: {
+          overallAverage: overallAvgPrepTime ? parseFloat(overallAvgPrepTime.toFixed(2)) : null,
+          slowestItems: prepTimeStats,
+          unit: 'minutes'
+        },
+        categoryPerformance: categoryArray,
+        recommendations,
+        alerts,
+        summary: {
+          totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+          totalOrders,
+          avgOrderValue: parseFloat(avgOrderValue.toFixed(2)),
+          uniqueCustomers,
+          totalItemsSold,
+          revenueTrend: parseFloat(revenueTrend.toFixed(1)),
+          dateRange: {
+            start: startDate.toISOString().split('T')[0],
+            end: endDate.toISOString().split('T')[0],
+            days: 90
+          }
+        },
+        dailyRevenue: dailyRevenueSorted
+      }
+    });
+  } catch (error) {
+    console.error('Error generating insights:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate business insights'
+    });
+  }
+});
+
+/**
  * @route   GET /api/orders/:id
  * @desc    Get single order by ID
  * @access  Public
@@ -1797,521 +2312,6 @@ router.get('/updates', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch order updates',
-    });
-  }
-});
-
-/**
- * @route   GET /api/orders/insights
- * @desc    Get comprehensive business intelligence insights from last 90 days of order data
- * @access  Public (should be protected in production)
- */
-router.get('/insights', async (req, res) => {
-  try {
-    const MenuItem = require('../models/MenuItem');
-    
-    // Calculate date range (last 90 days)
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 90);
-    const startTimestamp = startDate.getTime();
-    const endTimestamp = endDate.getTime();
-
-    // Fetch all orders from last 90 days
-    const orders = await Order.find({
-      createdAt: { $gte: startTimestamp, $lte: endTimestamp },
-      isPaid: true // Only analyze paid orders
-    }).sort({ createdAt: 1 });
-
-    // Get menu items for category mapping
-    const menuItems = await MenuItem.find({});
-    const menuItemMap = new Map();
-    menuItems.forEach(item => {
-      menuItemMap.set(item._id.toString(), item);
-      menuItemMap.set(item.name.toLowerCase(), item);
-    });
-
-    // Initialize data structures
-    const itemStats = new Map(); // item name -> { quantity, revenue, orders, prepTimes }
-    const hourlyStats = new Map(); // hour -> { orders, revenue, count }
-    const dayOfWeekStats = new Map(); // day (0-6) -> { orders, revenue, count }
-    const customerStats = new Map(); // customerName -> { orders, revenue, avgOrderValue, items }
-    const itemCombinations = new Map(); // "item1|item2" -> count
-    const prepTimeData = []; // { itemName, prepTime }
-    const dailyRevenue = []; // { date, revenue, orders }
-    const categoryStats = new Map(); // category -> { revenue, quantity }
-
-    // Process each order
-    orders.forEach(order => {
-      const orderDate = new Date(order.createdAt);
-      const hour = orderDate.getHours();
-      const dayOfWeek = orderDate.getDay();
-      const dateKey = formatLocalDate(orderDate);
-      
-      // Daily revenue tracking
-      const dailyIndex = dailyRevenue.findIndex(d => d.date === dateKey);
-      if (dailyIndex === -1) {
-        dailyRevenue.push({ date: dateKey, revenue: 0, orders: 0 });
-      }
-      const dailyRecord = dailyRevenue[dailyIndex === -1 ? dailyRevenue.length - 1 : dailyIndex];
-      dailyRecord.orders += 1;
-
-      // Hourly stats
-      if (!hourlyStats.has(hour)) {
-        hourlyStats.set(hour, { orders: 0, revenue: 0, count: 0 });
-      }
-      const hourStat = hourlyStats.get(hour);
-      hourStat.count += 1;
-
-      // Day of week stats
-      if (!dayOfWeekStats.has(dayOfWeek)) {
-        dayOfWeekStats.set(dayOfWeek, { orders: 0, revenue: 0, count: 0 });
-      }
-      const dayStat = dayOfWeekStats.get(dayOfWeek);
-      dayStat.count += 1;
-
-      // Customer stats
-      const customerName = order.customerName?.toLowerCase() || 'unknown';
-      if (!customerStats.has(customerName)) {
-        customerStats.set(customerName, { orders: 0, revenue: 0, items: new Set() });
-      }
-      const customerStat = customerStats.get(customerName);
-      customerStat.orders += 1;
-
-      // Process main order items
-      const orderItems = [...order.items];
-      if (order.appendedOrders && order.appendedOrders.length > 0) {
-        order.appendedOrders.forEach(appended => {
-          if (appended.items) {
-            orderItems.push(...appended.items);
-          }
-        });
-      }
-
-      let orderTotal = 0;
-      const orderItemNames = [];
-
-      orderItems.forEach(item => {
-        const itemName = item.name;
-        orderItemNames.push(itemName);
-        const itemRevenue = item.price * item.quantity;
-        orderTotal += itemRevenue;
-
-        // Item statistics
-        if (!itemStats.has(itemName)) {
-          itemStats.set(itemName, {
-            name: itemName,
-            quantity: 0,
-            revenue: 0,
-            orders: new Set(),
-            prepTimes: []
-          });
-        }
-        const itemStat = itemStats.get(itemName);
-        itemStat.quantity += item.quantity;
-        itemStat.revenue += itemRevenue;
-        itemStat.orders.add(order.id);
-
-        // Preparation time tracking
-        if (item.preparingAt && item.readyAt) {
-          const prepTime = (item.readyAt - item.preparingAt) / 1000 / 60; // minutes
-          itemStat.prepTimes.push(prepTime);
-          prepTimeData.push({ itemName, prepTime });
-        }
-
-        // Category stats
-        const menuItem = menuItemMap.get(itemName.toLowerCase()) || 
-                        Array.from(menuItemMap.values()).find(m => m.name.toLowerCase() === itemName.toLowerCase());
-        if (menuItem && menuItem.category) {
-          if (!categoryStats.has(menuItem.category)) {
-            categoryStats.set(menuItem.category, { revenue: 0, quantity: 0 });
-          }
-          const catStat = categoryStats.get(menuItem.category);
-          catStat.revenue += itemRevenue;
-          catStat.quantity += item.quantity;
-        }
-
-        // Track item combinations (pairs)
-        orderItemNames.forEach(otherItem => {
-          if (otherItem !== itemName) {
-            const comboKey = [itemName, otherItem].sort().join('|');
-            itemCombinations.set(comboKey, (itemCombinations.get(comboKey) || 0) + 1);
-          }
-        });
-      });
-
-      // Update customer stats
-      customerStat.revenue += orderTotal;
-      orderItemNames.forEach(item => customerStat.items.add(item));
-
-      // Update hourly and daily stats with revenue
-      hourStat.revenue += orderTotal;
-      dayStat.revenue += orderTotal;
-      dailyRecord.revenue += orderTotal;
-    });
-
-    // Convert item stats to array and calculate averages
-    const itemStatsArray = Array.from(itemStats.values()).map(stat => ({
-      name: stat.name,
-      quantity: stat.quantity,
-      revenue: stat.revenue,
-      orderCount: stat.orders.size,
-      avgPrepTime: stat.prepTimes.length > 0
-        ? stat.prepTimes.reduce((a, b) => a + b, 0) / stat.prepTimes.length
-        : null,
-      avgRevenuePerOrder: stat.orders.size > 0 ? stat.revenue / stat.orders.size : 0
-    }));
-
-    // Top 10 best sellers by revenue
-    const topSellers = [...itemStatsArray]
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10);
-
-    // Top 10 best sellers by quantity
-    const topSellersByQuantity = [...itemStatsArray]
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 10);
-
-    // Slowest moving items (bottom 10 by revenue, but only if they have at least 1 order)
-    const slowMoving = [...itemStatsArray]
-      .filter(item => item.orderCount > 0)
-      .sort((a, b) => a.revenue - b.revenue)
-      .slice(0, 10);
-
-    // Trending analysis: Compare first 45 days vs last 45 days
-    const midPoint = Math.floor(orders.length / 2);
-    const firstHalf = orders.slice(0, midPoint);
-    const secondHalf = orders.slice(midPoint);
-
-    const firstHalfItems = new Map();
-    const secondHalfItems = new Map();
-
-    [firstHalf, secondHalf].forEach((half, index) => {
-      const map = index === 0 ? firstHalfItems : secondHalfItems;
-      half.forEach(order => {
-        const orderItems = [...order.items];
-        if (order.appendedOrders) {
-          order.appendedOrders.forEach(appended => {
-            if (appended.items) orderItems.push(...appended.items);
-          });
-        }
-        orderItems.forEach(item => {
-          const itemName = item.name;
-          const revenue = item.price * item.quantity;
-          map.set(itemName, (map.get(itemName) || 0) + revenue);
-        });
-      });
-    });
-
-    const trendingUp = [];
-    const trendingDown = [];
-
-    itemStatsArray.forEach(item => {
-      const firstHalfRevenue = firstHalfItems.get(item.name) || 0;
-      const secondHalfRevenue = secondHalfItems.get(item.name) || 0;
-      const growth = firstHalfRevenue > 0
-        ? ((secondHalfRevenue - firstHalfRevenue) / firstHalfRevenue) * 100
-        : (secondHalfRevenue > 0 ? 100 : 0);
-
-      if (secondHalfRevenue > 0) {
-        if (growth > 20) {
-          trendingUp.push({ ...item, growth: parseFloat(growth.toFixed(1)) });
-        } else if (growth < -20 && firstHalfRevenue > 0) {
-          trendingDown.push({ ...item, growth: parseFloat(growth.toFixed(1)) });
-        }
-      }
-    });
-
-    trendingUp.sort((a, b) => b.growth - a.growth);
-    trendingDown.sort((a, b) => a.growth - b.growth);
-
-    // Peak hours analysis
-    const hourlyArray = Array.from(hourlyStats.entries())
-      .map(([hour, stats]) => ({
-        hour,
-        orders: stats.count,
-        revenue: stats.revenue,
-        avgOrderValue: stats.count > 0 ? stats.revenue / stats.count : 0
-      }))
-      .sort((a, b) => b.orders - a.orders);
-
-    const busiestHours = hourlyArray.slice(0, 5);
-    const slowestHours = hourlyArray.slice(-5).reverse();
-
-    // Day of week analysis
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayOfWeekArray = Array.from(dayOfWeekStats.entries())
-      .map(([day, stats]) => ({
-        day,
-        dayName: dayNames[day],
-        orders: stats.count,
-        revenue: stats.revenue,
-        avgOrderValue: stats.count > 0 ? stats.revenue / stats.count : 0
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    // Customer insights
-    const customerArray = Array.from(customerStats.entries())
-      .map(([name, stats]) => ({
-        name: name === 'unknown' ? 'Unknown' : name.charAt(0).toUpperCase() + name.slice(1),
-        orders: stats.orders,
-        revenue: stats.revenue,
-        avgOrderValue: stats.orders > 0 ? stats.revenue / stats.orders : 0,
-        uniqueItems: stats.items.size
-      }))
-      .filter(c => c.orders > 0)
-      .sort((a, b) => b.revenue - a.revenue);
-
-    const highValueCustomers = customerArray.slice(0, 10);
-    const avgRevenuePerCustomer = customerArray.length > 0
-      ? customerArray.reduce((sum, c) => sum + c.avgOrderValue, 0) / customerArray.length
-      : 0;
-
-    // Popular item combinations
-    const topCombinations = Array.from(itemCombinations.entries())
-      .map(([combo, count]) => {
-        const [item1, item2] = combo.split('|');
-        return { item1, item2, count };
-      })
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    // Preparation time analysis
-    const prepTimeByItem = new Map();
-    prepTimeData.forEach(({ itemName, prepTime }) => {
-      if (!prepTimeByItem.has(itemName)) {
-        prepTimeByItem.set(itemName, []);
-      }
-      prepTimeByItem.get(itemName).push(prepTime);
-    });
-
-    const prepTimeStats = Array.from(prepTimeByItem.entries())
-      .map(([itemName, times]) => ({
-        itemName,
-        avgPrepTime: times.reduce((a, b) => a + b, 0) / times.length,
-        minPrepTime: Math.min(...times),
-        maxPrepTime: Math.max(...times),
-        count: times.length
-      }))
-      .sort((a, b) => b.avgPrepTime - a.avgPrepTime)
-      .slice(0, 10);
-
-    const overallAvgPrepTime = prepTimeData.length > 0
-      ? prepTimeData.reduce((sum, d) => sum + d.prepTime, 0) / prepTimeData.length
-      : null;
-
-    // Category performance
-    const categoryArray = Array.from(categoryStats.entries())
-      .map(([category, stats]) => ({
-        category,
-        revenue: stats.revenue,
-        quantity: stats.quantity
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    // Calculate trends for daily revenue
-    const dailyRevenueSorted = [...dailyRevenue].sort((a, b) => a.date.localeCompare(b.date));
-    const recentDays = dailyRevenueSorted.slice(-7);
-    const previousDays = dailyRevenueSorted.slice(-14, -7);
-    const recentAvg = recentDays.length > 0
-      ? recentDays.reduce((sum, d) => sum + d.revenue, 0) / recentDays.length
-      : 0;
-    const previousAvg = previousDays.length > 0
-      ? previousDays.reduce((sum, d) => sum + d.revenue, 0) / previousDays.length
-      : 0;
-    const revenueTrend = previousAvg > 0 ? ((recentAvg - previousAvg) / previousAvg) * 100 : 0;
-
-    // Generate alerts
-    const alerts = [];
-
-    // Sales drop alert
-    if (revenueTrend < -15) {
-      alerts.push({
-        type: 'sales_drop',
-        severity: 'high',
-        message: `Sales have dropped ${Math.abs(revenueTrend).toFixed(1)}% compared to previous week. Consider promotional strategies.`,
-        value: revenueTrend
-      });
-    }
-
-    // Trending item alerts
-    trendingUp.slice(0, 3).forEach(item => {
-      alerts.push({
-        type: 'trending_up',
-        severity: 'info',
-        message: `${item.name} is trending up ${item.growth}%! Consider promoting or increasing stock.`,
-        itemName: item.name,
-        growth: item.growth
-      });
-    });
-
-    // Preparation time spike alert
-    const highPrepTimeItems = prepTimeStats.filter(item => item.avgPrepTime > overallAvgPrepTime * 1.5);
-    if (highPrepTimeItems.length > 0 && overallAvgPrepTime) {
-      alerts.push({
-        type: 'prep_time_spike',
-        severity: 'medium',
-        message: `${highPrepTimeItems[0].itemName} has high preparation time (${highPrepTimeItems[0].avgPrepTime.toFixed(1)} min). Review kitchen efficiency.`,
-        itemName: highPrepTimeItems[0].itemName,
-        prepTime: highPrepTimeItems[0].avgPrepTime
-      });
-    }
-
-    // Revenue per customer change
-    const recentCustomers = customerArray.filter(c => c.orders >= 2);
-    const recentAvgOrderValue = recentCustomers.length > 0
-      ? recentCustomers.reduce((sum, c) => sum + c.avgOrderValue, 0) / recentCustomers.length
-      : 0;
-    if (recentAvgOrderValue < avgRevenuePerCustomer * 0.85) {
-      alerts.push({
-        type: 'revenue_per_customer',
-        severity: 'medium',
-        message: `Average order value has decreased. Consider upselling strategies.`,
-        currentValue: recentAvgOrderValue,
-        previousValue: avgRevenuePerCustomer
-      });
-    }
-
-    // Generate recommendations
-    const recommendations = [];
-
-    // Promotion recommendations
-    if (slowMoving.length > 0) {
-      recommendations.push({
-        type: 'promotion',
-        priority: 'high',
-        title: 'Promote Slow-Moving Items',
-        description: `Consider promoting: ${slowMoving.slice(0, 3).map(i => i.name).join(', ')}. These items have low sales volume.`,
-        items: slowMoving.slice(0, 3).map(i => i.name)
-      });
-    }
-
-    // Inventory recommendations
-    topSellers.slice(0, 5).forEach(item => {
-      recommendations.push({
-        type: 'inventory',
-        priority: 'high',
-        title: 'Ensure Stock Availability',
-        description: `${item.name} is a top seller (₱${item.revenue.toFixed(2)} revenue). Ensure adequate inventory.`,
-        itemName: item.name
-      });
-    });
-
-    // Menu/pricing recommendations
-    if (trendingUp.length > 0) {
-      recommendations.push({
-        type: 'menu',
-        priority: 'medium',
-        title: 'Capitalize on Trending Items',
-        description: `${trendingUp[0].name} is trending up ${trendingUp[0].growth}%. Consider featuring it prominently or creating bundles.`,
-        itemName: trendingUp[0].name
-      });
-    }
-
-    // Staffing recommendations
-    const peakHour = busiestHours[0];
-    if (peakHour) {
-      recommendations.push({
-        type: 'staffing',
-        priority: 'high',
-        title: 'Optimize Staffing Schedule',
-        description: `Peak hours are ${peakHour.hour}:00 (${peakHour.orders} orders). Ensure adequate staff during these times.`,
-        peakHours: busiestHours.map(h => h.hour)
-      });
-    }
-
-    // Upsell recommendations
-    if (topCombinations.length > 0) {
-      recommendations.push({
-        type: 'upsell',
-        priority: 'medium',
-        title: 'Create Bundle Offers',
-        description: `Popular combination: ${topCombinations[0].item1} + ${topCombinations[0].item2} (ordered together ${topCombinations[0].count} times). Create a bundle deal.`,
-        combination: { item1: topCombinations[0].item1, item2: topCombinations[0].item2 }
-      });
-    }
-
-    // Executive summary
-    const totalRevenue = orders.reduce((sum, order) => {
-      const mainTotal = order.items.reduce((s, item) => s + (item.price * item.quantity), 0);
-      const appendedTotal = (order.appendedOrders || []).reduce((s, appended) => {
-        return s + (appended.items || []).reduce((is, item) => is + (item.price * item.quantity), 0);
-      }, 0);
-      return sum + mainTotal + appendedTotal;
-    }, 0);
-
-    const totalOrders = orders.length;
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const uniqueCustomers = customerStats.size;
-    const totalItemsSold = itemStatsArray.reduce((sum, item) => sum + item.quantity, 0);
-
-    const executiveSummary = [
-      `Total revenue of ₱${totalRevenue.toFixed(2)} from ${totalOrders} orders over the last 90 days`,
-      `Average order value: ₱${avgOrderValue.toFixed(2)}`,
-      `${uniqueCustomers} unique customers with ${totalItemsSold} items sold`,
-      revenueTrend >= 0
-        ? `Sales trending ${revenueTrend.toFixed(1)}% higher than previous period`
-        : `Sales trending ${Math.abs(revenueTrend).toFixed(1)}% lower than previous period - attention needed`,
-      topSellers.length > 0
-        ? `Top seller: ${topSellers[0].name} generating ₱${topSellers[0].revenue.toFixed(2)}`
-        : 'No sales data available',
-      busiestHours.length > 0
-        ? `Peak business hours: ${busiestHours.slice(0, 3).map(h => `${h.hour}:00`).join(', ')}`
-        : 'No peak hour data available'
-    ];
-
-    res.json({
-      success: true,
-      data: {
-        executiveSummary,
-        productPerformance: {
-          topSellersByRevenue: topSellers,
-          topSellersByQuantity: topSellersByQuantity,
-          slowMovingItems: slowMoving,
-          trendingUp: trendingUp.slice(0, 10),
-          trendingDown: trendingDown.slice(0, 10)
-        },
-        peakTimes: {
-          busiestHours,
-          slowestHours,
-          dayOfWeekPerformance: dayOfWeekArray,
-          hourlyBreakdown: hourlyArray
-        },
-        customerInsights: {
-          highValueCustomers,
-          avgRevenuePerCustomer: parseFloat(avgRevenuePerCustomer.toFixed(2)),
-          totalCustomers: uniqueCustomers,
-          popularCombinations: topCombinations
-        },
-        preparationTime: {
-          overallAverage: overallAvgPrepTime ? parseFloat(overallAvgPrepTime.toFixed(2)) : null,
-          slowestItems: prepTimeStats,
-          unit: 'minutes'
-        },
-        categoryPerformance: categoryArray,
-        recommendations,
-        alerts,
-        summary: {
-          totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-          totalOrders,
-          avgOrderValue: parseFloat(avgOrderValue.toFixed(2)),
-          uniqueCustomers,
-          totalItemsSold,
-          revenueTrend: parseFloat(revenueTrend.toFixed(1)),
-          dateRange: {
-            start: startDate.toISOString().split('T')[0],
-            end: endDate.toISOString().split('T')[0],
-            days: 90
-          }
-        },
-        dailyRevenue: dailyRevenueSorted
-      }
-    });
-  } catch (error) {
-    console.error('Error generating insights:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to generate business insights'
     });
   }
 });
