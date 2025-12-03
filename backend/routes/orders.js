@@ -172,9 +172,12 @@ router.get('/daily-sales', async (req, res) => {
     const MenuItem = require('../models/MenuItem');
     const menuItems = await MenuItem.find({});
     const menuItemMap = new Map();
+    const menuItemByNameMap = new Map();
     menuItems.forEach((menuItem) => {
       menuItemMap.set(menuItem._id.toString(), menuItem);
       menuItemMap.set(menuItem.id, menuItem);
+      // Also create a map by name (case-insensitive) for fallback lookup
+      menuItemByNameMap.set(menuItem.name.toLowerCase().trim(), menuItem);
     });
 
     // Group orders by business day (8AM to 1AM next day)
@@ -230,10 +233,27 @@ router.get('/daily-sales', async (req, res) => {
         // First check if item has category directly
         if (item.category) return item.category;
         
-        // Try to get from menu item map
-        const menuItem = menuItemMap.get(item.id);
-        if (menuItem && menuItem.category) {
-          return menuItem.category;
+        // Try to get from menu item map by ID
+        const menuItemById = menuItemMap.get(item.id);
+        if (menuItemById && menuItemById.category) {
+          return menuItemById.category;
+        }
+        
+        // Try to extract original menu item ID from unique ID format: {menuItemId}-{timestamp}-{random}
+        if (item.id && item.id.includes('-')) {
+          const originalId = item.id.split('-')[0];
+          const menuItemByOriginalId = menuItemMap.get(originalId);
+          if (menuItemByOriginalId && menuItemByOriginalId.category) {
+            return menuItemByOriginalId.category;
+          }
+        }
+        
+        // Fallback: try to look up by item name (case-insensitive)
+        if (item.name) {
+          const menuItemByName = menuItemByNameMap.get(item.name.toLowerCase().trim());
+          if (menuItemByName && menuItemByName.category) {
+            return menuItemByName.category;
+          }
         }
         
         return 'uncategorized';
