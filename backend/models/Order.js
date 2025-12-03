@@ -15,6 +15,11 @@ const orderItemSchema = new mongoose.Schema(
       required: [true, 'Item name is required'],
       trim: true
     },
+    owner: {
+      type: String,
+      enum: ['john', 'elwin'],
+      required: false
+    },
     price: {
       type: Number,
       required: [true, 'Item price is required'],

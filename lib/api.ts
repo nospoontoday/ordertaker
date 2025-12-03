@@ -33,6 +33,7 @@ export interface Category {
 export interface OrderItem {
   id: string;
   name: string;
+  owner?: "john" | "elwin";
   price: number;
   quantity: number;
   status: "pending" | "preparing" | "ready" | "served";

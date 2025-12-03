@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal } from "@/lib/api"
+import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal, type Order as ApiOrder } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -40,9 +40,10 @@ import { KitchenStatusBanner, type KitchenStatusData } from "@/components/kitche
 interface OrderItem {
   id: string
   name: string
+  owner?: "john" | "elwin"
   price: number
   quantity: number
-  status?: "pending" | "preparing" | "ready" | "served"
+  status: "pending" | "preparing" | "ready" | "served"
   itemType?: "dine-in" | "take-out"
   note?: string
 }
@@ -52,9 +53,10 @@ interface AppendedOrder {
   items: OrderItem[]
   createdAt: number
   isPaid?: boolean
-  paymentMethod?: "cash" | "gcash" | "split" | null
+  paymentMethod?: "cash" | "gcash" | "split"
   cashAmount?: number
   gcashAmount?: number
+  amountReceived?: number
 }
 
 interface OrderNote {
@@ -70,8 +72,8 @@ interface Order {
   customerName: string
   items: OrderItem[]
   createdAt: number
-  isPaid?: boolean
-  paymentMethod?: "cash" | "gcash" | "split" | null
+  isPaid: boolean
+  paymentMethod?: "cash" | "gcash" | "split"
   cashAmount?: number
   gcashAmount?: number
   orderType?: "dine-in" | "take-out"
@@ -82,6 +84,7 @@ interface Order {
 interface MenuItem {
   id: string
   name: string
+  owner?: "john" | "elwin"
   price: number
   category: string
   image: string
@@ -105,6 +108,7 @@ const FALLBACK_MENU_ITEMS: MenuItem[] = [
   {
     id: "1",
     name: "Espresso",
+    owner: "john",
     price: 3.5,
     category: "coffee",
     image: "/espresso-shot.png",
@@ -113,6 +117,7 @@ const FALLBACK_MENU_ITEMS: MenuItem[] = [
   {
     id: "2",
     name: "Cappuccino",
+    owner: "john",
     price: 4.5,
     category: "coffee",
     image: "/frothy-cappuccino.png",
@@ -125,6 +130,7 @@ const FALLBACK_MENU_ITEMS: MenuItem[] = [
   {
     id: "7",
     name: "Croissant",
+    owner: "john",
     price: 3.5,
     category: "pastry",
     image: "/golden-croissant.png",
@@ -178,7 +184,7 @@ export function OrderTaker({
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showDailySales, setShowDailySales] = useState(false)
-  const [allOrders, setAllOrders] = useState<Order[]>([])
+  const [allOrders, setAllOrders] = useState<ApiOrder[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false)
   const [clickedItemId, setClickedItemId] = useState<string | null>(null)
@@ -231,6 +237,7 @@ export function OrderTaker({
         try {
           const cartData = {
             customerName,
+            orderType: "dine-in" as const,
             orderNote,
             items: currentOrder,
           }
@@ -264,6 +271,7 @@ export function OrderTaker({
       const transformedItems: MenuItem[] = itemsData.map((item) => ({
         id: item._id || item.id || "",
         name: item.name,
+        owner: item.owner,
         price: item.price,
         category: item.category,
         image: item.image,
@@ -415,7 +423,16 @@ export function OrderTaker({
       // Format: {menuItemId}-{timestamp}-{random} to ensure uniqueness
       // This ensures each order item instance has a unique ID, even if same menu item with different types
       const uniqueId = `${menuItem.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      setTargetArray([...targetArray, { ...menuItem, id: uniqueId, quantity: 1, itemType }])
+      setTargetArray([
+        ...targetArray,
+        {
+          ...menuItem,
+          id: uniqueId,
+          quantity: 1,
+          itemType,
+          status: "pending",
+        },
+      ])
     }
   }
 
@@ -693,7 +710,7 @@ export function OrderTaker({
           items: itemsToAppend,
           createdAt: Date.now(),
           isPaid: isPaid,
-          paymentMethod: paymentMethod || null,
+          paymentMethod: paymentMethod || undefined,
           cashAmount: paymentMethod === 'split' ? parseFloat(cashAmount) : undefined,
           gcashAmount: paymentMethod === 'split' ? parseFloat(gcashAmount) : undefined,
           amountReceived: isPaid && paymentMethod && paymentMethod !== 'split' ? parseFloat(amountReceived) : undefined,
@@ -778,7 +795,7 @@ export function OrderTaker({
           items: currentOrder.map((item) => ({ ...item, status: "pending" as const })),
           createdAt: Date.now(),
           isPaid: isPaid,
-          paymentMethod: paymentMethod,
+          paymentMethod: paymentMethod || undefined,
           cashAmount: isPaid && paymentMethod === "cash" ? parseFloat(amountReceived) : isPaid && paymentMethod === "split" ? parseFloat(cashAmount || "0") : undefined,
           gcashAmount: isPaid && paymentMethod === "gcash" ? parseFloat(amountReceived) : isPaid && paymentMethod === "split" ? parseFloat(gcashAmount || "0") : undefined,
           appendedOrders: [],
@@ -796,7 +813,7 @@ export function OrderTaker({
 
         try {
           // Try to save to API first
-          const orderPayload = {
+          const orderPayload: Parameters<typeof ordersApi.create>[0] = {
             id: newOrder.id,
             customerName: newOrder.customerName,
             items: newOrder.items.map((item) => ({
@@ -809,7 +826,7 @@ export function OrderTaker({
             cashAmount: newOrder.cashAmount,
             gcashAmount: newOrder.gcashAmount,
             orderType: "dine-in",
-             amountReceived: isPaid ? parseFloat(amountReceived) : undefined,
+            amountReceived: isPaid ? parseFloat(amountReceived) : undefined,
             appendedOrders: [],
             orderTakerName: user?.name,
             orderTakerEmail: user?.email,
