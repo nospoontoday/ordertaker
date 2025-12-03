@@ -941,11 +941,13 @@ export function OrderTaker({
     return menuItems.filter((item) => item.isBestSeller)
   }
 
-  // Get the total quantity of an item in the current order
-  const getItemQuantityInCart = (itemId: string): number => {
+  // Get the total quantity of an item in the current order (by name)
+  // We use name instead of ID because each order item instance gets a unique ID,
+  // so matching by ID would never group quantities for the same menu item.
+  const getItemQuantityInCart = (itemName: string): number => {
     const orderToCheck = isAppending ? newItems : currentOrder
     return orderToCheck
-      .filter(orderItem => orderItem.id === itemId)
+      .filter(orderItem => orderItem.name === itemName)
       .reduce((total, orderItem) => total + orderItem.quantity, 0)
   }
 
@@ -1534,11 +1536,11 @@ export function OrderTaker({
                                      group-hover:scale-105 transition-transform duration-200"
                         />
                         {/* Quantity Counter Badge (top-left) */}
-                        {getItemQuantityInCart(item.id) > 0 && (
+                        {getItemQuantityInCart(item.name) > 0 && (
                           <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
                                            text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
                                            min-w-[28px] flex items-center justify-center">
-                            {getItemQuantityInCart(item.id)}
+                            {getItemQuantityInCart(item.name)}
                           </Badge>
                         )}
                         {item.isBestSeller && (
