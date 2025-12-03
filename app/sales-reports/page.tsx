@@ -680,7 +680,24 @@ export default function SalesReportsPage() {
             {dailySales.map((daily, index) => {
               const expanded = isExpanded(daily.date)
               const isLatest = index === 0 // First item is latest
-              
+
+              // Owner breakdown calculations (ensure accurate split between John and Elwin)
+              const johnSales = daily.salesByOwner?.john || 0
+              const elwinSales = daily.salesByOwner?.elwin || 0
+
+              const splitWithdrawals = daily.withdrawalsByOwner?.all || 0
+              const splitPurchases = daily.purchasesByOwner?.all || 0
+
+              const johnWithdrawals =
+                (daily.withdrawalsByOwner?.john || 0) + splitWithdrawals / 2
+              const elwinWithdrawals =
+                (daily.withdrawalsByOwner?.elwin || 0) + splitWithdrawals / 2
+
+              const johnPurchases =
+                (daily.purchasesByOwner?.john || 0) + splitPurchases / 2
+              const elwinPurchases =
+                (daily.purchasesByOwner?.elwin || 0) + splitPurchases / 2
+
               return (
               <Card key={daily.date} className="bg-white border border-slate-200/80 shadow-sm">
                 {/* Date Header - Clickable for toggle */}
@@ -1024,15 +1041,15 @@ export default function SalesReportsPage() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-purple-700 font-semibold">Sales:</span>
-                            <span className="text-purple-900 font-bold">₱{daily.salesByOwner?.john?.toFixed(2) || "0.00"}</span>
+                            <span className="text-purple-900 font-bold">₱{johnSales.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-red-600 font-semibold">Withdrawals:</span>
-                            <span className="text-red-700 font-bold">-₱{daily.withdrawalsByOwner?.john?.toFixed(2) || "0.00"}</span>
+                            <span className="text-red-700 font-bold">-₱{johnWithdrawals.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-orange-600 font-semibold">Purchases:</span>
-                            <span className="text-orange-700 font-bold">-₱{daily.purchasesByOwner?.john?.toFixed(2) || "0.00"}</span>
+                            <span className="text-orange-700 font-bold">-₱{johnPurchases.toFixed(2)}</span>
                           </div>
                           <div className="pt-2 border-t border-purple-200">
                             <div className="flex justify-between">
@@ -1055,15 +1072,15 @@ export default function SalesReportsPage() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span className="text-indigo-700 font-semibold">Sales:</span>
-                            <span className="text-indigo-900 font-bold">₱{daily.salesByOwner?.elwin?.toFixed(2) || "0.00"}</span>
+                            <span className="text-indigo-900 font-bold">₱{elwinSales.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-red-600 font-semibold">Withdrawals:</span>
-                            <span className="text-red-700 font-bold">-₱{daily.withdrawalsByOwner?.elwin?.toFixed(2) || "0.00"}</span>
+                            <span className="text-red-700 font-bold">-₱{elwinWithdrawals.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-orange-600 font-semibold">Purchases:</span>
-                            <span className="text-orange-700 font-bold">-₱{daily.purchasesByOwner?.elwin?.toFixed(2) || "0.00"}</span>
+                            <span className="text-orange-700 font-bold">-₱{elwinPurchases.toFixed(2)}</span>
                           </div>
                           <div className="pt-2 border-t border-indigo-200">
                             <div className="flex justify-between">
