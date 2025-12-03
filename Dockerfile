@@ -32,6 +32,13 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
+# Copy app directory (required for Next.js App Router)
+COPY --from=builder /app/app ./app
+# Copy other source directories that might be needed
+COPY --from=builder /app/components ./components
+COPY --from=builder /app/lib ./lib
+COPY --from=builder /app/contexts ./contexts
+COPY --from=builder /app/hooks ./hooks
 # Copy .env.local if it exists (for NEXT_PUBLIC_API_URL)
 COPY --from=builder /app/.env.local* ./
 

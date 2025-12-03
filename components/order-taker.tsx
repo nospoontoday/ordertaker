@@ -397,21 +397,25 @@ export function OrderTaker({
     const targetArray = isAppending ? newItems : currentOrder
     const setTargetArray = isAppending ? setNewItems : setCurrentOrder
 
-    // Find if there's an existing item with the same id AND same itemType
-    const existingItem = targetArray.find((item) => item.id === menuItem.id && item.itemType === itemType)
+    // Find if there's an existing item with the same name AND same itemType
+    // We use name + itemType instead of ID to allow same menu item with different types to have unique IDs
+    const existingItem = targetArray.find((item) => item.name === menuItem.name && item.itemType === itemType)
 
     if (existingItem) {
-      // Increment quantity if item with same type exists
+      // Increment quantity if item with same name and type exists
       setTargetArray(
         targetArray.map((item) =>
-          (item.id === menuItem.id && item.itemType === itemType)
+          (item.name === menuItem.name && item.itemType === itemType)
             ? { ...item, quantity: item.quantity + 1 }
             : item
         ),
       )
     } else {
-      // Add new item with specified type
-      setTargetArray([...targetArray, { ...menuItem, quantity: 1, itemType }])
+      // Add new item with specified type and generate unique ID
+      // Format: {menuItemId}-{timestamp}-{random} to ensure uniqueness
+      // This ensures each order item instance has a unique ID, even if same menu item with different types
+      const uniqueId = `${menuItem.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      setTargetArray([...targetArray, { ...menuItem, id: uniqueId, quantity: 1, itemType }])
     }
   }
 
@@ -2670,8 +2674,8 @@ export function OrderTaker({
                       ) : (
                         <div className="space-y-3">
                           {newItems.map((item) => (
-                            <div key={item.id} className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                              <div className="flex items-center justify-between mb-2">
+                            <div key={item.id} className="bg-blue-50/50 p-3 rounded-lg border border-blue-200/60 gap-2">
+                              <div className="flex items-center justify-between mb-2.5">
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold truncate text-slate-900">{item.name}</p>
                                   <p className="text-xs font-medium text-slate-600">₱{item.price.toFixed(2)}</p>
@@ -2684,11 +2688,12 @@ export function OrderTaker({
                                       )
                                       setNewItems(updated)
                                     }}
-                                    className="p-1.5 hover:bg-emerald-50 rounded-md transition-colors border border-emerald-200 min-w-[32px] min-h-[32px]"
+                                    className="p-1.5 hover:bg-emerald-50 rounded-md transition-colors border border-emerald-200"
+                                    aria-label="Increase quantity"
                                   >
                                     <Plus className="w-4 h-4 text-emerald-600" />
                                   </button>
-                                  <span className="w-8 text-center font-bold text-sm">{item.quantity}</span>
+                                  <span className="w-8 text-center font-bold text-sm text-slate-900">{item.quantity}</span>
                                   <button
                                     onClick={() => {
                                       const updated = newItems
@@ -2696,7 +2701,8 @@ export function OrderTaker({
                                         .filter((i) => i.quantity > 0)
                                       setNewItems(updated)
                                     }}
-                                    className="p-1.5 hover:bg-red-50 rounded-md transition-colors border border-red-200 min-w-[32px] min-h-[32px]"
+                                    className="p-1.5 hover:bg-red-50 rounded-md transition-colors border border-red-200"
+                                    aria-label="Decrease quantity"
                                   >
                                     <Minus className="w-4 h-4 text-red-600" />
                                   </button>
@@ -2705,11 +2711,53 @@ export function OrderTaker({
                                       const updated = newItems.filter((i) => i.id !== item.id)
                                       setNewItems(updated)
                                     }}
-                                    className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200 min-w-[32px] min-h-[32px]"
+                                    className="p-1.5 hover:bg-red-50 rounded-md transition-colors ml-1 border border-red-200"
+                                    aria-label="Remove item"
                                   >
                                     <X className="w-4 h-4 text-red-600" />
                                   </button>
                                 </div>
+                              </div>
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => {
+                                    const updated = switchItemType(newItems, item, "dine-in")
+                                    setNewItems(updated)
+                                  }}
+                                  className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                    item.itemType === "dine-in"
+                                      ? "bg-blue-600 border border-blue-700 text-white shadow-md"
+                                      : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                  }`}
+                                >
+                                  🍽️ Dine In
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const updated = switchItemType(newItems, item, "take-out")
+                                    setNewItems(updated)
+                                  }}
+                                  className={`flex-1 px-2.5 py-1.5 text-xs rounded-md font-bold transition-all shadow-sm ${
+                                    item.itemType === "take-out"
+                                      ? "bg-orange-600 border border-orange-700 text-white shadow-md"
+                                      : "bg-white border border-slate-300 text-slate-600 hover:border-slate-400"
+                                  }`}
+                                >
+                                  🥡 Take Out
+                                </button>
+                              </div>
+                              <div className="mt-2">
+                                <Input
+                                  value={item.note || ""}
+                                  onChange={(e) => {
+                                    const updated = newItems.map((i) =>
+                                      i.id === item.id ? { ...i, note: e.target.value } : i
+                                    )
+                                    setNewItems(updated)
+                                  }}
+                                  placeholder="Add note (optional)"
+                                  className="w-full text-xs border-slate-200 focus:border-slate-400"
+                                />
                               </div>
                             </div>
                           ))}
