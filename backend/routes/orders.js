@@ -303,26 +303,23 @@ router.get('/daily-sales', async (req, res) => {
         dailySales.totalSales += actualPaymentTotal;
       };
 
-      // Calculate total of all items (main + appended) for this order
+      // Calculate main order total
       const mainOrderTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      
-      // Calculate appended items total if they exist and are paid
-      let appendedOrdersTotal = 0;
+
+      // Process main order payment
+      calculatePaymentTotals(mainOrderTotal, order.paymentMethod, order.cashAmount, order.gcashAmount);
+
+      // Process each paid appended order's payment separately
+      // Each appended order has its own payment method and amounts
       if (order.appendedOrders && order.appendedOrders.length > 0) {
         order.appendedOrders.forEach((appended) => {
           if (appended.isPaid) {
-            appendedOrdersTotal += appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            const appendedTotal = appended.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+            // Use appended order's own payment method and amounts
+            calculatePaymentTotals(appendedTotal, appended.paymentMethod, appended.cashAmount, appended.gcashAmount);
           }
         });
       }
-      
-      // Total amount for payment calculation (main + appended)
-      const totalOrderAmount = mainOrderTotal + appendedOrdersTotal;
-      
-      // Process payment for the entire order (main + appended)
-      // For split payments, cashAmount and gcashAmount already contain the full amounts
-      // For cash/gcash payments, use the total of all items
-      calculatePaymentTotals(totalOrderAmount, order.paymentMethod, order.cashAmount, order.gcashAmount);
 
       // Track main order items
       order.items.forEach((item) => {
