@@ -8,7 +8,7 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb, Wallet } from "lucide-react"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
   Sheet,
@@ -193,6 +193,10 @@ export default function Home() {
                         <BarChart3 className="h-4 w-4 mr-2" />
                         Statistics
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push("/withdrawals")}>
+                        <Wallet className="h-4 w-4 mr-2" />
+                        Withdrawals
+                      </DropdownMenuItem>
                     </>
                   )}
                   {canAccessAdmin && (
@@ -302,6 +306,14 @@ export default function Home() {
                           >
                             <Package className="h-5 w-5 mr-3" />
                             Inventory
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/withdrawals")}
+                          >
+                            <Wallet className="h-5 w-5 mr-3" />
+                            Withdrawals
                           </Button>
                         </>
                       )}
