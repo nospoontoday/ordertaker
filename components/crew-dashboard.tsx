@@ -4155,6 +4155,17 @@ export function CrewDashboard({
               <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
               <h2 className="text-base font-bold tracking-wide uppercase text-slate-800">Completed Orders</h2>
               <div className="flex-1 h-[1px] bg-gradient-to-r from-slate-200 to-transparent" />
+              {isOrderTaker && (
+                <Button
+                  onClick={() => setShowHistoricalOrderDialog(true)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs font-semibold border-blue-200 text-blue-700 hover:bg-blue-50"
+                >
+                  <Calendar className="w-3 h-3 mr-1.5" />
+                  Create Past Order
+                </Button>
+              )}
               <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
                 {sortedCompletedOrders.length}
               </span>
