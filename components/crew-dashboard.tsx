@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, Minus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X } from "lucide-react"
+import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, Minus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X, Calendar } from "lucide-react"
 import { ordersApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
+import { HistoricalOrderDialog } from "@/components/historical-order-dialog"
 
 interface OrderItem {
   id: string
@@ -100,6 +101,7 @@ export function CrewDashboard({
   const [isOnline, setIsOnline] = useState(true)
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const [showCompletedOrders, setShowCompletedOrders] = useState(false)
+  const [showHistoricalOrderDialog, setShowHistoricalOrderDialog] = useState(false)
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("")
@@ -4124,8 +4126,8 @@ export function CrewDashboard({
         )}
 
         {/* Completed Orders Toggle */}
-        {sortedCompletedOrders.length > 0 && (
-          <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4">
+          {sortedCompletedOrders.length > 0 && (
             <Button
               onClick={() => setShowCompletedOrders(!showCompletedOrders)}
               variant={showCompletedOrders ? "default" : "outline"}
@@ -4133,8 +4135,18 @@ export function CrewDashboard({
             >
               {showCompletedOrders ? "Hide" : "Show"} Completed Orders ({sortedCompletedOrders.length})
             </Button>
-          </div>
-        )}
+          )}
+          {isOrderTaker && (
+            <Button
+              onClick={() => setShowHistoricalOrderDialog(true)}
+              variant="outline"
+              className="text-xs font-semibold border-blue-200 text-blue-700 hover:bg-blue-50"
+            >
+              <Calendar className="w-3 h-3 mr-1.5" />
+              Create Past Order
+            </Button>
+          )}
+        </div>
 
         {/* Completed Orders */}
         {shouldShowCompleted && sortedCompletedOrders.length > 0 && (
@@ -4939,6 +4951,13 @@ export function CrewDashboard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Historical Order Dialog */}
+      <HistoricalOrderDialog
+        open={showHistoricalOrderDialog}
+        onOpenChange={setShowHistoricalOrderDialog}
+        onSuccess={loadOrders}
+      />
     </div>
   )
 }
