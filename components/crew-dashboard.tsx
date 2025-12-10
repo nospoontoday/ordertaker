@@ -4967,7 +4967,7 @@ export function CrewDashboard({
       <HistoricalOrderDialog
         open={showHistoricalOrderDialog}
         onOpenChange={setShowHistoricalOrderDialog}
-        onSuccess={loadOrders}
+        onSuccess={() => fetchOrders()}
       />
     </div>
   )

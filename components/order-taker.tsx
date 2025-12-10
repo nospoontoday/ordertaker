@@ -81,7 +81,7 @@ interface Order {
   notes?: OrderNote[]
 }
 
-interface MenuItem {
+export interface MenuItem {
   id: string
   name: string
   owner?: "john" | "elwin"
@@ -91,20 +91,20 @@ interface MenuItem {
   isBestSeller?: boolean
 }
 
-interface Category {
+export interface Category {
   id: string
   name: string
   image: string
 }
 
-// Fallback data if API is unavailable
-const FALLBACK_CATEGORIES: Category[] = [
+// Fallback data if API is unavailable - exported for reuse in other components
+export const FALLBACK_CATEGORIES: Category[] = [
   { id: "coffee", name: "Coffee", image: "/coffee-cup.png" },
   { id: "food", name: "Food", image: "/food-plate.png" },
   { id: "pastry", name: "Pastry", image: "/pastry-dessert.jpg" },
 ]
 
-const FALLBACK_MENU_ITEMS: MenuItem[] = [
+export const FALLBACK_MENU_ITEMS: MenuItem[] = [
   {
     id: "1",
     name: "Espresso",

@@ -23,8 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight, Trash2, Search } from "lucide-react"
+import { Check, Clock, UtensilsCrossed, ChefHat, ChevronLeft, ChevronRight, Trash2, Search, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { CreatePastOrderDialog } from "@/components/create-past-order-dialog"
 
 const ORDERS_PER_PAGE = 10
 
@@ -38,6 +39,7 @@ export function PastOrders() {
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [createPastOrderOpen, setCreatePastOrderOpen] = useState(false)
 
   useEffect(() => {
     loadOrders()
@@ -381,7 +383,19 @@ export function PastOrders() {
   return (
     <div className="p-4 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Past Orders</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">Past Orders</h1>
+          {user?.role === "super_admin" && (
+            <Button
+              size="sm"
+              onClick={() => setCreatePastOrderOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Create Past Order
+            </Button>
+          )}
+        </div>
         <div className="text-sm text-gray-600">
           Showing {filteredOrders.length === 0 ? 0 : startIndex + 1}-{Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
           {searchQuery && ` (filtered from ${orders.length})`}
@@ -918,6 +932,13 @@ export function PastOrders() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Past Order Dialog */}
+      <CreatePastOrderDialog
+        open={createPastOrderOpen}
+        onOpenChange={setCreatePastOrderOpen}
+        onSuccess={loadOrders}
+      />
     </div>
   )
 }
