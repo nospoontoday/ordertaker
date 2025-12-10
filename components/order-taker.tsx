@@ -188,6 +188,7 @@ export function OrderTaker({
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false)
   const [clickedItemId, setClickedItemId] = useState<string | null>(null)
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Toast for notifications
   const { toast } = useToast()
@@ -401,6 +402,15 @@ export function OrderTaker({
     }
   }, [orders])
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current)
+      }
+    }
+  }, [])
+
   const addItem = (menuItem: MenuItem, itemType: "dine-in" | "take-out" = "dine-in") => {
     const targetArray = isAppending ? newItems : currentOrder
     const setTargetArray = isAppending ? setNewItems : setCurrentOrder
@@ -561,8 +571,12 @@ export function OrderTaker({
     } else {
       playTakeOutSound()
     }
+    // Clear any existing timeout to prevent memory leaks
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current)
+    }
     setClickedItemId(item.id)
-    setTimeout(() => setClickedItemId(null), 300) // Remove animation after 300ms
+    clickTimeoutRef.current = setTimeout(() => setClickedItemId(null), 300) // Remove animation after 300ms
     addItem(item, itemType)
   }
 

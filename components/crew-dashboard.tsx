@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -219,8 +219,8 @@ export function CrewDashboard({
   const canDeleteOrders = isOrderTaker
   const canAppendItems = isOrderTaker
 
-  // WebSocket real-time event handlers
-  const handleOrderCreated = (newOrder: any) => {
+  // WebSocket real-time event handlers - memoized to prevent unnecessary re-registrations
+  const handleOrderCreated = useCallback((newOrder: any) => {
     console.log('WebSocket: Order created', newOrder)
     console.log('WebSocket: Order items with notes:', newOrder.items.map((i: any) => ({ name: i.name, note: i.note })))
 
@@ -301,9 +301,9 @@ export function CrewDashboard({
       title: "New Order",
       description: `Order #${newOrder.orderNumber} for ${newOrder.customerName} has been created.`,
     })
-  }
+  }, [toast])
 
-  const handleOrderUpdated = (updatedOrder: any) => {
+  const handleOrderUpdated = useCallback((updatedOrder: any) => {
     console.log('WebSocket: Order updated', updatedOrder)
     console.log('WebSocket: Appended orders:', updatedOrder.appendedOrders)
 
@@ -395,9 +395,9 @@ export function CrewDashboard({
       newOrders[index] = transformedOrder
       return newOrders
     })
-  }
+  }, [])
 
-  const handleOrderDeleted = (orderId: string) => {
+  const handleOrderDeleted = useCallback((orderId: string) => {
     console.log('WebSocket: Order deleted', orderId)
 
     setOrders(prevOrders => prevOrders.filter(o => o.id !== orderId))
@@ -407,7 +407,7 @@ export function CrewDashboard({
       description: "An order has been deleted.",
       variant: "destructive",
     })
-  }
+  }, [toast])
 
   // Set up WebSocket event listeners
   const { isConnected } = useOrderEvents(
@@ -416,19 +416,31 @@ export function CrewDashboard({
     handleOrderDeleted
   )
 
-  // Load orders from API with localStorage fallback
+  // Load orders from API on initial mount
   useEffect(() => {
     fetchOrders()
     const today = new Date()
     setTodayDate(today.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" }))
+  }, [])
 
-    // Auto-refresh every 30 seconds (backup for WebSocket)
+  // Conditional polling - only poll when WebSocket is disconnected
+  useEffect(() => {
+    if (isConnected) {
+      // WebSocket is connected, no need to poll
+      return
+    }
+
+    // WebSocket disconnected - poll every 60 seconds as fallback
+    console.log('WebSocket disconnected, starting fallback polling')
     const interval = setInterval(() => {
       fetchOrders(true) // Silent refresh
-    }, 30000)
+    }, 60000)
 
-    return () => clearInterval(interval)
-  }, [])
+    return () => {
+      console.log('Stopping fallback polling')
+      clearInterval(interval)
+    }
+  }, [isConnected])
 
   const fetchOrders = async (silent = false) => {
     if (!silent) {
@@ -641,11 +653,109 @@ export function CrewDashboard({
     }
   }, [orders])
 
+  // Calculate preparing items summary grouped by item name and type - MEMOIZED (moved here for useEffect below)
+  const preparingItemsSummary = useMemo(() => {
+    const preparingMap = new Map<string, {
+      quantity: number;
+      orders: Array<{ orderNumber: number; customerName: string; notes: OrderNote[] }>
+      items: Array<{ orderId: string; itemId: string; appendedOrderId?: string; quantity: number; preparingAt?: number }>
+    }>()
+
+    orders.forEach(order => {
+      // Main order items
+      order.items.forEach(item => {
+        if (item.status === "preparing") {
+          const key = `${item.name}|${item.itemType || "dine-in"}`
+          const existing = preparingMap.get(key) || { quantity: 0, orders: [], items: [] }
+          existing.quantity += item.quantity
+          existing.items.push({
+            orderId: order.id,
+            itemId: item.id,
+            quantity: item.quantity,
+            preparingAt: item.preparingAt
+          })
+          if (order.orderNumber) {
+            let orderDetail = existing.orders.find(o => o.orderNumber === order.orderNumber)
+            if (!orderDetail) {
+              orderDetail = {
+                orderNumber: order.orderNumber,
+                customerName: order.customerName,
+                notes: []
+              }
+              existing.orders.push(orderDetail)
+              if (order.notes && order.notes.length > 0) {
+                orderDetail.notes.push(...order.notes)
+              }
+            }
+            if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
+              orderDetail.notes.push({
+                id: `item-note-${item.id}`,
+                content: item.note,
+                createdAt: Date.now()
+              })
+            }
+          }
+          preparingMap.set(key, existing)
+        }
+      })
+
+      // Appended order items
+      order.appendedOrders?.forEach(appended => {
+        appended.items.forEach(item => {
+          if (item.status === "preparing") {
+            const key = `${item.name}|${item.itemType || "dine-in"}`
+            const existing = preparingMap.get(key) || { quantity: 0, orders: [], items: [] }
+            existing.quantity += item.quantity
+            existing.items.push({
+              orderId: order.id,
+              itemId: item.id,
+              appendedOrderId: appended.id,
+              quantity: item.quantity,
+              preparingAt: item.preparingAt
+            })
+            if (order.orderNumber) {
+              let orderDetail = existing.orders.find(o => o.orderNumber === order.orderNumber)
+              if (!orderDetail) {
+                orderDetail = {
+                  orderNumber: order.orderNumber,
+                  customerName: order.customerName,
+                  notes: []
+                }
+                existing.orders.push(orderDetail)
+                if (order.notes && order.notes.length > 0) {
+                  orderDetail.notes.push(...order.notes)
+                }
+              }
+              if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
+                orderDetail.notes.push({
+                  id: `item-note-${item.id}`,
+                  content: item.note,
+                  createdAt: Date.now()
+                })
+              }
+            }
+            preparingMap.set(key, existing)
+          }
+        })
+      })
+    })
+
+    return Array.from(preparingMap.entries()).map(([key, data]) => {
+      const [name, itemType] = key.split("|")
+      return {
+        name,
+        itemType: itemType as "dine-in" | "take-out",
+        quantity: data.quantity,
+        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber),
+        items: data.items.sort((a, b) => (a.preparingAt || 0) - (b.preparingAt || 0))
+      }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }, [orders])
+
   // Initialize selected quantities for preparing items
   useEffect(() => {
-    const summary = getPreparingItemsSummary()
     const newQuantities: Record<string, number> = {}
-    summary.forEach(item => {
+    preparingItemsSummary.forEach(item => {
       const key = `${item.name}|${item.itemType}`
       // Only set if not already set (preserve user's selection)
       if (selectedQuantities[key] === undefined) {
@@ -655,7 +765,7 @@ export function CrewDashboard({
       }
     })
     setSelectedQuantities(newQuantities)
-  }, [orders])
+  }, [preparingItemsSummary])
 
   const toggleOrderExpanded = (orderId: string) => {
     const newExpanded = new Set(expandedOrders)
@@ -1914,10 +2024,10 @@ export function CrewDashboard({
     return { mainOrderPaid, appendedOrdersPaid, totalAppendedOrders }
   }
 
-  // Calculate pending items summary grouped by item name and type
-  const getPendingItemsSummary = () => {
+  // Calculate pending items summary grouped by item name and type - MEMOIZED
+  const pendingItemsSummary = useMemo(() => {
     const pendingMap = new Map<string, { quantity: number; orderDetails: Array<{ orderNumber: number; customerName: string; notes: OrderNote[] }> }>()
-    
+
     orders.forEach(order => {
       // Main order items
       order.items.forEach(item => {
@@ -1952,7 +2062,7 @@ export function CrewDashboard({
           pendingMap.set(key, existing)
         }
       })
-      
+
       // Appended order items
       order.appendedOrders?.forEach(appended => {
         appended.items.forEach(item => {
@@ -1999,7 +2109,7 @@ export function CrewDashboard({
         orderDetails: data.orderDetails.sort((a, b) => a.orderNumber - b.orderNumber)
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
-  }
+  }, [orders])
 
   // Start preparing items of a specific type
   const startPreparingItemType = async (itemName: string, itemType: "dine-in" | "take-out") => {
@@ -2046,113 +2156,6 @@ export function CrewDashboard({
         variant: "destructive",
       })
     }
-  }
-
-  const pendingItemsSummary = getPendingItemsSummary()
-
-  // Calculate preparing items summary grouped by item name and type
-  const getPreparingItemsSummary = () => {
-    const preparingMap = new Map<string, {
-      quantity: number;
-      orders: Array<{ orderNumber: number; customerName: string; notes: OrderNote[] }>
-      items: Array<{ orderId: string; itemId: string; appendedOrderId?: string; quantity: number; preparingAt?: number }>
-    }>()
-
-    orders.forEach(order => {
-      // Main order items
-      order.items.forEach(item => {
-        if (item.status === "preparing") {
-          const key = `${item.name}|${item.itemType || "dine-in"}`
-          const existing = preparingMap.get(key) || { quantity: 0, orders: [], items: [] }
-          existing.quantity += item.quantity
-          existing.items.push({
-            orderId: order.id,
-            itemId: item.id,
-            quantity: item.quantity,
-            preparingAt: item.preparingAt
-          })
-          if (order.orderNumber) {
-            // Check if this order is already in the list
-            let orderDetail = existing.orders.find(o => o.orderNumber === order.orderNumber)
-            if (!orderDetail) {
-              orderDetail = {
-                orderNumber: order.orderNumber,
-                customerName: order.customerName,
-                notes: []
-              }
-              existing.orders.push(orderDetail)
-              // Add order-level notes when creating the order detail entry
-              if (order.notes && order.notes.length > 0) {
-                orderDetail.notes.push(...order.notes)
-              }
-            }
-            // Add item-level note if it exists
-            if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
-              orderDetail.notes.push({
-                id: `item-note-${item.id}`,
-                content: item.note,
-                createdAt: Date.now()
-              })
-            }
-          }
-          preparingMap.set(key, existing)
-        }
-      })
-
-      // Appended order items
-      order.appendedOrders?.forEach(appended => {
-        appended.items.forEach(item => {
-          if (item.status === "preparing") {
-            const key = `${item.name}|${item.itemType || "dine-in"}`
-            const existing = preparingMap.get(key) || { quantity: 0, orders: [], items: [] }
-            existing.quantity += item.quantity
-            existing.items.push({
-              orderId: order.id,
-              itemId: item.id,
-              appendedOrderId: appended.id,
-              quantity: item.quantity,
-              preparingAt: item.preparingAt
-            })
-            if (order.orderNumber) {
-              // Check if this order is already in the list
-              let orderDetail = existing.orders.find(o => o.orderNumber === order.orderNumber)
-              if (!orderDetail) {
-                orderDetail = {
-                  orderNumber: order.orderNumber,
-                  customerName: order.customerName,
-                  notes: []
-                }
-                existing.orders.push(orderDetail)
-                // Add order-level notes when creating the order detail entry
-                if (order.notes && order.notes.length > 0) {
-                  orderDetail.notes.push(...order.notes)
-                }
-              }
-              // Add item-level note if it exists
-              if (item.note && !orderDetail.notes.some(n => n.content === item.note)) {
-                orderDetail.notes.push({
-                  id: `item-note-${item.id}`,
-                  content: item.note,
-                  createdAt: Date.now()
-                })
-              }
-            }
-            preparingMap.set(key, existing)
-          }
-        })
-      })
-    })
-
-    return Array.from(preparingMap.entries()).map(([key, data]) => {
-      const [name, itemType] = key.split("|")
-      return {
-        name,
-        itemType: itemType as "dine-in" | "take-out",
-        quantity: data.quantity,
-        orders: data.orders.sort((a, b) => a.orderNumber - b.orderNumber),
-        items: data.items.sort((a, b) => (a.preparingAt || 0) - (b.preparingAt || 0))
-      }
-    }).sort((a, b) => a.name.localeCompare(b.name))
   }
 
   // Mark ready items of a specific type
@@ -2351,8 +2354,6 @@ export function CrewDashboard({
       })
     }
   }
-
-  const preparingItemsSummary = getPreparingItemsSummary()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
