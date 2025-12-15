@@ -1,21 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const Category = require('../models/Category');
+const { get, set, invalidateCategories, CACHE_KEYS, TTL } = require('../utils/cache');
 
 /**
  * @route   GET /api/categories
- * @desc    Get all categories
+ * @desc    Get all categories (cached for 5 minutes)
  * @access  Public
  */
 router.get('/', async (req, res) => {
   try {
+    // Check cache first
+    const cachedData = get(CACHE_KEYS.CATEGORIES);
+    if (cachedData) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cachedData);
+    }
+
     const categories = await Category.find().sort({ createdAt: 1 });
 
-    res.json({
+    const response = {
       success: true,
       count: categories.length,
       data: categories
-    });
+    };
+
+    // Cache the response
+    set(CACHE_KEYS.CATEGORIES, response, TTL.CATEGORIES);
+    res.set('X-Cache', 'MISS');
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching categories:', error);
     res.status(500).json({
@@ -87,6 +101,9 @@ router.post('/', async (req, res) => {
       image: image || ''
     });
 
+    // Invalidate categories cache
+    invalidateCategories();
+
     res.status(201).json({
       success: true,
       data: category
@@ -152,6 +169,9 @@ router.put('/:id', async (req, res) => {
       }
     );
 
+    // Invalidate categories cache
+    invalidateCategories();
+
     res.json({
       success: true,
       data: category
@@ -192,6 +212,9 @@ router.delete('/:id', async (req, res) => {
     }
 
     await Category.findOneAndDelete({ id: req.params.id });
+
+    // Invalidate categories cache
+    invalidateCategories();
 
     res.json({
       success: true,

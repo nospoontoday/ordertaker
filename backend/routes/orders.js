@@ -3,6 +3,7 @@ const router = express.Router();
 const Order = require('../models/Order');
 const DailyReportValidation = require('../models/DailyReportValidation');
 const User = require('../models/User');
+const { get, set, invalidateOrders, CACHE_KEYS, TTL } = require('../utils/cache');
 
 /**
  * Helper function to format date as YYYY-MM-DD from UTC components
@@ -79,6 +80,18 @@ router.get('/', async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
+    // Generate cache key based on query params
+    const cacheKey = `${CACHE_KEYS.ORDERS}list:${isPaid || 'all'}:${status || 'all'}:${customerName || ''}:${limit || 'all'}:${sortBy}:${sortOrder}`;
+
+    // Check cache first (only for common queries without customer name search)
+    if (!customerName) {
+      const cachedData = get(cacheKey);
+      if (cachedData) {
+        res.set('X-Cache', 'HIT');
+        return res.json(cachedData);
+      }
+    }
+
     // Build query
     const query = {};
 
@@ -111,11 +124,19 @@ router.get('/', async (req, res) => {
 
     const orders = await ordersQuery;
 
-    res.json({
+    const response = {
       success: true,
       count: orders.length,
       data: orders
-    });
+    };
+
+    // Cache the response (only for common queries without customer name search)
+    if (!customerName) {
+      set(cacheKey, response, TTL.ORDERS);
+    }
+    res.set('X-Cache', 'MISS');
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching orders:', error);
     res.status(500).json({
@@ -160,6 +181,16 @@ router.get('/daily-sales', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+
+    // Generate cache key based on page and limit
+    const cacheKey = `${CACHE_KEYS.DAILY_SALES}page:${page}:limit:${limit}`;
+
+    // Check cache first
+    const cachedData = get(cacheKey);
+    if (cachedData) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cachedData);
+    }
 
     // Get all paid orders
     const allOrders = await Order.find({ isPaid: true }).sort({ createdAt: -1 });
@@ -533,7 +564,7 @@ router.get('/daily-sales', async (req, res) => {
     const total = dailySalesArray.length;
     const paginatedData = dailySalesArray.slice(skip, skip + limit);
 
-    res.json({
+    const response = {
       success: true,
       data: paginatedData,
       pagination: {
@@ -542,7 +573,13 @@ router.get('/daily-sales', async (req, res) => {
         total,
         totalPages: Math.ceil(total / limit),
       },
-    });
+    };
+
+    // Cache the response
+    set(cacheKey, response, TTL.DAILY_SALES);
+    res.set('X-Cache', 'MISS');
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching daily sales:', error);
     res.status(500).json({
@@ -765,8 +802,16 @@ router.delete('/daily-sales/:date', async (req, res) => {
  */
 router.get('/insights', async (req, res) => {
   try {
+    // Check cache first - insights are expensive to compute
+    const cacheKey = `${CACHE_KEYS.ORDERS}insights`;
+    const cachedData = get(cacheKey);
+    if (cachedData) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cachedData);
+    }
+
     const MenuItem = require('../models/MenuItem');
-    
+
     // Calculate date range (last 90 days)
     const endDate = new Date();
     const startDate = new Date();
@@ -1217,7 +1262,7 @@ router.get('/insights', async (req, res) => {
         : 'No peak hour data available'
     ];
 
-    res.json({
+    const response = {
       success: true,
       data: {
         executiveSummary,
@@ -1263,7 +1308,13 @@ router.get('/insights', async (req, res) => {
         },
         dailyRevenue: dailyRevenueSorted
       }
-    });
+    };
+
+    // Cache the response (5 minutes TTL)
+    set(cacheKey, response, TTL.INSIGHTS);
+    res.set('X-Cache', 'MISS');
+
+    res.json(response);
   } catch (error) {
     console.error('Error generating insights:', error);
     res.status(500).json({
@@ -1383,6 +1434,9 @@ router.post('/', async (req, res) => {
     
     console.log('🔍 BACKEND DEBUG - Order saved successfully, notes:', order.notes)
 
+    // Invalidate orders cache
+    invalidateOrders();
+
     // Emit WebSocket event for new order
     const io = req.app.get('io');
     if (io) {
@@ -1448,6 +1502,9 @@ router.put('/:id', async (req, res) => {
     });
 
     await order.save();
+
+    // Invalidate orders cache
+    invalidateOrders();
 
     // Emit WebSocket event for order update
     const io = req.app.get('io');
@@ -1515,6 +1572,9 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
+    // Invalidate orders cache
+    invalidateOrders();
+
     // Emit WebSocket event for order deletion
     const io = req.app.get('io');
     if (io) {
@@ -1580,6 +1640,9 @@ router.post('/:id/append', async (req, res) => {
 
     order.appendedOrders.push(appendedOrder);
     await order.save();
+
+    // Invalidate orders cache
+    invalidateOrders();
 
     // Emit WebSocket event for appended items
     const io = req.app.get('io');
@@ -1690,6 +1753,9 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
         await order.save();
       }
 
+      // Invalidate orders cache
+      invalidateOrders();
+
       // Emit WebSocket event for real-time update IMMEDIATELY
       const io = req.app.get('io');
       if (io) {
@@ -1774,6 +1840,9 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
       order.allItemsServedAt = Date.now();
       await order.save();
     }
+
+    // Invalidate orders cache
+    invalidateOrders();
 
     // Emit WebSocket event for real-time update IMMEDIATELY
     const io = req.app.get('io');
@@ -1915,6 +1984,9 @@ router.put('/:id/payment', async (req, res) => {
       });
     }
 
+    // Invalidate orders cache
+    invalidateOrders();
+
     // Emit WebSocket event for real-time update
     const io = req.app.get('io');
     if (io) {
@@ -2028,6 +2100,9 @@ router.put('/:id/appended/:appendedId/payment', async (req, res) => {
 
     await order.save();
 
+    // Invalidate orders cache
+    invalidateOrders();
+
     // Emit WebSocket event for real-time update
     const io = req.app.get('io');
     if (io) {
@@ -2079,6 +2154,9 @@ router.delete('/:id/appended/:appendedId', async (req, res) => {
     }
 
     await order.save();
+
+    // Invalidate orders cache
+    invalidateOrders();
 
     // Emit WebSocket event for real-time update
     const io = req.app.get('io');
@@ -2200,6 +2278,9 @@ router.put('/:id/appended/:appendedId/items/:itemId/status', async (req, res) =>
       await order.save();
     }
 
+    // Invalidate orders cache
+    invalidateOrders();
+
     // Emit WebSocket event for real-time update
     const io = req.app.get('io');
     if (io) {
@@ -2280,6 +2361,9 @@ router.post('/sync', async (req, res) => {
       Object.assign(existingOrder, orderData);
       await existingOrder.save();
 
+      // Invalidate orders cache
+      invalidateOrders();
+
       res.json({
         success: true,
         message: 'Order synced successfully (updated)',
@@ -2289,6 +2373,9 @@ router.post('/sync', async (req, res) => {
       // Create new order
       const newOrder = new Order(orderData);
       await newOrder.save();
+
+      // Invalidate orders cache
+      invalidateOrders();
 
       res.status(201).json({
         success: true,

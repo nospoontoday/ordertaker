@@ -79,6 +79,28 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Cache stats endpoint for monitoring
+app.get('/api/cache/stats', (req, res) => {
+  const { getStats, flush } = require('./utils/cache');
+  res.json({
+    success: true,
+    data: getStats(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Cache flush endpoint (use with caution)
+app.post('/api/cache/flush', (req, res) => {
+  const { flush, getStats } = require('./utils/cache');
+  flush();
+  res.json({
+    success: true,
+    message: 'Cache flushed successfully',
+    data: getStats(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({

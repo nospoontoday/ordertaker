@@ -1,15 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const MenuItem = require('../models/MenuItem');
+const { get, set, invalidateMenu, CACHE_KEYS, TTL } = require('../utils/cache');
 
 /**
  * @route   GET /api/menu-items
- * @desc    Get all menu items
+ * @desc    Get all menu items (cached for 5 minutes)
  * @access  Public
  */
 router.get('/', async (req, res) => {
   try {
     const { category, bestSellers } = req.query;
+
+    // Generate cache key based on query params
+    const cacheKey = `${CACHE_KEYS.MENU_ITEMS}:${category || 'all'}:${bestSellers || 'false'}`;
+
+    // Check cache first
+    const cachedData = get(cacheKey);
+    if (cachedData) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cachedData);
+    }
 
     // Build query filter
     let filter = {};
@@ -24,11 +35,17 @@ router.get('/', async (req, res) => {
 
     const menuItems = await MenuItem.find(filter).sort({ createdAt: -1 });
 
-    res.json({
+    const response = {
       success: true,
       count: menuItems.length,
       data: menuItems
-    });
+    };
+
+    // Cache the response
+    set(cacheKey, response, TTL.MENU_ITEMS);
+    res.set('X-Cache', 'MISS');
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching menu items:', error);
     res.status(500).json({
@@ -111,6 +128,9 @@ router.post('/', async (req, res) => {
       owner: owner || 'john'
     });
 
+    // Invalidate menu cache
+    invalidateMenu();
+
     res.status(201).json({
       success: true,
       data: menuItem
@@ -171,6 +191,9 @@ router.put('/:id', async (req, res) => {
       }
     );
 
+    // Invalidate menu cache
+    invalidateMenu();
+
     res.json({
       success: true,
       data: menuItem
@@ -219,6 +242,9 @@ router.delete('/:id', async (req, res) => {
     }
 
     await MenuItem.findByIdAndDelete(req.params.id);
+
+    // Invalidate menu cache
+    invalidateMenu();
 
     res.json({
       success: true,

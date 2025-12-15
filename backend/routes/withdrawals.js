@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Withdrawal = require('../models/Withdrawal');
+const { invalidateOrders } = require('../utils/cache');
 
 /**
  * @route   GET /api/withdrawals
@@ -176,6 +177,9 @@ router.post('/', async (req, res) => {
 
     await withdrawal.save();
 
+    // Invalidate daily-sales cache since withdrawals affect it
+    invalidateOrders();
+
     res.status(201).json({
       success: true,
       data: withdrawal,
@@ -205,6 +209,9 @@ router.delete('/:id', async (req, res) => {
         error: 'Withdrawal not found'
       });
     }
+
+    // Invalidate daily-sales cache since withdrawals affect it
+    invalidateOrders();
 
     res.json({
       success: true,
