@@ -982,10 +982,10 @@ export function OrderTaker({
       .reduce((total, orderItem) => total + orderItem.quantity, 0)
   }
 
-  // Group menu items by type for default view (Drinks vs Food)
+  // Group menu items by type for default view (Drinks vs Food) - only best sellers
   const getGroupedMenuItems = () => {
-    const drinks = menuItems.filter(item => item.category === "coffee")
-    const food = menuItems.filter(item => item.category === "food" || item.category === "pastry")
+    const drinks = menuItems.filter(item => (item.category === "cold-coffee" || item.category === "cold-drink-no-coffee") && item.isBestSeller)
+    const food = menuItems.filter(item => (item.category === "food" || item.category === "pastry") && item.isBestSeller)
     return { drinks, food }
   }
 
