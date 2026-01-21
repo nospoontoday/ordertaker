@@ -23,6 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import { HistoricalOrderDialog } from "@/components/historical-order-dialog"
+import { classifyCategory } from "@/lib/utils/category-classifier"
 
 interface OrderItem {
   id: string
@@ -674,12 +675,20 @@ export function CrewDashboard({
       items: Array<{ orderId: string; itemId: string; appendedOrderId?: string; quantity: number; preparingAt?: number }>
     }>()
 
+    // Helper to determine category - use item.category if set, otherwise fallback to categorizeItem based on name
+    const getItemCategory = (item: OrderItem): string => {
+      if (item.category) return item.category
+      // Fallback: categorize by item name for drinks detection
+      return categorizeItem(item.name)
+    }
+
     orders.forEach(order => {
       // Main order items
       order.items.forEach(item => {
         if (item.status === "preparing") {
           const key = `${item.name}|${item.itemType || "dine-in"}`
-          const existing = preparingMap.get(key) || { quantity: 0, category: item.category || "food", orders: [], items: [] }
+          const itemCategory = getItemCategory(item)
+          const existing = preparingMap.get(key) || { quantity: 0, category: itemCategory, orders: [], items: [] }
           existing.quantity += item.quantity
           existing.items.push({
             orderId: order.id,
@@ -717,7 +726,8 @@ export function CrewDashboard({
         appended.items.forEach(item => {
           if (item.status === "preparing") {
             const key = `${item.name}|${item.itemType || "dine-in"}`
-            const existing = preparingMap.get(key) || { quantity: 0, category: item.category || "food", orders: [], items: [] }
+            const itemCategory = getItemCategory(item)
+            const existing = preparingMap.get(key) || { quantity: 0, category: itemCategory, orders: [], items: [] }
             existing.quantity += item.quantity
             existing.items.push({
               orderId: order.id,
@@ -2042,12 +2052,20 @@ export function CrewDashboard({
   const pendingItemsSummary = useMemo(() => {
     const pendingMap = new Map<string, { quantity: number; category: string; orderDetails: Array<{ orderNumber: number; customerName: string; notes: OrderNote[] }> }>()
 
+    // Helper to determine category - use item.category if set, otherwise fallback to categorizeItem based on name
+    const getItemCategory = (item: OrderItem): string => {
+      if (item.category) return item.category
+      // Fallback: categorize by item name for drinks detection
+      return categorizeItem(item.name)
+    }
+
     orders.forEach(order => {
       // Main order items
       order.items.forEach(item => {
         if (item.status === "pending") {
           const key = `${item.name}|${item.itemType || "dine-in"}`
-          const existing = pendingMap.get(key) || { quantity: 0, category: item.category || "food", orderDetails: [] }
+          const itemCategory = getItemCategory(item)
+          const existing = pendingMap.get(key) || { quantity: 0, category: itemCategory, orderDetails: [] }
           existing.quantity += item.quantity
           if (order.orderNumber) {
             // Find or create order detail entry
@@ -2082,7 +2100,8 @@ export function CrewDashboard({
         appended.items.forEach(item => {
           if (item.status === "pending") {
             const key = `${item.name}|${item.itemType || "dine-in"}`
-            const existing = pendingMap.get(key) || { quantity: 0, category: item.category || "food", orderDetails: [] }
+            const itemCategory = getItemCategory(item)
+            const existing = pendingMap.get(key) || { quantity: 0, category: itemCategory, orderDetails: [] }
             existing.quantity += item.quantity
             if (order.orderNumber) {
               // Find or create order detail entry
@@ -2415,17 +2434,17 @@ export function CrewDashboard({
             </div>
             
             {/* Food Items */}
-            {pendingItemsSummary.filter(item => item.category === "food" || item.category === "pastry").length > 0 && (
+            {pendingItemsSummary.filter(item => classifyCategory(item.category) === "food").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">🍔</span>
                   <h4 className="font-bold text-xs uppercase tracking-wide text-amber-800">Food</h4>
                   <Badge className="bg-amber-600 text-white text-xs">
-                    {pendingItemsSummary.filter(item => item.category === "food" || item.category === "pastry").reduce((sum, item) => sum + item.quantity, 0)}
+                    {pendingItemsSummary.filter(item => classifyCategory(item.category) === "food").reduce((sum, item) => sum + item.quantity, 0)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {pendingItemsSummary.filter(item => item.category === "food" || item.category === "pastry").map((item, index) => (
+                  {pendingItemsSummary.filter(item => classifyCategory(item.category) === "food").map((item, index) => (
                    <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
                      <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
                      <div className="flex items-center justify-between gap-2 mt-1 mb-2">
@@ -2488,166 +2507,18 @@ export function CrewDashboard({
               </div>
             )}
 
-            {/* Cold Coffee Items */}
-            {pendingItemsSummary.filter(item => item.category === "cold-coffee").length > 0 && (
+            {/* Drinks Items */}
+            {pendingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">☕</span>
-                  <h4 className="font-bold text-xs uppercase tracking-wide text-amber-800">Cold Coffee</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wide text-amber-800">Drinks</h4>
                   <Badge className="bg-amber-600 text-white text-xs">
-                    {pendingItemsSummary.filter(item => item.category === "cold-coffee").reduce((sum, item) => sum + item.quantity, 0)}
+                    {pendingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").reduce((sum, item) => sum + item.quantity, 0)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {pendingItemsSummary.filter(item => item.category === "cold-coffee").map((item, index) => (
-                   <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
-                     <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
-                     <div className="flex items-center justify-between gap-2 mt-1 mb-2">
-                       <Badge
-                         className={`text-xs font-bold px-1.5 py-0.5 ${
-                           item.itemType === "dine-in"
-                             ? "bg-blue-600 hover:bg-blue-700 text-white"
-                             : "bg-orange-600 hover:bg-orange-700 text-white"
-                         }`}
-                       >
-                         {item.itemType === "dine-in" ? "🍽️" : "🥡"}
-                       </Badge>
-                       <span className="text-sm font-bold text-amber-700">×{item.quantity}</span>
-                     </div>
-                     <div className="text-xs text-slate-600 font-medium space-y-1.5 flex-1">
-                       {item.orderDetails.map((order, idx) => (
-                         <div key={idx} className="text-xs">
-                           <div className="font-bold text-slate-900">
-                             <span>#{order.orderNumber}</span>
-                             <span className="text-slate-500 font-medium"> - {order.customerName}</span>
-                           </div>
-                           {order.notes && order.notes.length > 0 && (
-                             <div className="mt-1 ml-2 space-y-1">
-                               {order.notes.map((note, noteIdx) => {
-                                 const isItemNote = note.id.startsWith("item-note-")
-                                 return (
-                                   <div 
-                                     key={noteIdx} 
-                                     className={`text-xs pl-2 border-l-2 ${
-                                       isItemNote 
-                                         ? "border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r" 
-                                         : "border-blue-400 text-blue-700 bg-blue-50/50 py-0.5 rounded-r font-medium"
-                                     }`}
-                                   >
-                                     {isItemNote ? (
-                                       <span className="italic">📝 Item Note: {note.content}</span>
-                                     ) : (
-                                       <span>📋 Order Note: {note.content}</span>
-                                     )}
-                                   </div>
-                                 )
-                               })}
-                             </div>
-                           )}
-                         </div>
-                       ))}
-                     </div>
-                     {isCrew && (
-                       <Button
-                         onClick={() => startPreparingItemType(item.name, item.itemType)}
-                         size="sm"
-                         className="mt-2.5 w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all"
-                       >
-                         Start Preparing
-                       </Button>
-                     )}
-                   </div>
-                 ))}
-                </div>
-              </div>
-            )}
-
-            {/* Cold Drinks (Non-Coffee) Items */}
-            {pendingItemsSummary.filter(item => item.category === "cold-drink-no-coffee").length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🧃</span>
-                  <h4 className="font-bold text-xs uppercase tracking-wide text-amber-800">Cold Drinks (Non-Coffee)</h4>
-                  <Badge className="bg-amber-600 text-white text-xs">
-                    {pendingItemsSummary.filter(item => item.category === "cold-drink-no-coffee").reduce((sum, item) => sum + item.quantity, 0)}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {pendingItemsSummary.filter(item => item.category === "cold-drink-no-coffee").map((item, index) => (
-                   <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
-                     <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
-                     <div className="flex items-center justify-between gap-2 mt-1 mb-2">
-                       <Badge
-                         className={`text-xs font-bold px-1.5 py-0.5 ${
-                           item.itemType === "dine-in"
-                             ? "bg-blue-600 hover:bg-blue-700 text-white"
-                             : "bg-orange-600 hover:bg-orange-700 text-white"
-                         }`}
-                       >
-                         {item.itemType === "dine-in" ? "🍽️" : "🥡"}
-                       </Badge>
-                       <span className="text-sm font-bold text-amber-700">×{item.quantity}</span>
-                     </div>
-                     <div className="text-xs text-slate-600 font-medium space-y-1.5 flex-1">
-                       {item.orderDetails.map((order, idx) => (
-                         <div key={idx} className="text-xs">
-                           <div className="font-bold text-slate-900">
-                             <span>#{order.orderNumber}</span>
-                             <span className="text-slate-500 font-medium"> - {order.customerName}</span>
-                           </div>
-                           {order.notes && order.notes.length > 0 && (
-                             <div className="mt-1 ml-2 space-y-1">
-                               {order.notes.map((note, noteIdx) => {
-                                 const isItemNote = note.id.startsWith("item-note-")
-                                 return (
-                                   <div 
-                                     key={noteIdx} 
-                                     className={`text-xs pl-2 border-l-2 ${
-                                       isItemNote 
-                                         ? "border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r" 
-                                         : "border-blue-400 text-blue-700 bg-blue-50/50 py-0.5 rounded-r font-medium"
-                                     }`}
-                                   >
-                                     {isItemNote ? (
-                                       <span className="italic">📝 Item Note: {note.content}</span>
-                                     ) : (
-                                       <span>📋 Order Note: {note.content}</span>
-                                     )}
-                                   </div>
-                                 )
-                               })}
-                             </div>
-                           )}
-                         </div>
-                       ))}
-                     </div>
-                     {isCrew && (
-                       <Button
-                         onClick={() => startPreparingItemType(item.name, item.itemType)}
-                         size="sm"
-                         className="mt-2.5 w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all"
-                       >
-                         Start Preparing
-                       </Button>
-                     )}
-                   </div>
-                 ))}
-                </div>
-              </div>
-            )}
-
-            {/* Other Items (catch-all for items without specific category) */}
-            {pendingItemsSummary.filter(item => !["food", "pastry", "cold-coffee", "cold-drink-no-coffee"].includes(item.category)).length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">📦</span>
-                  <h4 className="font-bold text-xs uppercase tracking-wide text-amber-800">Other</h4>
-                  <Badge className="bg-amber-600 text-white text-xs">
-                    {pendingItemsSummary.filter(item => !["food", "pastry", "cold-coffee", "cold-drink-no-coffee"].includes(item.category)).reduce((sum, item) => sum + item.quantity, 0)}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {pendingItemsSummary.filter(item => !["food", "pastry", "cold-coffee", "cold-drink-no-coffee"].includes(item.category)).map((item, index) => (
+                  {pendingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").map((item, index) => (
                    <div key={index} className="bg-white rounded-lg p-2.5 border border-amber-100 shadow-sm flex flex-col">
                      <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
                      <div className="flex items-center justify-between gap-2 mt-1 mb-2">
@@ -2721,17 +2592,17 @@ export function CrewDashboard({
             </div>
             
             {/* Food Items */}
-            {preparingItemsSummary.filter(item => item.category === "food" || item.category === "pastry").length > 0 && (
+            {preparingItemsSummary.filter(item => classifyCategory(item.category) === "food").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">🍔</span>
                   <h4 className="font-bold text-xs uppercase tracking-wide text-orange-800">Food</h4>
                   <Badge className="bg-orange-600 text-white text-xs">
-                    {preparingItemsSummary.filter(item => item.category === "food" || item.category === "pastry").reduce((sum, item) => sum + item.quantity, 0)}
+                    {preparingItemsSummary.filter(item => classifyCategory(item.category) === "food").reduce((sum, item) => sum + item.quantity, 0)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {preparingItemsSummary.filter(item => item.category === "food" || item.category === "pastry").map((item, index) => (
+                  {preparingItemsSummary.filter(item => classifyCategory(item.category) === "food").map((item, index) => (
                     <div key={index} className="bg-white rounded-lg p-2.5 border border-orange-100 shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group">
                       <div className="absolute inset-0 bg-gradient-to-r from-orange-100/0 via-orange-100/20 to-orange-100/0 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="relative z-10">
@@ -2790,158 +2661,18 @@ export function CrewDashboard({
               </div>
             )}
 
-            {/* Cold Coffee Items */}
-            {preparingItemsSummary.filter(item => item.category === "cold-coffee").length > 0 && (
+            {/* Drinks Items */}
+            {preparingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">☕</span>
-                  <h4 className="font-bold text-xs uppercase tracking-wide text-orange-800">Cold Coffee</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wide text-orange-800">Drinks</h4>
                   <Badge className="bg-orange-600 text-white text-xs">
-                    {preparingItemsSummary.filter(item => item.category === "cold-coffee").reduce((sum, item) => sum + item.quantity, 0)}
+                    {preparingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").reduce((sum, item) => sum + item.quantity, 0)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {preparingItemsSummary.filter(item => item.category === "cold-coffee").map((item, index) => (
-                    <div key={index} className="bg-white rounded-lg p-2.5 border border-orange-100 shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-orange-100/0 via-orange-100/20 to-orange-100/0 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-xs font-semibold text-slate-900 truncate flex-1">{item.name}</p>
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
-                        </div>
-                        <div className="flex items-center justify-between gap-2 mt-1 mb-2">
-                          <Badge className={`text-xs font-bold px-1.5 py-0.5 ${item.itemType === "dine-in" ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-orange-600 hover:bg-orange-700 text-white"}`}>
-                            {item.itemType === "dine-in" ? "🍽️" : "🥡"}
-                          </Badge>
-                          <span className="text-sm font-bold text-orange-700">×{item.quantity}</span>
-                        </div>
-                        <div className="text-xs text-slate-600 font-medium space-y-1 flex-1 mb-2">
-                          {item.orders.map((order, idx) => (
-                            <div key={idx} className="text-xs">
-                              <div className="font-bold text-slate-900">
-                                <span>#{order.orderNumber}</span>
-                                <span className="text-slate-500 font-medium"> - {order.customerName}</span>
-                              </div>
-                              {order.notes && order.notes.length > 0 && (
-                                <div className="mt-1 ml-2 space-y-1">
-                                  {order.notes.map((note, noteIdx) => {
-                                    const isItemNote = note.id.startsWith("item-note-")
-                                    return (
-                                      <div key={noteIdx} className={`text-xs pl-2 border-l-2 ${isItemNote ? "border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r" : "border-blue-400 text-blue-700 bg-blue-50/50 py-0.5 rounded-r font-medium"}`}>
-                                        {isItemNote ? <span className="italic">📝 Item Note: {note.content}</span> : <span>📋 Order Note: {note.content}</span>}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {isCrew && (
-                          <>
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="text-xs font-medium text-slate-600">Mark Ready:</span>
-                              <div className="flex items-center gap-1">
-                                <Button onClick={() => { const key = `${item.name}|${item.itemType}`; const currentQty = selectedQuantities[key] || item.quantity; if (currentQty > 1) { setSelectedQuantities(prev => ({ ...prev, [key]: currentQty - 1 })) } }} size="sm" variant="outline" className="h-7 w-7 p-0 border-orange-300 hover:bg-orange-100" disabled={(selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity) <= 1}><Minus className="h-3 w-3" /></Button>
-                                <div className="w-12 text-center"><span className="text-sm font-bold text-orange-700">{selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity}</span><span className="text-xs text-slate-500">/{item.quantity}</span></div>
-                                <Button onClick={() => { const key = `${item.name}|${item.itemType}`; const currentQty = selectedQuantities[key] || item.quantity; if (currentQty < item.quantity) { setSelectedQuantities(prev => ({ ...prev, [key]: currentQty + 1 })) } }} size="sm" variant="outline" className="h-7 w-7 p-0 border-orange-300 hover:bg-orange-100" disabled={(selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity) >= item.quantity}><Plus className="h-3 w-3" /></Button>
-                              </div>
-                            </div>
-                            <Button onClick={() => { const key = `${item.name}|${item.itemType}`; const qtyToMark = selectedQuantities[key] || item.quantity; markReadyItemType(item.name, item.itemType, qtyToMark) }} size="sm" className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all relative group/btn overflow-hidden">
-                              <span className="relative z-10 flex items-center justify-center gap-1.5"><Clock className="w-3 h-3 animate-spin" />Mark Ready</span>
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Cold Drinks (Non-Coffee) Items */}
-            {preparingItemsSummary.filter(item => item.category === "cold-drink-no-coffee").length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🧃</span>
-                  <h4 className="font-bold text-xs uppercase tracking-wide text-orange-800">Cold Drinks (Non-Coffee)</h4>
-                  <Badge className="bg-orange-600 text-white text-xs">
-                    {preparingItemsSummary.filter(item => item.category === "cold-drink-no-coffee").reduce((sum, item) => sum + item.quantity, 0)}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {preparingItemsSummary.filter(item => item.category === "cold-drink-no-coffee").map((item, index) => (
-                    <div key={index} className="bg-white rounded-lg p-2.5 border border-orange-100 shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-orange-100/0 via-orange-100/20 to-orange-100/0 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="relative z-10">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-xs font-semibold text-slate-900 truncate flex-1">{item.name}</p>
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse flex-shrink-0" />
-                        </div>
-                        <div className="flex items-center justify-between gap-2 mt-1 mb-2">
-                          <Badge className={`text-xs font-bold px-1.5 py-0.5 ${item.itemType === "dine-in" ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-orange-600 hover:bg-orange-700 text-white"}`}>
-                            {item.itemType === "dine-in" ? "🍽️" : "🥡"}
-                          </Badge>
-                          <span className="text-sm font-bold text-orange-700">×{item.quantity}</span>
-                        </div>
-                        <div className="text-xs text-slate-600 font-medium space-y-1 flex-1 mb-2">
-                          {item.orders.map((order, idx) => (
-                            <div key={idx} className="text-xs">
-                              <div className="font-bold text-slate-900">
-                                <span>#{order.orderNumber}</span>
-                                <span className="text-slate-500 font-medium"> - {order.customerName}</span>
-                              </div>
-                              {order.notes && order.notes.length > 0 && (
-                                <div className="mt-1 ml-2 space-y-1">
-                                  {order.notes.map((note, noteIdx) => {
-                                    const isItemNote = note.id.startsWith("item-note-")
-                                    return (
-                                      <div key={noteIdx} className={`text-xs pl-2 border-l-2 ${isItemNote ? "border-amber-300 text-amber-700 bg-amber-50/50 py-0.5 rounded-r" : "border-blue-400 text-blue-700 bg-blue-50/50 py-0.5 rounded-r font-medium"}`}>
-                                        {isItemNote ? <span className="italic">📝 Item Note: {note.content}</span> : <span>📋 Order Note: {note.content}</span>}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {isCrew && (
-                          <>
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="text-xs font-medium text-slate-600">Mark Ready:</span>
-                              <div className="flex items-center gap-1">
-                                <Button onClick={() => { const key = `${item.name}|${item.itemType}`; const currentQty = selectedQuantities[key] || item.quantity; if (currentQty > 1) { setSelectedQuantities(prev => ({ ...prev, [key]: currentQty - 1 })) } }} size="sm" variant="outline" className="h-7 w-7 p-0 border-orange-300 hover:bg-orange-100" disabled={(selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity) <= 1}><Minus className="h-3 w-3" /></Button>
-                                <div className="w-12 text-center"><span className="text-sm font-bold text-orange-700">{selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity}</span><span className="text-xs text-slate-500">/{item.quantity}</span></div>
-                                <Button onClick={() => { const key = `${item.name}|${item.itemType}`; const currentQty = selectedQuantities[key] || item.quantity; if (currentQty < item.quantity) { setSelectedQuantities(prev => ({ ...prev, [key]: currentQty + 1 })) } }} size="sm" variant="outline" className="h-7 w-7 p-0 border-orange-300 hover:bg-orange-100" disabled={(selectedQuantities[`${item.name}|${item.itemType}`] || item.quantity) >= item.quantity}><Plus className="h-3 w-3" /></Button>
-                              </div>
-                            </div>
-                            <Button onClick={() => { const key = `${item.name}|${item.itemType}`; const qtyToMark = selectedQuantities[key] || item.quantity; markReadyItemType(item.name, item.itemType, qtyToMark) }} size="sm" className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold text-xs px-2 py-1.5 shadow-sm hover:shadow-md transition-all relative group/btn overflow-hidden">
-                              <span className="relative z-10 flex items-center justify-center gap-1.5"><Clock className="w-3 h-3 animate-spin" />Mark Ready</span>
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Other Items */}
-            {preparingItemsSummary.filter(item => !["food", "pastry", "cold-coffee", "cold-drink-no-coffee"].includes(item.category)).length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">📦</span>
-                  <h4 className="font-bold text-xs uppercase tracking-wide text-orange-800">Other</h4>
-                  <Badge className="bg-orange-600 text-white text-xs">
-                    {preparingItemsSummary.filter(item => !["food", "pastry", "cold-coffee", "cold-drink-no-coffee"].includes(item.category)).reduce((sum, item) => sum + item.quantity, 0)}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {preparingItemsSummary.filter(item => !["food", "pastry", "cold-coffee", "cold-drink-no-coffee"].includes(item.category)).map((item, index) => (
+                  {preparingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").map((item, index) => (
                     <div key={index} className="bg-white rounded-lg p-2.5 border border-orange-100 shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden group">
                       <div className="absolute inset-0 bg-gradient-to-r from-orange-100/0 via-orange-100/20 to-orange-100/0 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="relative z-10">

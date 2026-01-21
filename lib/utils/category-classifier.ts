@@ -5,7 +5,10 @@
 
 const DRINK_CATEGORIES = [
   'coffee',
+  'cold-coffee',
+  'cold-drink-no-coffee',
   'tea',
+  'drink',
   'drinks',
   'beverages',
   'juice',
@@ -35,8 +38,18 @@ const FOOD_CATEGORIES = [
  * @param category - The category string to classify
  * @returns 'food' or 'drinks'
  */
-export function classifyCategory(category: string): 'food' | 'drinks' {
+export function classifyCategory(category: string | undefined | null): 'food' | 'drinks' {
+  // Handle undefined, null, or empty string - default to food
+  if (!category || typeof category !== 'string') {
+    return 'food'
+  }
+  
   const normalized = category.toLowerCase().trim()
+  
+  // Handle empty string after trim
+  if (!normalized) {
+    return 'food'
+  }
 
   // Check if it's a drink category
   if (DRINK_CATEGORIES.some(drink => normalized.includes(drink))) {

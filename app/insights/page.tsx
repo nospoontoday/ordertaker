@@ -15,7 +15,6 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   Info, 
-  Clock, 
   Users, 
   ShoppingCart,
   BarChart3,
@@ -422,95 +421,6 @@ export default function InsightsPage() {
                     </div>
                   </div>
                 )}
-              </div>
-            </Card>
-
-            {/* Peak & Off-Peak Times */}
-            <Card className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Clock className="h-5 w-5 text-slate-600" />
-                <h2 className="text-xl font-bold text-slate-900">⏰ Peak & Off-Peak Times</h2>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                {/* Busiest Hours Chart */}
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4">Busiest Hours</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={insights.peakTimes.busiestHours.map(h => ({ ...h, hourLabel: formatHour12(h.hour) }))}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="hourLabel" tick={{ fontSize: 12 }} stroke="#64748b" />
-                      <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#fff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '8px',
-                          fontSize: '12px'
-                        }}
-                        formatter={(value: number) => [`${value}`, 'Orders']}
-                      />
-                      <Bar dataKey="orders" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Day of Week Performance */}
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4">Day of Week Performance</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={insights.peakTimes.dayOfWeekPerformance}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="dayName" tick={{ fontSize: 12 }} stroke="#64748b" />
-                      <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#fff',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '8px',
-                          fontSize: '12px'
-                        }}
-                        formatter={(value: number) => [`₱${value.toFixed(2)}`, 'Revenue']}
-                      />
-                      <Bar dataKey="revenue" fill="#10b981" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Hourly Breakdown Table */}
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-4">Hourly Breakdown</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-slate-600 uppercase">Hour</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600 uppercase">Orders</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600 uppercase">Revenue</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-slate-600 uppercase">Avg Order Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {insights.peakTimes.hourlyBreakdown
-                        .slice() // Create a copy to avoid mutating original
-                        .sort((a, b) => {
-                          // Sort chronologically: 14, 15, 16... 23, 0 (midnight last)
-                          const aHour = a.hour === 0 ? 24 : a.hour
-                          const bHour = b.hour === 0 ? 24 : b.hour
-                          return aHour - bHour
-                        })
-                        .map((hour, index) => (
-                        <tr key={index} className="border-b border-slate-100 last:border-0">
-                          <td className="py-2 px-3 text-sm font-medium text-slate-900">{formatHour12(hour.hour)}</td>
-                          <td className="py-2 px-3 text-sm text-slate-600 text-right">{hour.orders}</td>
-                          <td className="py-2 px-3 text-sm font-bold text-slate-900 text-right">₱{hour.revenue.toFixed(2)}</td>
-                          <td className="py-2 px-3 text-sm text-slate-600 text-right">₱{hour.avgOrderValue.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             </Card>
 
