@@ -33,8 +33,8 @@ interface ItemAverage {
   todayQuantity: number
 }
 
-const DAYS = ["Sunday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-const DAY_INDICES = [0, 2, 3, 4, 5, 6] // Map display index to actual day index (skipping Monday = 1)
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const DAY_INDICES = [0, 1, 2, 3, 4, 5, 6] // Map display index to actual day index
 const HOURS = Array.from({ length: 24 }, (_, i) => i).filter(h => h >= 14 && h <= 23)
 
 export default function StatsPage() {

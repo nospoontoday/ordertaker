@@ -982,6 +982,13 @@ export function OrderTaker({
       .reduce((total, orderItem) => total + orderItem.quantity, 0)
   }
 
+  // Group menu items by type for default view (Drinks vs Food)
+  const getGroupedMenuItems = () => {
+    const drinks = menuItems.filter(item => item.category === "coffee")
+    const food = menuItems.filter(item => item.category === "food" || item.category === "pastry")
+    return { drinks, food }
+  }
+
   // Group items by order type
   const groupItemsByType = (items: OrderItem[]) => {
     const dineInItems = items.filter(item => item.itemType === "dine-in")
@@ -1525,125 +1532,364 @@ export function OrderTaker({
                 </div>
               </div>
 
-              {/* Improved Menu Items Grid */}
-              <TooltipProvider>
-                {getDisplayedItems().length === 0 && searchQuery ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <Search className="h-12 w-12 text-slate-300 mb-4" />
-                    <p className="text-lg font-semibold text-slate-600 mb-2">No items found</p>
-                    <p className="text-sm text-slate-500 mb-4">No menu items match "{searchQuery}"</p>
-                    <Button
-                      variant="outline"
-                      onClick={() => setSearchQuery("")}
-                      className="gap-2"
-                    >
-                      <X className="h-4 w-4" />
-                      Clear search
-                    </Button>
-                  </div>
-                ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4 pb-28 lg:pb-0">
-                  {getDisplayedItems().map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleItemClick(item, "dine-in")}
-                      className={cn(
-                        "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white cursor-pointer",
-                        "border-2 border-slate-200 hover:border-blue-400",
-                        "shadow-sm hover:shadow-lg",
-                        "transition-all duration-200",
-                        "min-h-[200px] lg:min-h-[220px]",
-                        "min-w-[140px] sm:min-w-0",
-                        "active:scale-95 active:shadow-md",
-                        clickedItemId === item.id && "animate-pulse scale-95"
-                      )}
-                    >
-                      {/* Image Container with Best Seller Badge */}
-                      <div className="relative">
-                        <img
-                          src={getImageUrl(item.image) || "/placeholder.svg"}
-                          alt={item.name}
-                          className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
-                                     group-hover:scale-105 transition-transform duration-200"
-                        />
-                        {/* Quantity Counter Badge (top-left) */}
-                        {getItemQuantityInCart(item.name) > 0 && (
-                          <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
-                                           text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
-                                           min-w-[28px] flex items-center justify-center">
-                            {getItemQuantityInCart(item.name)}
-                          </Badge>
-                        )}
-                        {item.isBestSeller && (
-                          <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
-                                           text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
-                            BEST
-                          </Badge>
-                        )}
-                      </div>
+               {/* Improved Menu Items Display */}
+               <TooltipProvider>
+                 {getDisplayedItems().length === 0 && searchQuery ? (
+                   <div className="flex flex-col items-center justify-center py-16 text-center">
+                     <Search className="h-12 w-12 text-slate-300 mb-4" />
+                     <p className="text-lg font-semibold text-slate-600 mb-2">No items found</p>
+                     <p className="text-sm text-slate-500 mb-4">No menu items match "{searchQuery}"</p>
+                     <Button
+                       variant="outline"
+                       onClick={() => setSearchQuery("")}
+                       className="gap-2"
+                     >
+                       <X className="h-4 w-4" />
+                       Clear search
+                     </Button>
+                   </div>
+                 ) : (
+                   // Conditional rendering: grouped sections vs filtered grid
+                   !selectedCategory && !searchQuery ? (
+                     // Grouped view: Drinks and Food sections
+                     <div className="space-y-8 pb-28 lg:pb-0">
+                       {/* Drinks Section */}
+                       {(() => {
+                         const { drinks } = getGroupedMenuItems()
+                         return drinks.length > 0 ? (
+                           <div>
+                             <div className="flex items-center gap-3 mb-4">
+                               <div className="w-1 h-6 bg-blue-600 rounded-full"></div>
+                               <h3 className="text-lg font-bold text-slate-900">Drinks</h3>
+                               <Badge className="bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold px-2 py-1">
+                                 {drinks.length} items
+                               </Badge>
+                             </div>
+                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
+                               {drinks.map((item) => (
+                                 <div
+                                   key={item.id}
+                                   onClick={() => handleItemClick(item, "dine-in")}
+                                   className={cn(
+                                     "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white cursor-pointer",
+                                     "border-2 border-slate-200 hover:border-blue-400",
+                                     "shadow-sm hover:shadow-lg",
+                                     "transition-all duration-200",
+                                     "min-h-[200px] lg:min-h-[220px]",
+                                     "min-w-[140px] sm:min-w-0",
+                                     "active:scale-95 active:shadow-md",
+                                     clickedItemId === item.id && "animate-pulse scale-95"
+                                   )}
+                                 >
+                                   {/* Image Container with Best Seller Badge */}
+                                   <div className="relative">
+                                     <img
+                                       src={getImageUrl(item.image) || "/placeholder.svg"}
+                                       alt={item.name}
+                                       className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
+                                                  group-hover:scale-105 transition-transform duration-200"
+                                     />
+                                     {/* Quantity Counter Badge (top-left) */}
+                                     {getItemQuantityInCart(item.name) > 0 && (
+                                       <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
+                                                        text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
+                                                        min-w-[28px] flex items-center justify-center">
+                                         {getItemQuantityInCart(item.name)}
+                                       </Badge>
+                                     )}
+                                     {item.isBestSeller && (
+                                       <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
+                                                        text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
+                                         BEST
+                                       </Badge>
+                                     )}
+                                   </div>
 
-                      {/* Item Details */}
-                      <div className="flex flex-col items-center gap-1 flex-1">
-                        <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
-                                        line-clamp-2 leading-tight">
-                          {item.name}
-                        </span>
-                        <span className="text-base lg:text-sm font-bold text-blue-600">
-                          ₱{item.price.toFixed(2)}
-                        </span>
-                      </div>
+                                   {/* Item Details */}
+                                   <div className="flex flex-col items-center gap-1 flex-1">
+                                     <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
+                                                     line-clamp-2 leading-tight">
+                                       {item.name}
+                                     </span>
+                                     <span className="text-base lg:text-sm font-bold text-blue-600">
+                                       ₱{item.price.toFixed(2)}
+                                     </span>
+                                   </div>
 
-                      {/* Dine In / Take Out Buttons */}
-                      <div className="flex gap-2 w-full">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                playDineInSound()
-                                addItem(item, "dine-in")
-                              }}
-                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
-                                       bg-blue-600 hover:bg-blue-700 active:bg-blue-800
-                                       text-white font-semibold text-xs
-                                       transition-all active:scale-95 shadow-sm hover:shadow-md"
-                            >
-                              <Utensils className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Dine In</span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Add as Dine In</p>
-                          </TooltipContent>
-                        </Tooltip>
+                                   {/* Dine In / Take Out Buttons */}
+                                   <div className="flex gap-2 w-full">
+                                     <Tooltip>
+                                       <TooltipTrigger asChild>
+                                         <button
+                                           onClick={(e) => {
+                                             e.stopPropagation()
+                                             playDineInSound()
+                                             addItem(item, "dine-in")
+                                           }}
+                                           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                                    bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+                                                    text-white font-semibold text-xs
+                                                    transition-all active:scale-95 shadow-sm hover:shadow-md"
+                                         >
+                                           <Utensils className="w-3.5 h-3.5" />
+                                           <span className="hidden sm:inline">Dine In</span>
+                                         </button>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                         <p>Add as Dine In</p>
+                                       </TooltipContent>
+                                     </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                playTakeOutSound()
-                                addItem(item, "take-out")
-                              }}
-                              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
-                                       bg-orange-600 hover:bg-orange-700 active:bg-orange-800
-                                       text-white font-semibold text-xs
-                                       transition-all active:scale-95 shadow-sm hover:shadow-md"
-                            >
-                              <ShoppingBag className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Take Out</span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Add as Take Out</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                )}
-              </TooltipProvider>
+                                     <Tooltip>
+                                       <TooltipTrigger asChild>
+                                         <button
+                                           onClick={(e) => {
+                                             e.stopPropagation()
+                                             playTakeOutSound()
+                                             addItem(item, "take-out")
+                                           }}
+                                           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                                    bg-orange-600 hover:bg-orange-700 active:bg-orange-800
+                                                    text-white font-semibold text-xs
+                                                    transition-all active:scale-95 shadow-sm hover:shadow-md"
+                                         >
+                                           <ShoppingBag className="w-3.5 h-3.5" />
+                                           <span className="hidden sm:inline">Take Out</span>
+                                         </button>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                         <p>Add as Take Out</p>
+                                       </TooltipContent>
+                                     </Tooltip>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           </div>
+                         ) : null
+                       })()}
+
+                       {/* Food Section */}
+                       {(() => {
+                         const { food } = getGroupedMenuItems()
+                         return food.length > 0 ? (
+                           <div>
+                             <div className="flex items-center gap-3 mb-4">
+                               <div className="w-1 h-6 bg-emerald-600 rounded-full"></div>
+                               <h3 className="text-lg font-bold text-slate-900">Food</h3>
+                               <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2 py-1">
+                                 {food.length} items
+                               </Badge>
+                             </div>
+                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
+                               {food.map((item) => (
+                                 <div
+                                   key={item.id}
+                                   onClick={() => handleItemClick(item, "dine-in")}
+                                   className={cn(
+                                     "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white cursor-pointer",
+                                     "border-2 border-slate-200 hover:border-blue-400",
+                                     "shadow-sm hover:shadow-lg",
+                                     "transition-all duration-200",
+                                     "min-h-[200px] lg:min-h-[220px]",
+                                     "min-w-[140px] sm:min-w-0",
+                                     "active:scale-95 active:shadow-md",
+                                     clickedItemId === item.id && "animate-pulse scale-95"
+                                   )}
+                                 >
+                                   {/* Image Container with Best Seller Badge */}
+                                   <div className="relative">
+                                     <img
+                                       src={getImageUrl(item.image) || "/placeholder.svg"}
+                                       alt={item.name}
+                                       className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
+                                                  group-hover:scale-105 transition-transform duration-200"
+                                     />
+                                     {/* Quantity Counter Badge (top-left) */}
+                                     {getItemQuantityInCart(item.name) > 0 && (
+                                       <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
+                                                        text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
+                                                        min-w-[28px] flex items-center justify-center">
+                                         {getItemQuantityInCart(item.name)}
+                                       </Badge>
+                                     )}
+                                     {item.isBestSeller && (
+                                       <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
+                                                        text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
+                                         BEST
+                                       </Badge>
+                                     )}
+                                   </div>
+
+                                   {/* Item Details */}
+                                   <div className="flex flex-col items-center gap-1 flex-1">
+                                     <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
+                                                     line-clamp-2 leading-tight">
+                                       {item.name}
+                                     </span>
+                                     <span className="text-base lg:text-sm font-bold text-blue-600">
+                                       ₱{item.price.toFixed(2)}
+                                     </span>
+                                   </div>
+
+                                   {/* Dine In / Take Out Buttons */}
+                                   <div className="flex gap-2 w-full">
+                                     <Tooltip>
+                                       <TooltipTrigger asChild>
+                                         <button
+                                           onClick={(e) => {
+                                             e.stopPropagation()
+                                             playDineInSound()
+                                             addItem(item, "dine-in")
+                                           }}
+                                           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                                    bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+                                                    text-white font-semibold text-xs
+                                                    transition-all active:scale-95 shadow-sm hover:shadow-md"
+                                         >
+                                           <Utensils className="w-3.5 h-3.5" />
+                                           <span className="hidden sm:inline">Dine In</span>
+                                         </button>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                         <p>Add as Dine In</p>
+                                       </TooltipContent>
+                                     </Tooltip>
+
+                                     <Tooltip>
+                                       <TooltipTrigger asChild>
+                                         <button
+                                           onClick={(e) => {
+                                             e.stopPropagation()
+                                             playTakeOutSound()
+                                             addItem(item, "take-out")
+                                           }}
+                                           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                                    bg-orange-600 hover:bg-orange-700 active:bg-orange-800
+                                                    text-white font-semibold text-xs
+                                                    transition-all active:scale-95 shadow-sm hover:shadow-md"
+                                         >
+                                           <ShoppingBag className="w-3.5 h-3.5" />
+                                           <span className="hidden sm:inline">Take Out</span>
+                                         </button>
+                                       </TooltipTrigger>
+                                       <TooltipContent>
+                                         <p>Add as Take Out</p>
+                                       </TooltipContent>
+                                     </Tooltip>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           </div>
+                         ) : null
+                       })()}
+                     </div>
+                   ) : (
+                     // Filtered view: category selected or search active
+                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4 pb-28 lg:pb-0">
+                       {getDisplayedItems().map((item) => (
+                         <div
+                           key={item.id}
+                           onClick={() => handleItemClick(item, "dine-in")}
+                           className={cn(
+                             "group flex flex-col items-center gap-3 p-4 lg:p-5 rounded-xl bg-white cursor-pointer",
+                             "border-2 border-slate-200 hover:border-blue-400",
+                             "shadow-sm hover:shadow-lg",
+                             "transition-all duration-200",
+                             "min-h-[200px] lg:min-h-[220px]",
+                             "min-w-[140px] sm:min-w-0",
+                             "active:scale-95 active:shadow-md",
+                             clickedItemId === item.id && "animate-pulse scale-95"
+                           )}
+                         >
+                           {/* Image Container with Best Seller Badge */}
+                           <div className="relative">
+                             <img
+                               src={getImageUrl(item.image) || "/placeholder.svg"}
+                               alt={item.name}
+                               className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover
+                                          group-hover:scale-105 transition-transform duration-200"
+                             />
+                             {/* Quantity Counter Badge (top-left) */}
+                             {getItemQuantityInCart(item.name) > 0 && (
+                               <Badge className="absolute -top-2 -left-2 bg-blue-600 border-2 border-white
+                                                text-white text-xs font-bold px-2.5 py-1 shadow-lg rounded-full
+                                                min-w-[28px] flex items-center justify-center">
+                                 {getItemQuantityInCart(item.name)}
+                               </Badge>
+                             )}
+                             {item.isBestSeller && (
+                               <Badge className="absolute -top-2 -right-2 bg-amber-500 border border-amber-600
+                                                text-white text-[10px] font-bold px-2 py-0.5 shadow-md">
+                                 BEST
+                               </Badge>
+                             )}
+                           </div>
+
+                           {/* Item Details */}
+                           <div className="flex flex-col items-center gap-1 flex-1">
+                             <span className="text-sm lg:text-sm font-semibold text-center text-slate-900
+                                             line-clamp-2 leading-tight">
+                               {item.name}
+                             </span>
+                             <span className="text-base lg:text-sm font-bold text-blue-600">
+                               ₱{item.price.toFixed(2)}
+                             </span>
+                           </div>
+
+                           {/* Dine In / Take Out Buttons */}
+                           <div className="flex gap-2 w-full">
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation()
+                                     playDineInSound()
+                                     addItem(item, "dine-in")
+                                   }}
+                                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                            bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+                                            text-white font-semibold text-xs
+                                            transition-all active:scale-95 shadow-sm hover:shadow-md"
+                                 >
+                                   <Utensils className="w-3.5 h-3.5" />
+                                   <span className="hidden sm:inline">Dine In</span>
+                                 </button>
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 <p>Add as Dine In</p>
+                               </TooltipContent>
+                             </Tooltip>
+
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation()
+                                     playTakeOutSound()
+                                     addItem(item, "take-out")
+                                   }}
+                                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg
+                                            bg-orange-600 hover:bg-orange-700 active:bg-orange-800
+                                            text-white font-semibold text-xs
+                                            transition-all active:scale-95 shadow-sm hover:shadow-md"
+                                 >
+                                   <ShoppingBag className="w-3.5 h-3.5" />
+                                   <span className="hidden sm:inline">Take Out</span>
+                                 </button>
+                               </TooltipTrigger>
+                               <TooltipContent>
+                                 <p>Add as Take Out</p>
+                               </TooltipContent>
+                             </Tooltip>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   )
+                 )}
+               </TooltipProvider>
             </>
           )}
         </div>

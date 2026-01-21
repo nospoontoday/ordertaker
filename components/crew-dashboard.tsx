@@ -92,6 +92,17 @@ export function CrewDashboard({
   onAppendItems: (orderId: string) => void
   onKitchenStatusChange?: (status: KitchenStatusData | null) => void
 }) {
+  // Helper function to categorize items as drinks or food based on name
+  const categorizeItem = (itemName: string): "drinks" | "food" => {
+    const drinkKeywords = [
+      "espresso", "cappuccino", "latte", "americano", "macchiato", "flat white",
+      "coffee", "mocha", "frappe", "iced tea", "matcha", "tea"
+    ]
+
+    const lowerName = itemName.toLowerCase()
+    return drinkKeywords.some(keyword => lowerName.includes(keyword)) ? "drinks" : "food"
+  }
+
   const [orders, setOrders] = useState<Order[]>([])
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
   const [expandedServed, setExpandedServed] = useState<Set<string>>(new Set())
@@ -3178,10 +3189,14 @@ export function CrewDashboard({
                                {order.items.filter(item => isOrderTaker || item.status !== "served").map((item) => {
                                  console.log('Rendering item:', item.name, 'note:', item.note)
                                  return (
-                               <div
-                                 key={item.id}
-                                 className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow"
-                               >
+                                <div
+                                  key={item.id}
+                                  className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${
+                                    categorizeItem(item.name) === "drinks"
+                                      ? "bg-blue-50/50 border-blue-200/60"
+                                      : "bg-emerald-50/50 border-emerald-200/60"
+                                  }`}
+                                >
                                  <div className="flex-1 min-w-0">
                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                                     <p className="font-semibold text-sm text-slate-900">{item.name}</p>

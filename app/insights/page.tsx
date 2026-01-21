@@ -131,6 +131,13 @@ export default function InsightsPage() {
     }
   }
 
+  const formatHour12 = (hour: number) => {
+    if (hour === 0) return "12AM"
+    if (hour < 12) return `${hour}AM`
+    if (hour === 12) return "12PM"
+    return `${hour - 12}PM`
+  }
+
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
   if (!mounted || isLoading || !user || !canAccess) {
@@ -430,9 +437,9 @@ export default function InsightsPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-4">Busiest Hours</h3>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={insights.peakTimes.busiestHours}>
+                    <BarChart data={insights.peakTimes.busiestHours.map(h => ({ ...h, hourLabel: formatHour12(h.hour) }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="hour" tick={{ fontSize: 12 }} stroke="#64748b" />
+                      <XAxis dataKey="hourLabel" tick={{ fontSize: 12 }} stroke="#64748b" />
                       <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
                       <Tooltip 
                         contentStyle={{ 
@@ -487,7 +494,7 @@ export default function InsightsPage() {
                     <tbody>
                       {insights.peakTimes.hourlyBreakdown.map((hour, index) => (
                         <tr key={index} className="border-b border-slate-100 last:border-0">
-                          <td className="py-2 px-3 text-sm font-medium text-slate-900">{hour.hour}:00</td>
+                          <td className="py-2 px-3 text-sm font-medium text-slate-900">{formatHour12(hour.hour)}</td>
                           <td className="py-2 px-3 text-sm text-slate-600 text-right">{hour.orders}</td>
                           <td className="py-2 px-3 text-sm font-bold text-slate-900 text-right">₱{hour.revenue.toFixed(2)}</td>
                           <td className="py-2 px-3 text-sm text-slate-600 text-right">₱{hour.avgOrderValue.toFixed(2)}</td>
@@ -511,7 +518,9 @@ export default function InsightsPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-4">High-Value Customers</h3>
                   <div className="space-y-2">
-                    {insights.customerInsights.highValueCustomers.slice(0, 10).map((customer, index) => (
+                    {insights.customerInsights.highValueCustomers
+                      .filter(customer => customer.name.toLowerCase() !== 'daily summary - cash')
+                      .slice(0, 10).map((customer, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <div>
                           <p className="font-semibold text-slate-900">{customer.name}</p>

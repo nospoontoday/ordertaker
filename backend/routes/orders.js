@@ -309,29 +309,25 @@ router.get('/daily-sales', async (req, res) => {
 
       // Helper function to calculate payment method totals
       const calculatePaymentTotals = (orderTotal, paymentMethod, cashAmount, gcashAmount) => {
-        let actualPaymentTotal = 0;
-
         if (paymentMethod === "cash") {
           dailySales.totalCash += orderTotal;
-          actualPaymentTotal = orderTotal;
         } else if (paymentMethod === "gcash") {
           dailySales.totalGcash += orderTotal;
-          actualPaymentTotal = orderTotal;
         } else if (paymentMethod === "split") {
           // Ensure proper number conversion for split payments
+          // Track cash/gcash amounts separately for payment method breakdown
           const cash = Number(cashAmount) || 0;
           const gcash = Number(gcashAmount) || 0;
           dailySales.totalCash += cash;
           dailySales.totalGcash += gcash;
-          actualPaymentTotal = cash + gcash;
         } else {
           // Default to cash for legacy orders without payment method
           dailySales.totalCash += orderTotal;
-          actualPaymentTotal = orderTotal;
         }
 
-        // Add to total sales based on actual payment received, not item prices
-        dailySales.totalSales += actualPaymentTotal;
+        // Always use orderTotal (calculated from item prices) for totalSales
+        // This ensures consistency with itemsByCategory breakdown
+        dailySales.totalSales += orderTotal;
       };
 
       // Calculate main order total
