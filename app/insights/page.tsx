@@ -437,7 +437,9 @@ export default function InsightsPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-4">Busiest Hours</h3>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={insights.peakTimes.busiestHours.map(h => ({ ...h, hourLabel: formatHour12(h.hour) }))}>
+                    <BarChart data={insights.peakTimes.busiestHours
+                      .filter(h => (h.hour >= 14 && h.hour <= 23) || h.hour === 0)
+                      .map(h => ({ ...h, hourLabel: formatHour12(h.hour) }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="hourLabel" tick={{ fontSize: 12 }} stroke="#64748b" />
                       <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
@@ -492,7 +494,15 @@ export default function InsightsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {insights.peakTimes.hourlyBreakdown.map((hour, index) => (
+                      {insights.peakTimes.hourlyBreakdown
+                        .filter(h => (h.hour >= 14 && h.hour <= 23) || h.hour === 0)
+                        .sort((a, b) => {
+                          // Sort so midnight (0) comes after 23
+                          const aHour = a.hour === 0 ? 24 : a.hour
+                          const bHour = b.hour === 0 ? 24 : b.hour
+                          return aHour - bHour
+                        })
+                        .map((hour, index) => (
                         <tr key={index} className="border-b border-slate-100 last:border-0">
                           <td className="py-2 px-3 text-sm font-medium text-slate-900">{formatHour12(hour.hour)}</td>
                           <td className="py-2 px-3 text-sm text-slate-600 text-right">{hour.orders}</td>
