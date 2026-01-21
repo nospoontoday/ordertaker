@@ -437,9 +437,7 @@ export default function InsightsPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-4">Busiest Hours</h3>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={insights.peakTimes.busiestHours
-                      .filter(h => (h.hour >= 14 && h.hour <= 23) || h.hour === 0)
-                      .map(h => ({ ...h, hourLabel: formatHour12(h.hour) }))}>
+                    <BarChart data={insights.peakTimes.busiestHours.map(h => ({ ...h, hourLabel: formatHour12(h.hour) }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="hourLabel" tick={{ fontSize: 12 }} stroke="#64748b" />
                       <YAxis tick={{ fontSize: 12 }} stroke="#64748b" />
@@ -495,9 +493,9 @@ export default function InsightsPage() {
                     </thead>
                     <tbody>
                       {insights.peakTimes.hourlyBreakdown
-                        .filter(h => (h.hour >= 14 && h.hour <= 23) || h.hour === 0)
+                        .slice() // Create a copy to avoid mutating original
                         .sort((a, b) => {
-                          // Sort so midnight (0) comes after 23
+                          // Sort chronologically: 14, 15, 16... 23, 0 (midnight last)
                           const aHour = a.hour === 0 ? 24 : a.hour
                           const bHour = b.hour === 0 ? 24 : b.hour
                           return aHour - bHour

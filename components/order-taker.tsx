@@ -41,6 +41,7 @@ interface OrderItem {
   id: string
   name: string
   owner?: "john" | "elwin"
+  category?: string
   price: number
   quantity: number
   status: "pending" | "preparing" | "ready" | "served"
