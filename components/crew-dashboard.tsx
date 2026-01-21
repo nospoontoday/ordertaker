@@ -116,6 +116,27 @@ export function CrewDashboard({
   const [showCompletedOrders, setShowCompletedOrders] = useState(false)
   const [showHistoricalOrderDialog, setShowHistoricalOrderDialog] = useState(false)
 
+  // Toggle visibility for Food/Drinks in summaries (persisted to sessionStorage)
+  const [hideFoodItems, setHideFoodItems] = useState(false)
+  const [hideDrinkItems, setHideDrinkItems] = useState(false)
+
+  // Load toggle state from sessionStorage on mount
+  useEffect(() => {
+    const savedHideFood = sessionStorage.getItem('crew-dashboard-hide-food')
+    const savedHideDrinks = sessionStorage.getItem('crew-dashboard-hide-drinks')
+    if (savedHideFood !== null) setHideFoodItems(savedHideFood === 'true')
+    if (savedHideDrinks !== null) setHideDrinkItems(savedHideDrinks === 'true')
+  }, [])
+
+  // Save toggle state to sessionStorage when changed
+  useEffect(() => {
+    sessionStorage.setItem('crew-dashboard-hide-food', String(hideFoodItems))
+  }, [hideFoodItems])
+
+  useEffect(() => {
+    sessionStorage.setItem('crew-dashboard-hide-drinks', String(hideDrinkItems))
+  }, [hideDrinkItems])
+
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("")
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<"all" | "paid" | "unpaid" | "partial">("all")
@@ -2428,13 +2449,41 @@ export function CrewDashboard({
         {/* Pending Items Summary */}
         {pendingItemsSummary.length > 0 && (
           <div className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle className="w-5 h-5 text-amber-600" />
-              <h3 className="font-bold text-sm uppercase tracking-wide text-amber-900">Pending Items Summary</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <h3 className="font-bold text-sm uppercase tracking-wide text-amber-900">Pending Items Summary</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setHideFoodItems(!hideFoodItems)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                    hideFoodItems
+                      ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                      : "bg-amber-600 text-white hover:bg-amber-700"
+                  }`}
+                >
+                  <span>🍔</span>
+                  <span>Food</span>
+                  {hideFoodItems && <X className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={() => setHideDrinkItems(!hideDrinkItems)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                    hideDrinkItems
+                      ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                      : "bg-amber-600 text-white hover:bg-amber-700"
+                  }`}
+                >
+                  <span>☕</span>
+                  <span>Drinks</span>
+                  {hideDrinkItems && <X className="w-3 h-3" />}
+                </button>
+              </div>
             </div>
             
             {/* Food Items */}
-            {pendingItemsSummary.filter(item => classifyCategory(item.category) === "food").length > 0 && (
+            {!hideFoodItems && pendingItemsSummary.filter(item => classifyCategory(item.category) === "food").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">🍔</span>
@@ -2508,7 +2557,7 @@ export function CrewDashboard({
             )}
 
             {/* Drinks Items */}
-            {pendingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").length > 0 && (
+            {!hideDrinkItems && pendingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">☕</span>
@@ -2586,13 +2635,41 @@ export function CrewDashboard({
         {/* Preparing Items Summary */}
         {preparingItemsSummary.length > 0 && (
           <div className="mb-6 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-5 h-5 text-orange-600 animate-pulse" />
-              <h3 className="font-bold text-sm uppercase tracking-wide text-orange-900">Preparing Items Summary</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-orange-600 animate-pulse" />
+                <h3 className="font-bold text-sm uppercase tracking-wide text-orange-900">Preparing Items Summary</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setHideFoodItems(!hideFoodItems)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                    hideFoodItems
+                      ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                      : "bg-orange-600 text-white hover:bg-orange-700"
+                  }`}
+                >
+                  <span>🍔</span>
+                  <span>Food</span>
+                  {hideFoodItems && <X className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={() => setHideDrinkItems(!hideDrinkItems)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                    hideDrinkItems
+                      ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                      : "bg-orange-600 text-white hover:bg-orange-700"
+                  }`}
+                >
+                  <span>☕</span>
+                  <span>Drinks</span>
+                  {hideDrinkItems && <X className="w-3 h-3" />}
+                </button>
+              </div>
             </div>
             
             {/* Food Items */}
-            {preparingItemsSummary.filter(item => classifyCategory(item.category) === "food").length > 0 && (
+            {!hideFoodItems && preparingItemsSummary.filter(item => classifyCategory(item.category) === "food").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">🍔</span>
@@ -2662,7 +2739,7 @@ export function CrewDashboard({
             )}
 
             {/* Drinks Items */}
-            {preparingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").length > 0 && (
+            {!hideDrinkItems && preparingItemsSummary.filter(item => classifyCategory(item.category) === "drinks").length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">☕</span>
