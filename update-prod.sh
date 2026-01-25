@@ -68,7 +68,22 @@ else
 fi
 echo ""
 
-echo "Step 3: Stopping application containers (keeping data)..."
+echo "Step 3: Clearing Docker cache..."
+echo "=========================================="
+# Remove old/unused Docker images (keeps currently used ones)
+docker image prune -f
+echo "✓ Unused images removed"
+
+# Remove Docker build cache
+docker builder prune -f
+echo "✓ Build cache cleared"
+
+# Show disk space reclaimed
+echo "Current Docker disk usage:"
+docker system df
+echo ""
+
+echo "Step 4: Stopping application containers (keeping data)..."
 echo "=========================================="
 # NOTE: This does NOT remove volumes, so MongoDB data persists
 docker compose -f docker-compose.prod.yml down
@@ -79,7 +94,7 @@ else
 fi
 echo ""
 
-echo "Step 4: Starting updated containers..."
+echo "Step 5: Starting updated containers..."
 echo "=========================================="
 docker compose -f docker-compose.prod.yml up -d
 if [ $? -eq 0 ]; then
@@ -89,16 +104,16 @@ else
 fi
 echo ""
 
-echo "Step 5: Waiting for services to initialize..."
+echo "Step 6: Waiting for services to initialize..."
 sleep 10
 
-echo "Step 6: Verifying services..."
+echo "Step 7: Verifying services..."
 echo "=========================================="
 docker compose -f docker-compose.prod.yml ps
 echo "✓ Services verified"
 echo ""
 
-echo "Step 7: Verifying Nginx configuration..."
+echo "Step 8: Verifying Nginx configuration..."
 echo "=========================================="
 if nginx -t 2>/dev/null; then
     echo "✓ Nginx configuration is valid"
