@@ -259,7 +259,7 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
                     {waitingCustomers.length} {waitingCustomers.length === 1 ? "customer" : "customers"}
                   </Badge>
                   {averageWaitTime > 0 && (
-                    <span className="text-xs text-orange-700 hidden xs:inline">
+                    <span className="text-xs text-orange-700">
                       Avg: {formatWaitTime(averageWaitTime)}
                     </span>
                   )}
