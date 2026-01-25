@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Clock, AlertCircle, Users, ChevronDown, ChevronUp } from "lucide-react"
+import { Clock, AlertCircle, Users, ChevronDown, ChevronUp, ChefHat } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 
 interface OrderItem {
   id: string
@@ -53,9 +54,10 @@ interface WaitingCustomer {
 interface WaitingCustomersBannerProps {
   orders: Order[]
   historicalAverageWaitTimeMs?: number // Historical average wait time from all completed orders
+  kitchenStatus?: KitchenStatusData | null
 }
 
-export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs }: WaitingCustomersBannerProps) {
+export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, kitchenStatus }: WaitingCustomersBannerProps) {
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [isCollapsed, setIsCollapsed] = useState(false)
 
@@ -199,14 +201,28 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs }: 
     }
   }
 
+  // Kitchen status helpers
+  const getKitchenStatusColor = (loadPercent: number): "green" | "yellow" | "red" => {
+    if (loadPercent >= 80) return "red"
+    if (loadPercent >= 50) return "yellow"
+    return "green"
+  }
+
+  const getKitchenStatusLabel = (loadPercent: number): string => {
+    if (loadPercent >= 80) return "High Load"
+    if (loadPercent >= 50) return "Medium Load"
+    return "Low Load"
+  }
+
   // Don't render if no waiting customers
   if (waitingCustomers.length === 0) {
     return null
   }
 
   return (
-    <Card className="sticky top-[70px] z-40 mx-4 mt-4 mb-2 border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-lg">
-      <div className="p-3">
+    <div className="sticky top-[70px] z-40 max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+      <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-lg">
+        <div className="p-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -227,18 +243,49 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs }: 
               </div>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="text-orange-700 hover:bg-orange-100"
-          >
-            {isCollapsed ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronUp className="h-4 w-4" />
+
+          {/* Kitchen Status Metrics */}
+          <div className="flex items-center gap-4">
+            {kitchenStatus && (
+              <div className="flex items-center gap-3 text-sm">
+                <div className="flex flex-col items-center">
+                  <span className="text-xs text-muted-foreground">Pending</span>
+                  <span className="font-bold text-amber-700">{kitchenStatus.pendingItemsCount}</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-xs text-muted-foreground">Preparing</span>
+                  <span className="font-bold text-blue-700 flex items-center gap-1">
+                    <ChefHat className="h-3.5 w-3.5" />
+                    {kitchenStatus.preparingItemsCount}
+                  </span>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs",
+                    getKitchenStatusColor(kitchenStatus.kitchenLoadPercent) === "red" && "border-red-600 text-red-700 bg-red-50",
+                    getKitchenStatusColor(kitchenStatus.kitchenLoadPercent) === "yellow" && "border-yellow-600 text-yellow-700 bg-yellow-50",
+                    getKitchenStatusColor(kitchenStatus.kitchenLoadPercent) === "green" && "border-green-600 text-green-700 bg-green-50"
+                  )}
+                >
+                  {getKitchenStatusLabel(kitchenStatus.kitchenLoadPercent)}
+                </Badge>
+              </div>
             )}
-          </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="text-orange-700 hover:bg-orange-100"
+            >
+              {isCollapsed ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Customer List */}
@@ -313,7 +360,8 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs }: 
             })}
           </div>
         )}
-      </div>
-    </Card>
+        </div>
+      </Card>
+    </div>
   )
 }

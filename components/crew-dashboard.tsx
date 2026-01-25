@@ -2438,6 +2438,9 @@ export function CrewDashboard({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      {/* Waiting Customers Banner - outside container for consistent margin */}
+      <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} />
+
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Premium Header */}
         <div className="mb-8">
@@ -2471,9 +2474,6 @@ export function CrewDashboard({
           </div>
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>
-
-        {/* Waiting Customers Banner */}
-        <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} />
 
         {/* Pending Items Summary */}
         {pendingItemsSummary.length > 0 && (

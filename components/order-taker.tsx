@@ -35,7 +35,7 @@ import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { WithdrawalDialog } from "@/components/withdrawal-dialog"
-import { KitchenStatusBanner, type KitchenStatusData } from "@/components/kitchen-status-banner"
+import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import { WaitingCustomersBanner } from "@/components/waiting-customers-banner"
 
 interface OrderItem {
@@ -1264,11 +1264,8 @@ export function OrderTaker({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* Kitchen Status Banner */}
-      <KitchenStatusBanner kitchenStatus={kitchenStatus || null} />
-
       {/* Waiting Customers Banner */}
-      <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} />
+      <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} kitchenStatus={kitchenStatus} />
 
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Premium Header */}
