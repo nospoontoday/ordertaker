@@ -220,16 +220,16 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
   }
 
   return (
-    <div className="sticky top-[70px] z-40 max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+    <div className="sticky top-[70px] z-40 max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 pt-2 pb-1">
       <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-lg">
-        <div className="p-3">
+        <div className="px-3 py-2">
         {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {/* Left: Title and customer count */}
-          <div className="flex items-center justify-between sm:justify-start gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-100 text-orange-700">
-                <Users className="h-5 w-5" />
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-full bg-orange-100 text-orange-700">
+                <Users className="h-4 w-4" />
               </div>
               <div>
                 <h3 className="font-semibold text-sm text-orange-900">Waiting Customers</h3>
@@ -261,9 +261,9 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
           </div>
 
           {/* Right: Kitchen Status Metrics */}
-          <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
             {kitchenStatus && (
-              <div className="flex items-center gap-3 sm:gap-4 text-sm">
+              <div className="flex items-center gap-2 sm:gap-3 text-sm">
                 <div className="flex flex-col items-center">
                   <span className="text-xs text-muted-foreground">Pending</span>
                   <span className="font-bold text-amber-700">{kitchenStatus.pendingItemsCount}</span>
@@ -307,7 +307,7 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
 
         {/* Customer List */}
         {!isCollapsed && (
-          <div className="mt-3 space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="mt-2 space-y-1.5 max-h-[250px] overflow-y-auto">
             {waitingCustomers.map((customer) => {
               const urgencyColor = getUrgencyColor(customer.waitTimeMs)
 
@@ -315,7 +315,7 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
                 <div
                   key={customer.orderId}
                   className={cn(
-                    "flex items-center justify-between gap-3 p-2.5 rounded-lg border transition-all",
+                    "flex items-center justify-between gap-2 p-2 rounded-lg border transition-all",
                     urgencyColor === "red" && "bg-red-50 border-red-300",
                     urgencyColor === "yellow" && "bg-yellow-50 border-yellow-300",
                     urgencyColor === "green" && "bg-green-50 border-green-300"
@@ -363,7 +363,7 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
                   {/* Right: Timer */}
                   <div
                     className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-sm font-bold flex-shrink-0",
+                      "flex items-center gap-1 px-2 py-1 rounded-md font-mono text-xs font-bold flex-shrink-0",
                       urgencyColor === "red" && "bg-red-200 text-red-800",
                       urgencyColor === "yellow" && "bg-yellow-200 text-yellow-800",
                       urgencyColor === "green" && "bg-green-200 text-green-800"
