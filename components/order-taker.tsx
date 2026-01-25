@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal, type Order as ApiOrder } from "@/lib/api"
+import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, statsApi, getImageUrl, type MenuItem as ApiMenuItem, type Category as ApiCategory, type Withdrawal, type Order as ApiOrder } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -189,6 +189,7 @@ export function OrderTaker({
   const [allOrders, setAllOrders] = useState<ApiOrder[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false)
+  const [historicalAverageWaitTimeMs, setHistoricalAverageWaitTimeMs] = useState<number>(0)
   const [clickedItemId, setClickedItemId] = useState<string | null>(null)
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -355,14 +356,24 @@ export function OrderTaker({
     }
   }
 
-  // Load orders from IndexedDB
+  // Load orders from API (with IndexedDB fallback)
   useEffect(() => {
     const loadOrders = async () => {
       try {
-        const cachedOrders = await orderDB.getAllOrders()
-        setOrders(cachedOrders)
+        // Try API first
+        const apiOrders = await ordersApi.getAll({ sortBy: 'createdAt', sortOrder: 'asc' })
+        setOrders(apiOrders)
+        // Cache to IndexedDB
+        await orderDB.saveOrders(apiOrders.map((o: any) => ({ ...o, synced: true })))
       } catch (error) {
-        console.error("Failed to load orders from IndexedDB:", error)
+        console.error("Failed to load orders from API, falling back to IndexedDB:", error)
+        // Fallback to IndexedDB if offline
+        try {
+          const cachedOrders = await orderDB.getAllOrders()
+          setOrders(cachedOrders)
+        } catch (dbError) {
+          console.error("Failed to load orders from IndexedDB:", dbError)
+        }
       }
     }
 
@@ -374,6 +385,19 @@ export function OrderTaker({
     fetchAllOrders()
     // Fetch withdrawals for daily sales
     fetchWithdrawals()
+  }, [])
+
+  // Fetch historical average wait time stats on mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const stats = await statsApi.get()
+        setHistoricalAverageWaitTimeMs(stats.averageWaitTimeMs || 0)
+      } catch (error) {
+        console.error("Failed to fetch stats:", error)
+      }
+    }
+    fetchStats()
   }, [])
 
   useEffect(() => {
@@ -1244,7 +1268,7 @@ export function OrderTaker({
       <KitchenStatusBanner kitchenStatus={kitchenStatus || null} />
 
       {/* Waiting Customers Banner */}
-      <WaitingCustomersBanner orders={orders} />
+      <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} />
 
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Premium Header */}

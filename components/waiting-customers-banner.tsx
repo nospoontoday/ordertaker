@@ -52,9 +52,10 @@ interface WaitingCustomer {
 
 interface WaitingCustomersBannerProps {
   orders: Order[]
+  historicalAverageWaitTimeMs?: number // Historical average wait time from all completed orders
 }
 
-export function WaitingCustomersBanner({ orders }: WaitingCustomersBannerProps) {
+export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs }: WaitingCustomersBannerProps) {
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [isCollapsed, setIsCollapsed] = useState(false)
 
@@ -129,12 +130,17 @@ export function WaitingCustomersBanner({ orders }: WaitingCustomersBannerProps) 
     return customers.sort((a, b) => a.createdAt - b.createdAt)
   }, [orders, currentTime])
 
-  // Calculate average wait time
+  // Use historical average if provided, otherwise fall back to current waiting customers average
   const averageWaitTime = useMemo(() => {
+    // Prefer historical average from all completed orders
+    if (historicalAverageWaitTimeMs && historicalAverageWaitTimeMs > 0) {
+      return historicalAverageWaitTimeMs
+    }
+    // Fallback to current waiting customers average
     if (waitingCustomers.length === 0) return 0
     const totalWaitTime = waitingCustomers.reduce((sum, c) => sum + c.waitTimeMs, 0)
     return totalWaitTime / waitingCustomers.length
-  }, [waitingCustomers])
+  }, [waitingCustomers, historicalAverageWaitTimeMs])
 
   // Format duration as "Xm Ys"
   const formatWaitTime = (ms: number): string => {

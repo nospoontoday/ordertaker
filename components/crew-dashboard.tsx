@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ChevronDown, Check, CheckCircle, Clock, AlertCircle, Plus, Minus, CreditCard, Trash2, RefreshCw, Loader2, MessageSquare, Send, Search, X, Calendar } from "lucide-react"
-import { ordersApi } from "@/lib/api"
+import { ordersApi, statsApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -116,6 +116,7 @@ export function CrewDashboard({
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set())
   const [showCompletedOrders, setShowCompletedOrders] = useState(false)
   const [showHistoricalOrderDialog, setShowHistoricalOrderDialog] = useState(false)
+  const [historicalAverageWaitTimeMs, setHistoricalAverageWaitTimeMs] = useState<number>(0)
 
   // Toggle visibility for Food/Drinks in summaries (persisted to sessionStorage)
   const [hideFoodItems, setHideFoodItems] = useState(false)
@@ -462,6 +463,19 @@ export function CrewDashboard({
     setTodayDate(today.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" }))
   }, [])
 
+  // Fetch historical average wait time stats on mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const stats = await statsApi.get()
+        setHistoricalAverageWaitTimeMs(stats.averageWaitTimeMs || 0)
+      } catch (error) {
+        console.error("Failed to fetch stats:", error)
+      }
+    }
+    fetchStats()
+  }, [])
+
   // Conditional polling - only poll when WebSocket is disconnected
   useEffect(() => {
     if (isConnected) {
@@ -643,19 +657,24 @@ export function CrewDashboard({
     const preparingItems = allItems.filter(item => item.status === "preparing")
 
     // Calculate average prep time from items that have been served
-    const completedItems = allItems.filter(
-      item => item.preparingAt && item.servedAt && item.status === "served"
+    // Calculate average prep time from items that have been prepared (readyAt - preparingAt)
+    const preparedItems = allItems.filter(
+      item => item.preparingAt && item.readyAt
     )
 
     let averagePrepTimeMs = 0
-    if (completedItems.length > 0) {
-      const totalPrepTime = completedItems.reduce((sum, item) => {
-        return sum + (item.servedAt! - item.preparingAt!)
+    if (preparedItems.length > 0) {
+      const totalPrepTime = preparedItems.reduce((sum, item) => {
+        const prepTime = item.readyAt! - item.preparingAt!
+        // Only count positive prep times
+        return sum + (prepTime > 0 ? prepTime : 0)
       }, 0)
-      averagePrepTimeMs = totalPrepTime / completedItems.length
-    } else {
-      // Default estimate if no historical data (5 minutes per item)
-      averagePrepTimeMs = 5 * 60 * 1000
+      averagePrepTimeMs = totalPrepTime / preparedItems.length
+    }
+    
+    // Use default if no data or calculated time is too small (less than 1 minute)
+    if (averagePrepTimeMs < 60 * 1000) {
+      averagePrepTimeMs = 5 * 60 * 1000 // Default: 5 minutes per item
     }
 
     const averagePrepTimeMinutes = Math.round(averagePrepTimeMs / 1000 / 60)
@@ -2454,7 +2473,7 @@ export function CrewDashboard({
         </div>
 
         {/* Waiting Customers Banner */}
-        <WaitingCustomersBanner orders={orders} />
+        <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} />
 
         {/* Pending Items Summary */}
         {pendingItemsSummary.length > 0 && (

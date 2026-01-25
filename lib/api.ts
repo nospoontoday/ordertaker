@@ -1099,3 +1099,42 @@ export const insightsApi = {
     };
   },
 };
+
+// Stats types
+export interface StatsData {
+  averageWaitTimeMs: number;
+  completedOrdersCount: number;
+  totalWaitTimeMs: number;
+  lastUpdated: number;
+}
+
+// Stats API
+export const statsApi = {
+  /**
+   * Get global statistics including historical average wait time
+   */
+  get: async (): Promise<StatsData> => {
+    const response = await apiCall<StatsData>('/stats');
+    return response.data || {
+      averageWaitTimeMs: 0,
+      completedOrdersCount: 0,
+      totalWaitTimeMs: 0,
+      lastUpdated: Date.now()
+    };
+  },
+
+  /**
+   * Recalculate stats from all completed orders (admin utility)
+   */
+  recalculate: async (): Promise<StatsData> => {
+    const response = await apiCall<StatsData>('/stats/recalculate', {
+      method: 'POST'
+    });
+    return response.data || {
+      averageWaitTimeMs: 0,
+      completedOrdersCount: 0,
+      totalWaitTimeMs: 0,
+      lastUpdated: Date.now()
+    };
+  }
+};

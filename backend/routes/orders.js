@@ -3,7 +3,8 @@ const router = express.Router();
 const Order = require('../models/Order');
 const DailyReportValidation = require('../models/DailyReportValidation');
 const User = require('../models/User');
-const { get, set, invalidateOrders, CACHE_KEYS, TTL } = require('../utils/cache');
+const Stats = require('../models/Stats');
+const { get, set, del, invalidateOrders, CACHE_KEYS, TTL } = require('../utils/cache');
 
 /**
  * Helper function to format date as YYYY-MM-DD from UTC components
@@ -1747,6 +1748,13 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
       if (allMainServed && allAppendedServed && !order.allItemsServedAt) {
         order.allItemsServedAt = now;
         await order.save();
+        
+        // Update stats with completed order wait time
+        const waitTime = order.allItemsServedAt - order.createdAt;
+        if (waitTime > 0) {
+          await Stats.recordCompletedOrder(waitTime);
+          del('stats:global'); // Invalidate stats cache
+        }
       }
 
       // Invalidate orders cache
@@ -1835,6 +1843,13 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
     if (allMainServed && allAppendedServed && !order.allItemsServedAt) {
       order.allItemsServedAt = Date.now();
       await order.save();
+      
+      // Update stats with completed order wait time
+      const waitTime = order.allItemsServedAt - order.createdAt;
+      if (waitTime > 0) {
+        await Stats.recordCompletedOrder(waitTime);
+        del('stats:global'); // Invalidate stats cache
+      }
     }
 
     // Invalidate orders cache
@@ -2272,6 +2287,13 @@ router.put('/:id/appended/:appendedId/items/:itemId/status', async (req, res) =>
     if (allMainServed && allAppendedServed && !order.allItemsServedAt) {
       order.allItemsServedAt = now;
       await order.save();
+      
+      // Update stats with completed order wait time
+      const waitTime = order.allItemsServedAt - order.createdAt;
+      if (waitTime > 0) {
+        await Stats.recordCompletedOrder(waitTime);
+        del('stats:global'); // Invalidate stats cache
+      }
     }
 
     // Invalidate orders cache
