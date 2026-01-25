@@ -224,30 +224,46 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
       <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-lg">
         <div className="p-3">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-orange-100 text-orange-700">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-sm text-orange-900">Waiting Customers</h3>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge className="bg-orange-600 text-white text-xs">
-                  {waitingCustomers.length} {waitingCustomers.length === 1 ? "customer" : "customers"}
-                </Badge>
-                {averageWaitTime > 0 && (
-                  <span className="text-xs text-orange-700">
-                    Avg wait: {formatWaitTime(averageWaitTime)}
-                  </span>
-                )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Left: Title and customer count */}
+          <div className="flex items-center justify-between sm:justify-start gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-orange-100 text-orange-700">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm text-orange-900">Waiting Customers</h3>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge className="bg-orange-600 text-white text-xs">
+                    {waitingCustomers.length} {waitingCustomers.length === 1 ? "customer" : "customers"}
+                  </Badge>
+                  {averageWaitTime > 0 && (
+                    <span className="text-xs text-orange-700 hidden xs:inline">
+                      Avg: {formatWaitTime(averageWaitTime)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+            {/* Collapse button - visible on mobile in this row */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="text-orange-700 hover:bg-orange-100 sm:hidden min-h-[44px] min-w-[44px]"
+            >
+              {isCollapsed ? (
+                <ChevronDown className="h-5 w-5" />
+              ) : (
+                <ChevronUp className="h-5 w-5" />
+              )}
+            </Button>
           </div>
 
-          {/* Kitchen Status Metrics */}
-          <div className="flex items-center gap-4">
+          {/* Right: Kitchen Status Metrics */}
+          <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
             {kitchenStatus && (
-              <div className="flex items-center gap-3 text-sm">
+              <div className="flex items-center gap-3 sm:gap-4 text-sm">
                 <div className="flex flex-col items-center">
                   <span className="text-xs text-muted-foreground">Pending</span>
                   <span className="font-bold text-amber-700">{kitchenStatus.pendingItemsCount}</span>
@@ -262,7 +278,7 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
                 <Badge
                   variant="outline"
                   className={cn(
-                    "text-xs",
+                    "text-xs whitespace-nowrap",
                     getKitchenStatusColor(kitchenStatus.kitchenLoadPercent) === "red" && "border-red-600 text-red-700 bg-red-50",
                     getKitchenStatusColor(kitchenStatus.kitchenLoadPercent) === "yellow" && "border-yellow-600 text-yellow-700 bg-yellow-50",
                     getKitchenStatusColor(kitchenStatus.kitchenLoadPercent) === "green" && "border-green-600 text-green-700 bg-green-50"
@@ -273,11 +289,12 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
               </div>
             )}
 
+            {/* Collapse button - visible on desktop */}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-orange-700 hover:bg-orange-100"
+              className="text-orange-700 hover:bg-orange-100 hidden sm:flex"
             >
               {isCollapsed ? (
                 <ChevronDown className="h-4 w-4" />

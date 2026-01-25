@@ -705,13 +705,15 @@ export function CrewDashboard({
     }
   }
 
+  // Memoize kitchen status for local use and reporting
+  const kitchenStatus = useMemo(() => calculateKitchenStatus(), [orders])
+
   // Update kitchen status when orders change
   useEffect(() => {
     if (onKitchenStatusChange) {
-      const status = calculateKitchenStatus()
-      onKitchenStatusChange(status)
+      onKitchenStatusChange(kitchenStatus)
     }
-  }, [orders])
+  }, [kitchenStatus, onKitchenStatusChange])
 
   // Calculate preparing items summary grouped by item name and type - MEMOIZED (moved here for useEffect below)
   const preparingItemsSummary = useMemo(() => {
@@ -2439,7 +2441,7 @@ export function CrewDashboard({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       {/* Waiting Customers Banner - outside container for consistent margin */}
-      <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} />
+      <WaitingCustomersBanner orders={orders} historicalAverageWaitTimeMs={historicalAverageWaitTimeMs} kitchenStatus={kitchenStatus} />
 
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Premium Header */}
