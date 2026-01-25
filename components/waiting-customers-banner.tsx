@@ -78,9 +78,16 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
       // Collect all unserved items from main order and appended orders
       const unservedItemsMap = new Map<string, UnservedItem>()
 
+      // Track if main order has unserved items
+      let hasMainOrderUnservedItems = false
+
+      // Track earliest appended order with unserved items
+      let earliestAppendedCreatedAt: number | null = null
+
       // Process main order items
       order.items.forEach((item) => {
         if (item.status !== "served") {
+          hasMainOrderUnservedItems = true
           const key = `${item.name}|${item.status}`
           const existing = unservedItemsMap.get(key)
           if (existing) {
@@ -97,8 +104,10 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
 
       // Process appended order items
       order.appendedOrders?.forEach((appended) => {
+        let appendedHasUnserved = false
         appended.items.forEach((item) => {
           if (item.status !== "served") {
+            appendedHasUnserved = true
             const key = `${item.name}|${item.status}`
             const existing = unservedItemsMap.get(key)
             if (existing) {
@@ -112,16 +121,28 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
             }
           }
         })
+        // Track the earliest appended order that has unserved items
+        if (appendedHasUnserved && 
+            (earliestAppendedCreatedAt === null || appended.createdAt < earliestAppendedCreatedAt)) {
+          earliestAppendedCreatedAt = appended.createdAt
+        }
       })
 
       // If there are unserved items, add to waiting customers
       if (unservedItemsMap.size > 0) {
-        const waitTimeMs = currentTime - order.createdAt
+        // Determine the relevant start time for wait calculation:
+        // - If main order items are unserved, use order.createdAt
+        // - If only appended items are unserved, use the earliest appended order's createdAt
+        const relevantCreatedAt = hasMainOrderUnservedItems 
+          ? order.createdAt 
+          : (earliestAppendedCreatedAt ?? order.createdAt)
+
+        const waitTimeMs = currentTime - relevantCreatedAt
         customers.push({
           orderId: order.id,
           orderNumber: order.orderNumber,
           customerName: order.customerName,
-          createdAt: order.createdAt,
+          createdAt: relevantCreatedAt,
           waitTimeMs,
           unservedItems: Array.from(unservedItemsMap.values()),
         })
