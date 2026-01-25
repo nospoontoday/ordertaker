@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import { HistoricalOrderDialog } from "@/components/historical-order-dialog"
 import { classifyCategory } from "@/lib/utils/category-classifier"
+import { WaitingCustomersBanner } from "@/components/waiting-customers-banner"
 
 interface OrderItem {
   id: string
@@ -2451,6 +2452,9 @@ export function CrewDashboard({
           </div>
           <div className="h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
         </div>
+
+        {/* Waiting Customers Banner */}
+        <WaitingCustomersBanner orders={orders} />
 
         {/* Pending Items Summary */}
         {pendingItemsSummary.length > 0 && (
