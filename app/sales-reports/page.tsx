@@ -7,7 +7,7 @@ import { dailySalesApi, type DailySalesSummary } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2, Pencil, BarChart3, PieChart, LineChart } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, ArrowLeft, Calendar, TrendingDown, TrendingUp, ChevronDown, ChevronUp, CheckCircle2, Trash2, Pencil, BarChart3, PieChart, LineChart, GlassWater } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { EditDailySalesDialog } from "@/components/edit-daily-sales-dialog"
 import { LineChart as RechartsLineChart, Line, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, ReferenceLine } from "recharts"
@@ -626,6 +626,12 @@ export default function SalesReportsPage() {
               const elwinPurchases =
                 (daily.purchasesByOwner?.elwin || 0) + splitPurchases / 2
 
+              // Calculate total drinks served (cold-coffee + cold-drink-no-coffee)
+              const coldCoffeeItems = daily.itemsByCategory["cold-coffee"] || []
+              const coldDrinkNoCoffeeItems = daily.itemsByCategory["cold-drink-no-coffee"] || []
+              const drinksServed = [...coldCoffeeItems, ...coldDrinkNoCoffeeItems]
+                .reduce((sum, item) => sum + item.quantity, 0)
+
               return (
               <Card key={daily.date} className="bg-white border border-slate-200/80 shadow-sm">
                 {/* Date Header - Clickable for toggle */}
@@ -645,6 +651,12 @@ export default function SalesReportsPage() {
                       <Badge className="bg-emerald-600 text-white font-bold text-xs px-2 py-1 rounded-md flex items-center gap-1 flex-shrink-0">
                         <CheckCircle2 className="h-3 w-3" />
                         Validated
+                      </Badge>
+                    )}
+                    {drinksServed > 0 && (
+                      <Badge className="bg-cyan-600 text-white font-bold text-xs px-2 py-1 rounded-md flex items-center gap-1 flex-shrink-0">
+                        <GlassWater className="h-3 w-3" />
+                        {drinksServed} drinks
                       </Badge>
                     )}
                   </div>
