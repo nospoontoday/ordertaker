@@ -127,6 +127,16 @@ export default function SalesReportsPage() {
       ? ((lastWeekSales - previousWeekSales) / previousWeekSales) * 100 
       : 0
 
+    // 8. Average drinks served per day (cold-coffee + cold-drink-no-coffee)
+    const totalDrinksServed = allDailySales.reduce((sum, day) => {
+      const coldCoffeeItems = day.itemsByCategory["cold-coffee"] || []
+      const coldDrinkNoCoffeeItems = day.itemsByCategory["cold-drink-no-coffee"] || []
+      const dayDrinks = [...coldCoffeeItems, ...coldDrinkNoCoffeeItems]
+        .reduce((itemSum, item) => itemSum + item.quantity, 0)
+      return sum + dayDrinks
+    }, 0)
+    const avgDrinksPerDay = allDailySales.length > 0 ? totalDrinksServed / allDailySales.length : 0
+
     return {
       salesTrend,
       categoryData,
@@ -140,7 +150,9 @@ export default function SalesReportsPage() {
         avgDailySales,
         avgDailyNet,
         weekOverWeekGrowth,
-        daysTracked: allDailySales.length
+        daysTracked: allDailySales.length,
+        totalDrinksServed,
+        avgDrinksPerDay
       }
     }
   }, [allDailySales])
@@ -405,7 +417,7 @@ export default function SalesReportsPage() {
             {showAnalytics && (
               <div className="space-y-6">
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                   <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-semibold text-blue-700">Total Revenue</span>
@@ -462,6 +474,19 @@ export default function SalesReportsPage() {
                     </div>
                     <div className="text-xs text-purple-600 mt-1">
                       Week over week
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-cyan-700">Drinks Served</span>
+                      <GlassWater className="h-4 w-4 text-cyan-600" />
+                    </div>
+                    <div className="text-2xl font-bold text-cyan-900">
+                      {analyticsData.summary.totalDrinksServed} cups
+                    </div>
+                    <div className="text-xs text-cyan-600 mt-1">
+                      Avg: {analyticsData.summary.avgDrinksPerDay.toFixed(1)} cups/day
                     </div>
                   </Card>
                 </div>
