@@ -4381,7 +4381,7 @@ export function CrewDashboard({
               {showCompletedOrders ? "Hide" : "Show"} Completed Orders ({sortedCompletedOrders.length})
             </Button>
           )}
-          {isOrderTaker && (
+          {user?.role === "super_admin" && (
             <Button
               onClick={() => setShowHistoricalOrderDialog(true)}
               variant="outline"
@@ -4400,7 +4400,7 @@ export function CrewDashboard({
               <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
               <h2 className="text-base font-bold tracking-wide uppercase text-slate-800">Completed Orders</h2>
               <div className="flex-1 h-[1px] bg-gradient-to-r from-slate-200 to-transparent" />
-              {isOrderTaker && (
+              {user?.role === "super_admin" && (
                 <Button
                   onClick={() => setShowHistoricalOrderDialog(true)}
                   variant="outline"
