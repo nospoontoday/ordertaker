@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { DEFAULT_BRANCH, VALID_BRANCH_IDS } = require('../config/branches');
 
 /**
  * Order Item Sub-Schema
@@ -168,6 +169,13 @@ const orderSchema = new mongoose.Schema(
       sparse: true, // Allows multiple documents without orderNumber
       index: true
     },
+    branchId: {
+      type: String,
+      required: true,
+      enum: VALID_BRANCH_IDS,
+      default: DEFAULT_BRANCH.id,
+      index: true
+    },
     customerName: {
       type: String,
       required: [true, 'Customer name is required'],
@@ -289,8 +297,9 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Compound index for common queries
-orderSchema.index({ createdAt: -1, isPaid: 1 });
-orderSchema.index({ customerName: 1, createdAt: -1 });
+orderSchema.index({ branchId: 1, createdAt: -1, isPaid: 1 });
+orderSchema.index({ branchId: 1, customerName: 1, createdAt: -1 });
+orderSchema.index({ createdAt: -1, isPaid: 1 }); // Keep for backward compatibility
 
 // Virtual for total order amount
 orderSchema.virtual('totalAmount').get(function() {

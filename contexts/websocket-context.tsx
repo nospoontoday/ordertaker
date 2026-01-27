@@ -1,8 +1,9 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 import type { Order } from '@/lib/api'
+import type { BranchId } from '@/lib/branches'
 
 interface WebSocketContextType {
   socket: Socket | null
@@ -69,43 +70,54 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   )
 }
 
-// Custom hook for order events
+// Custom hook for order events with branch filtering
 export function useOrderEvents(
   onOrderCreated?: (order: Order) => void,
   onOrderUpdated?: (order: Order) => void,
-  onOrderDeleted?: (orderId: string) => void
+  onOrderDeleted?: (orderId: string) => void,
+  branchId?: BranchId
 ) {
   const { socket, isConnected } = useWebSocket()
+
+  // Create filtered handlers that only call callbacks for matching branch
+  const handleOrderCreated = useCallback((order: Order & { branchId?: string }) => {
+    // If branchId filter is set and order has a different branchId, ignore
+    if (branchId && order.branchId && order.branchId !== branchId) {
+      return
+    }
+    onOrderCreated?.(order)
+  }, [onOrderCreated, branchId])
+
+  const handleOrderUpdated = useCallback((order: Order & { branchId?: string }) => {
+    // If branchId filter is set and order has a different branchId, ignore
+    if (branchId && order.branchId && order.branchId !== branchId) {
+      return
+    }
+    onOrderUpdated?.(order)
+  }, [onOrderUpdated, branchId])
 
   useEffect(() => {
     if (!socket) return
 
-    // Listen for order events
-    if (onOrderCreated) {
-      socket.on('order:created', onOrderCreated)
-    }
-
-    if (onOrderUpdated) {
-      socket.on('order:updated', onOrderUpdated)
-    }
+    // Listen for order events with branch filtering
+    socket.on('order:created', handleOrderCreated)
+    socket.on('order:updated', handleOrderUpdated)
 
     if (onOrderDeleted) {
+      // Note: For deletions, we don't have branchId info in the event
+      // The component should handle filtering based on its local state
       socket.on('order:deleted', onOrderDeleted)
     }
 
     // Cleanup listeners on unmount
     return () => {
-      if (onOrderCreated) {
-        socket.off('order:created', onOrderCreated)
-      }
-      if (onOrderUpdated) {
-        socket.off('order:updated', onOrderUpdated)
-      }
+      socket.off('order:created', handleOrderCreated)
+      socket.off('order:updated', handleOrderUpdated)
       if (onOrderDeleted) {
         socket.off('order:deleted', onOrderDeleted)
       }
     }
-  }, [socket, onOrderCreated, onOrderUpdated, onOrderDeleted])
+  }, [socket, handleOrderCreated, handleOrderUpdated, onOrderDeleted])
 
   return { isConnected }
 }

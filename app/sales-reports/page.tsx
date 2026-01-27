@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranch } from "@/contexts/branch-context"
 import { dailySalesApi, type DailySalesSummary } from "@/lib/api"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import { LineChart as RechartsLineChart, Line, BarChart, Bar, PieChart as Rechar
 export default function SalesReportsPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
+  const { currentBranch } = useBranch()
   const { toast } = useToast()
   const [dailySales, setDailySales] = useState<DailySalesSummary[]>([])
   const [pagination, setPagination] = useState({
@@ -180,7 +182,7 @@ export default function SalesReportsPage() {
   const fetchDailySales = async (page: number = 1) => {
     setIsLoadingData(true)
     try {
-      const response = await dailySalesApi.getDailySales(page, 10)
+      const response = await dailySalesApi.getDailySales(page, 10, currentBranch.id)
       setDailySales(response.data)
       setPagination(response.pagination)
       
@@ -192,7 +194,7 @@ export default function SalesReportsPage() {
       // Fetch all sales data for analytics (limit to last 30 days for performance)
       if (page === 1) {
         try {
-          const allDataResponse = await dailySalesApi.getDailySales(1, 30)
+          const allDataResponse = await dailySalesApi.getDailySales(1, 30, currentBranch.id)
           setAllDailySales(allDataResponse.data)
         } catch (err) {
           console.error("Error fetching analytics data:", err)
@@ -228,7 +230,7 @@ export default function SalesReportsPage() {
     if (canAccess && user) {
       fetchDailySales(1)
     }
-  }, [canAccess, user])
+  }, [canAccess, user, currentBranch.id])
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {

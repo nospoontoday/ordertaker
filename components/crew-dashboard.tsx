@@ -10,6 +10,7 @@ import { ordersApi, statsApi } from "@/lib/api"
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranch } from "@/contexts/branch-context"
 import { useOrderEvents } from "@/contexts/websocket-context"
 import { SplitPaymentDialog } from "@/components/split-payment-dialog"
 import {
@@ -243,6 +244,7 @@ export function CrewDashboard({
 
   const { toast } = useToast()
   const { user } = useAuth()
+  const { currentBranch } = useBranch()
 
   // Role-based permission checks
   // Order Taker: Can take orders, mark as paid, append items, delete orders/items
@@ -449,32 +451,33 @@ export function CrewDashboard({
     })
   }, [toast])
 
-  // Set up WebSocket event listeners
+  // Set up WebSocket event listeners - filter by current branch
   const { isConnected } = useOrderEvents(
     handleOrderCreated,
     handleOrderUpdated,
-    handleOrderDeleted
+    handleOrderDeleted,
+    currentBranch.id
   )
 
-  // Load orders from API on initial mount
+  // Load orders from API on initial mount and when branch changes
   useEffect(() => {
     fetchOrders()
     const today = new Date()
     setTodayDate(today.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" }))
-  }, [])
+  }, [currentBranch.id])
 
-  // Fetch historical average wait time stats on mount
+  // Fetch historical average wait time stats on mount and when branch changes
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const stats = await statsApi.get()
+        const stats = await statsApi.get(currentBranch.id)
         setHistoricalAverageWaitTimeMs(stats.averageWaitTimeMs || 0)
       } catch (error) {
         console.error("Failed to fetch stats:", error)
       }
     }
     fetchStats()
-  }, [])
+  }, [currentBranch.id])
 
   // Conditional polling - only poll when WebSocket is disconnected
   useEffect(() => {
@@ -501,8 +504,8 @@ export function CrewDashboard({
     }
 
     try {
-      // Try to fetch from API
-      const apiOrders = await ordersApi.getAll({ sortBy: 'createdAt', sortOrder: 'asc' })
+      // Try to fetch from API - filter by current branch
+      const apiOrders = await ordersApi.getAll({ branchId: currentBranch.id, sortBy: 'createdAt', sortOrder: 'asc' })
 
       // Transform API data to match component interface
       const transformedOrders = apiOrders.map((order: any) => ({

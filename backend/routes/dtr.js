@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const DTR = require('../models/DTR');
 const User = require('../models/User');
+const { DEFAULT_BRANCH, isValidBranchId } = require('../config/branches');
 
 /**
  * @route   GET /api/dtr/status/:userId
@@ -11,10 +12,15 @@ const User = require('../models/User');
 router.get('/status/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const { branchId } = req.query;
 
-    // Find the most recent DTR record that's still clocked in
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    // Find the most recent DTR record that's still clocked in for this branch
     const activeDTR = await DTR.findOne({
       userId,
+      branchId: effectiveBranchId,
       status: 'clocked_in'
     }).sort({ clockInTime: -1 });
 
@@ -42,7 +48,10 @@ router.get('/status/:userId', async (req, res) => {
  */
 router.post('/clock-in', async (req, res) => {
   try {
-    const { userId, notes } = req.body;
+    const { userId, branchId, notes } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     if (!userId) {
       return res.status(400).json({
@@ -67,9 +76,10 @@ router.post('/clock-in', async (req, res) => {
       });
     }
 
-    // Check if user is already clocked in
+    // Check if user is already clocked in at this branch
     const existingClockIn = await DTR.findOne({
       userId,
+      branchId: effectiveBranchId,
       status: 'clocked_in'
     });
 
@@ -87,6 +97,7 @@ router.post('/clock-in', async (req, res) => {
 
     const dtr = new DTR({
       userId,
+      branchId: effectiveBranchId,
       clockInTime: now,
       date,
       status: 'clocked_in',
@@ -120,7 +131,10 @@ router.post('/clock-in', async (req, res) => {
  */
 router.post('/clock-out', async (req, res) => {
   try {
-    const { userId, notes } = req.body;
+    const { userId, branchId, notes } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     if (!userId) {
       return res.status(400).json({
@@ -129,9 +143,10 @@ router.post('/clock-out', async (req, res) => {
       });
     }
 
-    // Find active clock-in record
+    // Find active clock-in record for this branch
     const dtr = await DTR.findOne({
       userId,
+      branchId: effectiveBranchId,
       status: 'clocked_in'
     }).sort({ clockInTime: -1 });
 
@@ -290,9 +305,12 @@ router.get('/summary/:userId/:year/:month', async (req, res) => {
  */
 router.get('/all', async (req, res) => {
   try {
-    const { startDate, endDate, limit = 100, page = 1 } = req.query;
+    const { branchId, startDate, endDate, limit = 100, page = 1 } = req.query;
 
-    const query = {};
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    const query = { branchId: effectiveBranchId };
 
     // Date range filter
     if (startDate || endDate) {

@@ -34,6 +34,7 @@ import { menuItemsApi, categoriesApi, ordersApi, withdrawalsApi, cartApi, statsA
 import { orderDB } from "@/lib/db"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranch } from "@/contexts/branch-context"
 import { WithdrawalDialog } from "@/components/withdrawal-dialog"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import { WaitingCustomersBanner } from "@/components/waiting-customers-banner"
@@ -196,6 +197,7 @@ export function OrderTaker({
   // Toast for notifications
   const { toast } = useToast()
   const { user } = useAuth()
+  const { currentBranch } = useBranch()
 
   // Check if user can access withdrawal feature (all roles except crew)
   const canWithdraw = user?.role !== "crew"
@@ -319,11 +321,11 @@ export function OrderTaker({
     }
   }
 
-  // Fetch all orders from API for daily sales
+  // Fetch all orders from API for daily sales - filter by branch
   const fetchAllOrders = async () => {
     try {
       console.log('Fetching all orders for daily sales...')
-      const ordersData = await ordersApi.getAll()
+      const ordersData = await ordersApi.getAll({ branchId: currentBranch.id })
       console.log('Fetched orders:', {
         count: ordersData.length,
         paidCount: ordersData.filter(o => o.isPaid).length,
@@ -346,22 +348,22 @@ export function OrderTaker({
     }
   }
 
-  // Fetch withdrawals for daily sales
+  // Fetch withdrawals for daily sales - filter by branch
   const fetchWithdrawals = async () => {
     try {
-      const withdrawalsData = await withdrawalsApi.getAll()
+      const withdrawalsData = await withdrawalsApi.getAll({ branchId: currentBranch.id })
       setWithdrawals(withdrawalsData)
     } catch (error) {
       console.error('Error fetching withdrawals:', error)
     }
   }
 
-  // Load orders from API (with IndexedDB fallback)
+  // Load orders from API (with IndexedDB fallback) - refetch when branch changes
   useEffect(() => {
     const loadOrders = async () => {
       try {
-        // Try API first
-        const apiOrders = await ordersApi.getAll({ sortBy: 'createdAt', sortOrder: 'asc' })
+        // Try API first - filter by current branch
+        const apiOrders = await ordersApi.getAll({ branchId: currentBranch.id, sortBy: 'createdAt', sortOrder: 'asc' })
         setOrders(apiOrders)
         // Cache to IndexedDB
         await orderDB.saveOrders(apiOrders.map((o: any) => ({ ...o, synced: true })))
@@ -385,20 +387,20 @@ export function OrderTaker({
     fetchAllOrders()
     // Fetch withdrawals for daily sales
     fetchWithdrawals()
-  }, [])
+  }, [currentBranch.id])
 
-  // Fetch historical average wait time stats on mount
+  // Fetch historical average wait time stats on mount and when branch changes
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const stats = await statsApi.get()
+        const stats = await statsApi.get(currentBranch.id)
         setHistoricalAverageWaitTimeMs(stats.averageWaitTimeMs || 0)
       } catch (error) {
         console.error("Failed to fetch stats:", error)
       }
     }
     fetchStats()
-  }, [])
+  }, [currentBranch.id])
 
   useEffect(() => {
     if (appendingOrderId) {
@@ -855,6 +857,7 @@ export function OrderTaker({
           // Try to save to API first
           const orderPayload: Parameters<typeof ordersApi.create>[0] = {
             id: newOrder.id,
+            branchId: currentBranch.id,
             customerName: newOrder.customerName,
             items: newOrder.items.map((item) => ({
               ...item,

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { DEFAULT_BRANCH, VALID_BRANCH_IDS } = require('../config/branches');
 
 /**
  * Withdrawal/Purchase Schema
@@ -11,6 +12,13 @@ const withdrawalSchema = new mongoose.Schema(
       type: String,
       enum: ['withdrawal', 'purchase'],
       required: [true, 'Type is required. Must be "withdrawal" or "purchase"'],
+      index: true
+    },
+    branchId: {
+      type: String,
+      required: true,
+      enum: VALID_BRANCH_IDS,
+      default: DEFAULT_BRANCH.id,
       index: true
     },
     amount: {
@@ -65,8 +73,9 @@ const withdrawalSchema = new mongoose.Schema(
 );
 
 // Index for date range queries
-withdrawalSchema.index({ createdAt: -1 });
-withdrawalSchema.index({ type: 1, createdAt: -1 });
+withdrawalSchema.index({ branchId: 1, createdAt: -1 });
+withdrawalSchema.index({ branchId: 1, type: 1, createdAt: -1 });
+withdrawalSchema.index({ createdAt: -1 }); // Keep for backward compatibility
 
 const Withdrawal = mongoose.model('Withdrawal', withdrawalSchema);
 

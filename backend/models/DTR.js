@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
+const { DEFAULT_BRANCH, VALID_BRANCH_IDS } = require('../config/branches');
 
 /**
  * DTR (Daily Time Record) Schema
  * Tracks clock in/out times for crew members
+ * Now supports per-branch time tracking
  */
 const dtrSchema = new mongoose.Schema(
   {
@@ -10,6 +12,13 @@ const dtrSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User ID is required'],
+      index: true
+    },
+    branchId: {
+      type: String,
+      required: true,
+      enum: VALID_BRANCH_IDS,
+      default: DEFAULT_BRANCH.id,
       index: true
     },
     clockInTime: {
@@ -44,8 +53,10 @@ const dtrSchema = new mongoose.Schema(
 );
 
 // Compound index for efficient queries
-dtrSchema.index({ userId: 1, date: 1 });
-dtrSchema.index({ userId: 1, clockInTime: -1 });
+dtrSchema.index({ branchId: 1, userId: 1, date: 1 });
+dtrSchema.index({ branchId: 1, userId: 1, clockInTime: -1 });
+dtrSchema.index({ branchId: 1, date: 1 });
+dtrSchema.index({ userId: 1, date: 1 }); // Keep for backward compatibility
 
 // Instance method to calculate work duration in hours
 dtrSchema.methods.getWorkDuration = function() {
@@ -62,14 +73,21 @@ dtrSchema.methods.isClockedIn = function() {
 };
 
 // Static method to get monthly summary for a user
-dtrSchema.statics.getMonthlySummary = async function(userId, year, month) {
+dtrSchema.statics.getMonthlySummary = async function(userId, year, month, branchId) {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
-  const records = await this.find({
+  const query = {
     userId,
     clockInTime: { $gte: startDate, $lte: endDate }
-  }).sort({ clockInTime: -1 });
+  };
+  
+  // Add branchId filter if provided
+  if (branchId) {
+    query.branchId = branchId;
+  }
+
+  const records = await this.find(query).sort({ clockInTime: -1 });
 
   const totalDays = records.filter(r => r.status === 'clocked_out').length;
   let totalHours = 0;

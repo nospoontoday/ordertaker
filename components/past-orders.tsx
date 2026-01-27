@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { ordersApi, Order, OrderItem, AppendedOrder } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranch } from "@/contexts/branch-context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,6 +32,7 @@ const ORDERS_PER_PAGE = 10
 
 export function PastOrders() {
   const { user } = useAuth()
+  const { currentBranch } = useBranch()
   const { toast } = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,7 +45,7 @@ export function PastOrders() {
 
   useEffect(() => {
     loadOrders()
-  }, [])
+  }, [currentBranch.id])
 
   const migrateLegacyOrders = async (orders: Order[]) => {
     // Migrate legacy orders that don't have paidAsWholeOrder flag
@@ -124,13 +126,13 @@ export function PastOrders() {
   const loadOrders = async () => {
     try {
       setLoading(true)
-      const allOrders = await ordersApi.getAll()
+      const allOrders = await ordersApi.getAll({ branchId: currentBranch.id })
 
       // Run migration for legacy orders
       await migrateLegacyOrders(allOrders)
 
       // Reload orders after migration to get updated data
-      const updatedOrders = await ordersApi.getAll()
+      const updatedOrders = await ordersApi.getAll({ branchId: currentBranch.id })
 
       // Sort orders from newest to oldest
       const sortedOrders = updatedOrders.sort((a, b) => b.createdAt - a.createdAt)

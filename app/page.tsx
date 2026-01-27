@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
+import { BranchSelector } from "@/components/branch-selector"
 
 export default function Home() {
   const router = useRouter()
@@ -152,6 +153,8 @@ export default function Home() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
+              <BranchSelector variant="compact" />
+              <div className="h-6 w-px bg-slate-300" />
               <span className="text-sm text-slate-600">{user?.email}</span>
               <div className="h-6 w-px bg-slate-300" />
 
@@ -228,9 +231,12 @@ export default function Home() {
           {/* Mobile Navigation */}
           <div className="lg:hidden">
             <div className="flex items-center justify-between">
-              {/* Logo Icon */}
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
-                <ChefHat className="h-6 w-6 text-white" />
+              {/* Left: Logo + Branch */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-600">
+                  <ChefHat className="h-6 w-6 text-white" />
+                </div>
+                <BranchSelector variant="compact" />
               </div>
 
               <div className="flex items-center gap-2">
@@ -264,7 +270,12 @@ export default function Home() {
                         {user?.email}
                       </SheetDescription>
                     </SheetHeader>
-                    <div className="mt-8 space-y-2">
+                    <div className="mt-6 mb-4">
+                      <p className="text-xs text-muted-foreground mb-2">Current Branch</p>
+                      <BranchSelector variant="default" className="w-full" />
+                    </div>
+                    <Separator className="my-4" />
+                    <div className="space-y-2">
                       {!isCrew && (
                         <>
                           <Button

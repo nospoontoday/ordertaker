@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
+import { BranchProvider } from '@/contexts/branch-context'
 import { WebSocketProvider } from '@/contexts/websocket-context'
 import { ServiceWorkerInitializer } from '@/components/sw-initializer'
 import { Toaster } from '@/components/ui/toaster'
@@ -39,9 +40,11 @@ export default function RootLayout({
       <body className={`font-sans antialiased`}>
         <ServiceWorkerInitializer />
         <AuthProvider>
-          <WebSocketProvider>
-            {children}
-          </WebSocketProvider>
+          <BranchProvider>
+            <WebSocketProvider>
+              {children}
+            </WebSocketProvider>
+          </BranchProvider>
         </AuthProvider>
         <Toaster />
         <Analytics />

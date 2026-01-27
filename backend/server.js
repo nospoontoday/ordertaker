@@ -19,8 +19,14 @@ const io = new Server(server, {
   }
 });
 
-// Connect to MongoDB
-connectDB();
+// Import branch migration utility
+const { runBranchMigration } = require('./utils/branchMigration');
+
+// Connect to MongoDB and run migrations
+connectDB().then(async () => {
+  // Run branch migration after DB connection
+  await runBranchMigration();
+});
 
 // Middleware
 // CORS configuration - WIDE OPEN (no restrictions)
@@ -61,6 +67,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/branches', require('./routes/branches'));
 app.use('/api/menu-items', require('./routes/menuItems'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/upload', require('./routes/upload'));
@@ -169,6 +176,7 @@ server.listen(PORT, () => {
 
   API Endpoints:
   - Health Check: http://localhost:${PORT}/api/health
+  - Branches:     http://localhost:${PORT}/api/branches
   - Auth:         http://localhost:${PORT}/api/auth
   - Menu Items:   http://localhost:${PORT}/api/menu-items
   - Categories:   http://localhost:${PORT}/api/categories

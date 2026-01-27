@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
+const { VALID_BRANCH_IDS } = require('../config/branches');
 
 /**
  * User Schema
  * Represents a user in the system with role-based access
  * Roles: super_admin, order_taker, crew, order_taker_crew
+ * Users can belong to multiple branches
  */
 const userSchema = new mongoose.Schema(
   {
@@ -33,6 +35,17 @@ const userSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true
+    },
+    branches: {
+      type: [String],
+      enum: VALID_BRANCH_IDS,
+      default: VALID_BRANCH_IDS, // Users can access all branches by default
+      validate: {
+        validator: function(branches) {
+          return branches && branches.length > 0;
+        },
+        message: 'User must have access to at least one branch'
+      }
     }
   },
   {
@@ -61,6 +74,11 @@ userSchema.methods.isOrderTaker = function() {
 // Instance method to check if user is crew
 userSchema.methods.isCrew = function() {
   return this.role === 'crew' || this.role === 'order_taker_crew';
+};
+
+// Instance method to check if user has access to a specific branch
+userSchema.methods.hasAccessToBranch = function(branchId) {
+  return this.branches && this.branches.includes(branchId);
 };
 
 // Don't return password in JSON responses

@@ -11,6 +11,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { ArrowLeft, Loader2, CalendarIcon, Filter, Search, Wallet, ShoppingCart, X } from "lucide-react"
 import { withdrawalsApi, Withdrawal } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranch } from "@/contexts/branch-context"
 import { useToast } from "@/hooks/use-toast"
 import { format, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth } from "date-fns"
 
@@ -21,6 +22,7 @@ type DatePreset = "today" | "yesterday" | "last7days" | "thisMonth" | "custom"
 export default function WithdrawalsPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { currentBranch } = useBranch()
   const { toast } = useToast()
 
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
@@ -37,17 +39,19 @@ export default function WithdrawalsPage() {
 
   useEffect(() => {
     fetchWithdrawals()
-  }, [startDate, endDate])
+  }, [startDate, endDate, currentBranch.id])
 
   const fetchWithdrawals = async () => {
     setIsLoading(true)
     try {
       const filters: {
+        branchId?: string
         startDate?: number
         endDate?: number
         sortBy?: string
         sortOrder?: "asc" | "desc"
       } = {
+        branchId: currentBranch.id,
         sortBy: "createdAt",
         sortOrder: "desc",
       }

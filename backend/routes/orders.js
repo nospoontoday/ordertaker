@@ -5,6 +5,7 @@ const DailyReportValidation = require('../models/DailyReportValidation');
 const User = require('../models/User');
 const Stats = require('../models/Stats');
 const { get, set, del, invalidateOrders, CACHE_KEYS, TTL } = require('../utils/cache');
+const { DEFAULT_BRANCH, isValidBranchId } = require('../config/branches');
 
 /**
  * Helper function to format date as YYYY-MM-DD from UTC components
@@ -73,6 +74,7 @@ function getBusinessDayDate(timestamp) {
 router.get('/', async (req, res) => {
   try {
     const {
+      branchId,
       isPaid,
       status,
       customerName,
@@ -81,8 +83,11 @@ router.get('/', async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
     // Generate cache key based on query params
-    const cacheKey = `${CACHE_KEYS.ORDERS}list:${isPaid || 'all'}:${status || 'all'}:${customerName || ''}:${limit || 'all'}:${sortBy}:${sortOrder}`;
+    const cacheKey = `${CACHE_KEYS.ORDERS}list:${effectiveBranchId}:${isPaid || 'all'}:${status || 'all'}:${customerName || ''}:${limit || 'all'}:${sortBy}:${sortOrder}`;
 
     // Check cache first (only for common queries without customer name search)
     if (!customerName) {
@@ -93,8 +98,8 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Build query
-    const query = {};
+    // Build query - always filter by branch
+    const query = { branchId: effectiveBranchId };
 
     // Filter by payment status
     if (isPaid !== undefined) {
@@ -182,9 +187,13 @@ router.get('/daily-sales', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+    const { branchId } = req.query;
 
-    // Generate cache key based on page and limit
-    const cacheKey = `${CACHE_KEYS.DAILY_SALES}page:${page}:limit:${limit}`;
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    // Generate cache key based on page, limit, and branchId
+    const cacheKey = `${CACHE_KEYS.DAILY_SALES}branch:${effectiveBranchId}:page:${page}:limit:${limit}`;
 
     // Check cache first
     const cachedData = get(cacheKey);
@@ -193,12 +202,12 @@ router.get('/daily-sales', async (req, res) => {
       return res.json(cachedData);
     }
 
-    // Get all paid orders
-    const allOrders = await Order.find({ isPaid: true }).sort({ createdAt: -1 });
+    // Get all paid orders for this branch
+    const allOrders = await Order.find({ isPaid: true, branchId: effectiveBranchId }).sort({ createdAt: -1 });
     
-    // Get all withdrawals
+    // Get all withdrawals for this branch
     const Withdrawal = require('../models/Withdrawal');
-    const allWithdrawals = await Withdrawal.find().sort({ createdAt: -1 });
+    const allWithdrawals = await Withdrawal.find({ branchId: effectiveBranchId }).sort({ createdAt: -1 });
 
     // Get menu items to map item IDs to categories
     const MenuItem = require('../models/MenuItem');
@@ -799,8 +808,13 @@ router.delete('/daily-sales/:date', async (req, res) => {
  */
 router.get('/insights', async (req, res) => {
   try {
+    const { branchId } = req.query;
+    
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
     // Check cache first - insights are expensive to compute
-    const cacheKey = `${CACHE_KEYS.ORDERS}insights`;
+    const cacheKey = `${CACHE_KEYS.ORDERS}insights:${effectiveBranchId}`;
     const cachedData = get(cacheKey);
     if (cachedData) {
       res.set('X-Cache', 'HIT');
@@ -816,8 +830,9 @@ router.get('/insights', async (req, res) => {
     const startTimestamp = startDate.getTime();
     const endTimestamp = endDate.getTime();
 
-    // Fetch all orders from last 90 days
+    // Fetch all orders from last 90 days for this branch
     const orders = await Order.find({
+      branchId: effectiveBranchId,
       createdAt: { $gte: startTimestamp, $lte: endTimestamp },
       isPaid: true // Only analyze paid orders
     }).sort({ createdAt: 1 });
@@ -1358,7 +1373,10 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount, notes } = req.body;
+    const { id, branchId, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount, notes } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     console.log('🔍 BACKEND DEBUG - Received order notes:', notes)
     console.log('🔍 BACKEND DEBUG - Full request body:', JSON.stringify(req.body, null, 2))
@@ -1409,6 +1427,7 @@ router.post('/', async (req, res) => {
     // Create new order
     const order = new Order({
       id,
+      branchId: effectiveBranchId,
       orderNumber: nextOrderNumber,
       customerName: customerName.trim(),
       items,
@@ -1752,8 +1771,8 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
         // Update stats with completed order wait time
         const waitTime = order.allItemsServedAt - order.createdAt;
         if (waitTime > 0) {
-          await Stats.recordCompletedOrder(waitTime);
-          del('stats:global'); // Invalidate stats cache
+          await Stats.recordCompletedOrder(waitTime, order.branchId);
+          del(`stats:${order.branchId}`); // Invalidate stats cache for this branch
         }
       }
 
@@ -1847,8 +1866,8 @@ router.put('/:id/items/:itemId/status', async (req, res) => {
       // Update stats with completed order wait time
       const waitTime = order.allItemsServedAt - order.createdAt;
       if (waitTime > 0) {
-        await Stats.recordCompletedOrder(waitTime);
-        del('stats:global'); // Invalidate stats cache
+        await Stats.recordCompletedOrder(waitTime, order.branchId);
+        del(`stats:${order.branchId}`); // Invalidate stats cache for this branch
       }
     }
 
@@ -2291,8 +2310,8 @@ router.put('/:id/appended/:appendedId/items/:itemId/status', async (req, res) =>
       // Update stats with completed order wait time
       const waitTime = order.allItemsServedAt - order.createdAt;
       if (waitTime > 0) {
-        await Stats.recordCompletedOrder(waitTime);
-        del('stats:global'); // Invalidate stats cache
+        await Stats.recordCompletedOrder(waitTime, order.branchId);
+        del(`stats:${order.branchId}`); // Invalidate stats cache for this branch
       }
     }
 

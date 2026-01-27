@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Withdrawal = require('../models/Withdrawal');
 const { invalidateOrders } = require('../utils/cache');
+const { DEFAULT_BRANCH, isValidBranchId } = require('../config/branches');
 
 /**
  * @route   GET /api/withdrawals
@@ -17,6 +18,7 @@ const { invalidateOrders } = require('../utils/cache');
 router.get('/', async (req, res) => {
   try {
     const {
+      branchId,
       type,
       startDate,
       endDate,
@@ -25,8 +27,11 @@ router.get('/', async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build query
-    const query = {};
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    // Build query - always filter by branch
+    const query = { branchId: effectiveBranchId };
 
     // Filter by type
     if (type) {
@@ -109,7 +114,10 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { type, amount, description, createdBy, paymentMethod, createdAt, chargedTo } = req.body;
+    const { branchId, type, amount, description, createdBy, paymentMethod, createdAt, chargedTo } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     // Validation
     if (!type || !['withdrawal', 'purchase'].includes(type)) {
@@ -166,6 +174,7 @@ router.post('/', async (req, res) => {
 
     // Create new withdrawal
     const withdrawal = new Withdrawal({
+      branchId: effectiveBranchId,
       type,
       amount: parseFloat(amount),
       description: description.trim(),

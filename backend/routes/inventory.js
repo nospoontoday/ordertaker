@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Inventory = require('../models/Inventory');
+const { DEFAULT_BRANCH, isValidBranchId } = require('../config/branches');
 
 /**
  * @route   GET /api/inventory
@@ -9,10 +10,13 @@ const Inventory = require('../models/Inventory');
  */
 router.get('/', async (req, res) => {
   try {
-    const { category, stockStatus } = req.query;
+    const { branchId, category, stockStatus } = req.query;
 
-    // Build query filter
-    let filter = {};
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    // Build query filter - always filter by branch
+    let filter = { branchId: effectiveBranchId };
 
     if (category && category !== 'all') {
       filter.category = category;
@@ -50,7 +54,12 @@ router.get('/', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
-    const items = await Inventory.find();
+    const { branchId } = req.query;
+    
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    const items = await Inventory.find({ branchId: effectiveBranchId });
 
     const stats = {
       totalItems: items.length,
@@ -108,7 +117,10 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
+    const { branchId, name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     // Validate required fields
     if (!name || !unit || !category) {
@@ -119,7 +131,7 @@ router.post('/', async (req, res) => {
     }
 
     // Check if item with same name already exists
-    const existingItem = await Inventory.findOne({ name: name.trim() });
+    const existingItem = await Inventory.findOne({ branchId: effectiveBranchId, name: name.trim() });
     if (existingItem) {
       return res.status(400).json({
         success: false,
@@ -128,6 +140,7 @@ router.post('/', async (req, res) => {
     }
 
     const item = await Inventory.create({
+      branchId: effectiveBranchId,
       name,
       quantity: quantity || 0,
       unit,
@@ -173,7 +186,10 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    const { name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
+    const { branchId, name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     let item = await Inventory.findById(req.params.id);
 
@@ -186,7 +202,7 @@ router.put('/:id', async (req, res) => {
 
     // Check if updating name to one that already exists
     if (name && name.trim() !== item.name) {
-      const existingItem = await Inventory.findOne({ name: name.trim() });
+      const existingItem = await Inventory.findOne({ branchId: effectiveBranchId, name: name.trim() });
       if (existingItem) {
         return res.status(400).json({
           success: false,
@@ -242,7 +258,10 @@ router.put('/:id', async (req, res) => {
  */
 router.patch('/:id', async (req, res) => {
   try {
-    const { name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
+    const { branchId, name, quantity, unit, category, lowStockThreshold, notes, image } = req.body;
+
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
 
     let item = await Inventory.findById(req.params.id);
 
@@ -255,7 +274,7 @@ router.patch('/:id', async (req, res) => {
 
     // Check if updating name to one that already exists
     if (name && name.trim() !== item.name) {
-      const existingItem = await Inventory.findOne({ name: name.trim() });
+      const existingItem = await Inventory.findOne({ branchId: effectiveBranchId, name: name.trim() });
       if (existingItem) {
         return res.status(400).json({
           success: false,

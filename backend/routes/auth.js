@@ -86,7 +86,8 @@ router.post('/login', async (req, res) => {
       id: user._id,
       email: user.email,
       role: user.role,
-      name: user.name
+      name: user.name,
+      branches: user.branches
     });
 
     res.json({
@@ -95,7 +96,8 @@ router.post('/login', async (req, res) => {
         id: user._id,
         email: user.email,
         role: user.role,
-        name: user.name
+        name: user.name,
+        branches: user.branches || ['pangabugan', 'baan'] // Default to all branches for backward compat
       },
       message: 'Login successful'
     });

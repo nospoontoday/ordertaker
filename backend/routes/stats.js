@@ -1,32 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const Stats = require('../models/Stats');
-const { get, set, CACHE_KEYS, TTL } = require('../utils/cache');
+const { get, set, del, CACHE_KEYS, TTL } = require('../utils/cache');
+const { DEFAULT_BRANCH, isValidBranchId } = require('../config/branches');
 
-// Add stats cache key
-const STATS_CACHE_KEY = 'stats:global';
+// Stats cache TTL
 const STATS_TTL = 60; // 1 minute cache
 
 /**
  * @route   GET /api/stats
- * @desc    Get global statistics including average wait time
+ * @desc    Get statistics for a branch including average wait time
+ * @query   branchId - Branch to get stats for
  * @access  Public
  */
 router.get('/', async (req, res) => {
   try {
+    const { branchId } = req.query;
+    
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    // Generate branch-specific cache key
+    const cacheKey = `stats:${effectiveBranchId}`;
+
     // Check cache first
-    const cachedStats = get(STATS_CACHE_KEY);
+    const cachedStats = get(cacheKey);
     if (cachedStats) {
       res.set('X-Cache', 'HIT');
       return res.json(cachedStats);
     }
 
-    // Get or create global stats
-    const stats = await Stats.getGlobalStats();
+    // Get or create stats for this branch
+    const stats = await Stats.getGlobalStats(effectiveBranchId);
 
     const response = {
       success: true,
       data: {
+        branchId: effectiveBranchId,
         averageWaitTimeMs: stats.averageWaitTimeMs,
         completedOrdersCount: stats.completedOrdersCount,
         totalWaitTimeMs: stats.totalWaitTimeMs,
@@ -35,7 +45,7 @@ router.get('/', async (req, res) => {
     };
 
     // Cache the response
-    set(STATS_CACHE_KEY, response, STATS_TTL);
+    set(cacheKey, response, STATS_TTL);
     res.set('X-Cache', 'MISS');
 
     res.json(response);
@@ -50,15 +60,22 @@ router.get('/', async (req, res) => {
 
 /**
  * @route   POST /api/stats/recalculate
- * @desc    Recalculate stats from all completed orders (admin utility)
+ * @desc    Recalculate stats from all completed orders for a branch (admin utility)
+ * @body    { branchId } - Optional branch to recalculate stats for
  * @access  Private (should be protected in production)
  */
 router.post('/recalculate', async (req, res) => {
   try {
+    const { branchId } = req.body;
+    
+    // Use provided branchId or default
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
     const Order = require('../models/Order');
     
-    // Find all orders that have been fully served (have allItemsServedAt set)
+    // Find all orders for this branch that have been fully served
     const completedOrders = await Order.find({
+      branchId: effectiveBranchId,
       allItemsServedAt: { $exists: true, $ne: null }
     });
 
@@ -75,9 +92,9 @@ router.post('/recalculate', async (req, res) => {
       }
     });
 
-    // Update stats
+    // Update stats for this branch
     const stats = await Stats.findOneAndUpdate(
-      { key: 'global' },
+      { key: 'global', branchId: effectiveBranchId },
       {
         $set: {
           totalWaitTimeMs,
@@ -88,14 +105,14 @@ router.post('/recalculate', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Invalidate cache
-    const { del } = require('../utils/cache');
-    del(STATS_CACHE_KEY);
+    // Invalidate cache for this branch
+    del(`stats:${effectiveBranchId}`);
 
     res.json({
       success: true,
       message: 'Stats recalculated successfully',
       data: {
+        branchId: effectiveBranchId,
         averageWaitTimeMs: stats.averageWaitTimeMs,
         completedOrdersCount: stats.completedOrdersCount,
         totalWaitTimeMs: stats.totalWaitTimeMs,

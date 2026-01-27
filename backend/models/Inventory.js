@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
+const { DEFAULT_BRANCH, VALID_BRANCH_IDS } = require('../config/branches');
 
 /**
  * Inventory Schema
  * Represents an inventory item in the restaurant
+ * Now supports per-branch inventory tracking
  */
 const inventorySchema = new mongoose.Schema(
   {
@@ -11,6 +13,13 @@ const inventorySchema = new mongoose.Schema(
       required: [true, 'Item name is required'],
       trim: true,
       maxlength: [100, 'Name cannot be more than 100 characters']
+    },
+    branchId: {
+      type: String,
+      required: true,
+      enum: VALID_BRANCH_IDS,
+      default: DEFAULT_BRANCH.id,
+      index: true
     },
     quantity: {
       type: Number,
@@ -73,8 +82,9 @@ const inventorySchema = new mongoose.Schema(
 );
 
 // Index for faster queries
-inventorySchema.index({ category: 1 });
-inventorySchema.index({ name: 1 });
+inventorySchema.index({ branchId: 1, category: 1 });
+inventorySchema.index({ branchId: 1, name: 1 });
+inventorySchema.index({ category: 1 }); // Keep for backward compatibility
 
 // Virtual for stock status
 inventorySchema.virtual('stockStatus').get(function() {

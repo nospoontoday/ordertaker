@@ -3,6 +3,8 @@
  * Handles all HTTP requests to the backend API
  */
 
+import { BranchId } from './branches';
+
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 const SERVER_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -385,9 +387,10 @@ export const getImageUrl = (imagePath: string): string => {
 export const ordersApi = {
   /**
    * Get all orders
-   * @param filters - Optional filters (isPaid, status, customerName, limit)
+   * @param filters - Optional filters (branchId, isPaid, status, customerName, limit)
    */
   getAll: async (filters?: {
+    branchId?: BranchId;
     isPaid?: boolean;
     status?: string;
     customerName?: string;
@@ -396,6 +399,7 @@ export const ordersApi = {
     sortOrder?: 'asc' | 'desc';
   }): Promise<Order[]> => {
     const params = new URLSearchParams();
+    if (filters?.branchId) params.append('branchId', filters.branchId);
     if (filters?.isPaid !== undefined) params.append('isPaid', String(filters.isPaid));
     if (filters?.status) params.append('status', filters.status);
     if (filters?.customerName) params.append('customerName', filters.customerName);
@@ -423,6 +427,7 @@ export const ordersApi = {
    */
   create: async (order: {
     id: string;
+    branchId?: BranchId;
     customerName: string;
     items: OrderItem[];
     createdAt?: number;
@@ -711,6 +716,7 @@ export const withdrawalsApi = {
    * @param filters - Optional filters (type, startDate, endDate, limit)
    */
   getAll: async (filters?: {
+    branchId?: BranchId;
     type?: "withdrawal" | "purchase";
     startDate?: number;
     endDate?: number;
@@ -719,6 +725,7 @@ export const withdrawalsApi = {
     sortOrder?: "asc" | "desc";
   }): Promise<Withdrawal[]> => {
     const params = new URLSearchParams();
+    if (filters?.branchId) params.append("branchId", filters.branchId);
     if (filters?.type) params.append("type", filters.type);
     if (filters?.startDate !== undefined) params.append("startDate", String(filters.startDate));
     if (filters?.endDate !== undefined) params.append("endDate", String(filters.endDate));
@@ -745,6 +752,7 @@ export const withdrawalsApi = {
    * Create a new withdrawal or purchase
    */
   create: async (withdrawal: {
+    branchId?: BranchId;
     type: "withdrawal" | "purchase";
     amount: number;
     description: string;
@@ -841,7 +849,7 @@ export const dailySalesApi = {
   /**
    * Get daily sales summaries with pagination
    */
-  getDailySales: async (page: number = 1, limit: number = 10): Promise<{
+  getDailySales: async (page: number = 1, limit: number = 10, branchId?: BranchId): Promise<{
     data: DailySalesSummary[];
     pagination: {
       page: number;
@@ -853,6 +861,7 @@ export const dailySalesApi = {
     const params = new URLSearchParams();
     params.append("page", String(page));
     params.append("limit", String(limit));
+    if (branchId) params.append("branchId", branchId);
 
     const response = await apiCall<{
       data: DailySalesSummary[];
@@ -1049,10 +1058,15 @@ export interface BusinessInsights {
 
 export const insightsApi = {
   /**
-   * Get comprehensive business intelligence insights
+   * Get comprehensive business intelligence insights for a branch
    */
-  getInsights: async (): Promise<BusinessInsights> => {
-    const response = await apiCall<BusinessInsights>('/orders/insights');
+  getInsights: async (branchId?: BranchId): Promise<BusinessInsights> => {
+    const params = new URLSearchParams();
+    if (branchId) params.append('branchId', branchId);
+    const queryString = params.toString();
+    const endpoint = `/orders/insights${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await apiCall<BusinessInsights>(endpoint);
     return response.data || {
       executiveSummary: [],
       productPerformance: {
@@ -1111,10 +1125,15 @@ export interface StatsData {
 // Stats API
 export const statsApi = {
   /**
-   * Get global statistics including historical average wait time
+   * Get statistics for a branch including historical average wait time
    */
-  get: async (): Promise<StatsData> => {
-    const response = await apiCall<StatsData>('/stats');
+  get: async (branchId?: BranchId): Promise<StatsData> => {
+    const params = new URLSearchParams();
+    if (branchId) params.append('branchId', branchId);
+    const queryString = params.toString();
+    const endpoint = `/stats${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await apiCall<StatsData>(endpoint);
     return response.data || {
       averageWaitTimeMs: 0,
       completedOrdersCount: 0,
@@ -1124,11 +1143,12 @@ export const statsApi = {
   },
 
   /**
-   * Recalculate stats from all completed orders (admin utility)
+   * Recalculate stats from all completed orders for a branch (admin utility)
    */
-  recalculate: async (): Promise<StatsData> => {
+  recalculate: async (branchId?: BranchId): Promise<StatsData> => {
     const response = await apiCall<StatsData>('/stats/recalculate', {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify({ branchId })
     });
     return response.data || {
       averageWaitTimeMs: 0,

@@ -26,6 +26,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow } from "date-fns"
 import { useAuth } from "@/contexts/auth-context"
+import { useBranch } from "@/contexts/branch-context"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -106,6 +107,7 @@ export function InventoryManagement() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const { toast } = useToast()
   const { user } = useAuth()
+  const { currentBranch } = useBranch()
 
   // Last touch confirmation state
   const [confirmationItem, setConfirmationItem] = useState<{
@@ -139,10 +141,10 @@ export function InventoryManagement() {
   const [imagePreview, setImagePreview] = useState<string>("")
   const [uploadingImage, setUploadingImage] = useState(false)
 
-  // Load items from API
+  // Load items from API when branch changes
   useEffect(() => {
     loadItems()
-  }, [])
+  }, [currentBranch.id])
 
   // Filter items based on search, category, and stock status
   useEffect(() => {
@@ -200,7 +202,7 @@ export function InventoryManagement() {
   const loadItems = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch(`${API_URL}/inventory`)
+      const response = await fetch(`${API_URL}/inventory?branchId=${currentBranch.id}`)
       if (!response.ok) {
         throw new Error('Failed to fetch inventory items')
       }
@@ -312,6 +314,7 @@ export function InventoryManagement() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          branchId: currentBranch.id,
           name: newItem.name.trim(),
           quantity: newItem.quantity,
           unit: newItem.unit,
