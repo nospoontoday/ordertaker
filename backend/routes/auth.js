@@ -87,7 +87,8 @@ router.post('/login', async (req, res) => {
       email: user.email,
       role: user.role,
       name: user.name,
-      branches: user.branches
+      branches: user.branches,
+      preferredBranch: user.preferredBranch
     });
 
     res.json({
@@ -97,7 +98,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         name: user.name,
-        branches: user.branches || ['pangabugan', 'baan'] // Default to all branches for backward compat
+        branches: user.branches || ['pangabugan', 'baan'], // Default to all branches for backward compat
+        preferredBranch: user.preferredBranch || null
       },
       message: 'Login successful'
     });
@@ -135,6 +137,71 @@ router.get('/me', async (req, res) => {
     success: false,
     error: 'Not implemented yet'
   });
+});
+
+/**
+ * @route   PATCH /api/auth/preferred-branch
+ * @desc    Update user's preferred branch
+ * @body    { userId, preferredBranch }
+ * @access  Public (should be authenticated in production)
+ */
+router.patch('/preferred-branch', async (req, res) => {
+  try {
+    const { userId, preferredBranch } = req.body;
+
+    // Validation
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account has been deactivated'
+      });
+    }
+
+    // Validate that preferredBranch is in user's allowed branches
+    if (preferredBranch && !user.branches.includes(preferredBranch)) {
+      return res.status(400).json({
+        success: false,
+        error: 'You can only set a preferred branch from your accessible branches'
+      });
+    }
+
+    // Update preferred branch
+    user.preferredBranch = preferredBranch || null;
+    await user.save();
+
+    console.log(`[PREFERRED-BRANCH] Updated for user ${user.email}: ${preferredBranch || 'cleared'}`);
+
+    res.json({
+      success: true,
+      data: {
+        preferredBranch: user.preferredBranch
+      },
+      message: preferredBranch ? 'Preferred branch updated successfully' : 'Preferred branch cleared'
+    });
+  } catch (error) {
+    console.error('Error updating preferred branch:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update preferred branch'
+    });
+  }
 });
 
 /**

@@ -2,11 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react"
 
+import type { BranchId } from "@/lib/branches"
+
 interface User {
   id: string
   email: string
   role: "super_admin" | "order_taker" | "crew" | "order_taker_crew"
   name: string
+  preferredBranch: BranchId | null
 }
 
 interface AuthContextType {
@@ -16,6 +19,7 @@ interface AuthContextType {
   register: (email: string, password: string, role: "order_taker" | "crew" | "order_taker_crew", name?: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   changePassword: (email: string, currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
+  setPreferredBranch: (branchId: BranchId | null) => Promise<{ success: boolean; error?: string }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -87,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: data.data.email,
         role: data.data.role,
         name: data.data.name,
+        preferredBranch: data.data.preferredBranch || null,
       }
       
       // Wrap localStorage in try-catch for mobile browser issues
@@ -175,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: data.data.email,
         role: data.data.role,
         name: data.data.name,
+        preferredBranch: data.data.preferredBranch || null,
       }
       
       // Wrap localStorage in try-catch for mobile browser issues
@@ -258,8 +264,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const setPreferredBranch = async (
+    branchId: BranchId | null
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (!user) {
+      return { success: false, error: "Not logged in" }
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/preferred-branch`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.id, preferredBranch: branchId }),
+      })
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to set preferred branch'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          errorMessage = response.statusText || errorMessage
+        }
+        return { success: false, error: errorMessage }
+      }
+
+      const data = await response.json()
+
+      // Update user in state and localStorage
+      const updatedUser: User = {
+        ...user,
+        preferredBranch: data.data.preferredBranch,
+      }
+      
+      try {
+        setUser(updatedUser)
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedUser))
+      } catch (storageError) {
+        console.error("localStorage error:", storageError)
+        setUser(updatedUser)
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error("Set preferred branch error:", error)
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return { success: false, error: "Network error. Please check your connection." }
+      }
+      return { success: false, error: "Failed to set preferred branch. Please try again." }
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, changePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, changePassword, setPreferredBranch }}>
       {children}
     </AuthContext.Provider>
   )

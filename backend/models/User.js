@@ -46,6 +46,18 @@ const userSchema = new mongoose.Schema(
         },
         message: 'User must have access to at least one branch'
       }
+    },
+    preferredBranch: {
+      type: String,
+      enum: [...VALID_BRANCH_IDS, null],
+      default: null,
+      validate: {
+        validator: function(branch) {
+          // Preferred branch must be in user's allowed branches
+          return !branch || this.branches.includes(branch);
+        },
+        message: 'Preferred branch must be one of your accessible branches'
+      }
     }
   },
   {
