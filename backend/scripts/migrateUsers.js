@@ -5,8 +5,8 @@ const User = require('../models/User');
 
 /**
  * Migration Script - Update User Roles and Add New Users
- * - Updates Allen and Jowicks to order_taker_crew
- * - Creates Jay and Baan 1 as order_taker_crew
+ * - Updates Allen, Jowicks, Jay, Baan 1 to 'staff' role
+ * - Creates users if they don't exist
  * Safe to run multiple times (idempotent)
  */
 
@@ -48,53 +48,39 @@ const migrateUsers = async () => {
     const STATIC_PASSWORD = '123456';
 
     // ========================================
-    // PART 1: Update existing users' roles
+    // Update/Create users with 'staff' role
     // ========================================
-    console.log('Part 1: Updating existing user roles...\n');
+    console.log('Updating users to staff role...\n');
 
-    const usersToUpdate = [
-      { email: 'allen@mail.com', name: 'Allen', newRole: 'order_taker_crew' },
-      { email: 'jowicks@mail.com', name: 'Jowicks', newRole: 'order_taker_crew' }
+    const staffUsers = [
+      { email: 'allen@mail.com', name: 'Allen' },
+      { email: 'jowicks@mail.com', name: 'Jowicks' },
+      { email: 'jay@mail.com', name: 'Jay' },
+      { email: 'baan1@mail.com', name: 'Baan 1' }
     ];
 
-    for (const user of usersToUpdate) {
-      const result = await User.findOneAndUpdate(
-        { email: user.email },
-        { $set: { role: user.newRole } },
-        { new: true }
-      );
-
-      if (result) {
-        console.log(`✓ Updated ${user.name} (${user.email}) → role: ${user.newRole}`);
-      } else {
-        console.log(`⚠ User ${user.email} not found - skipping update`);
-      }
-    }
-
-    // ========================================
-    // PART 2: Create new users if not exists
-    // ========================================
-    console.log('\nPart 2: Creating new users...\n');
-
-    const newUsers = [
-      { email: 'jay@mail.com', name: 'Jay', role: 'order_taker_crew' },
-      { email: 'baan1@mail.com', name: 'Baan 1', role: 'order_taker_crew' }
-    ];
-
-    for (const userData of newUsers) {
+    for (const userData of staffUsers) {
       const existingUser = await User.findOne({ email: userData.email });
       
       if (existingUser) {
-        console.log(`⊘ User ${userData.email} already exists - skipping`);
+        // Update existing user's role to staff
+        await User.findOneAndUpdate(
+          { email: userData.email },
+          { $set: { role: 'staff' } },
+          { new: true }
+        );
+        console.log(`✓ Updated ${userData.name} (${userData.email}) → role: staff`);
       } else {
+        // Create new user with staff role
         const hashedPassword = await bcrypt.hash(STATIC_PASSWORD, salt);
         const user = new User({
           ...userData,
+          role: 'staff',
           password: hashedPassword,
           isActive: true
         });
         await user.save();
-        console.log(`✓ Created user: ${userData.email} (${userData.role})`);
+        console.log(`✓ Created user: ${userData.email} (staff)`);
       }
     }
 
@@ -103,11 +89,11 @@ const migrateUsers = async () => {
     console.log('========================================\n');
 
     console.log('Summary:');
-    console.log('- Allen: updated to order_taker_crew');
-    console.log('- Jowicks: updated to order_taker_crew');
-    console.log('- Jay: created as order_taker_crew');
-    console.log('- Baan 1: created as order_taker_crew');
-    console.log('\nAll new user passwords: 123456');
+    console.log('- Allen: staff role');
+    console.log('- Jowicks: staff role');
+    console.log('- Jay: staff role');
+    console.log('- Baan 1: staff role');
+    console.log('\nAll user passwords: 123456');
 
   } catch (error) {
     console.error('\n❌ Error during migration:', error);

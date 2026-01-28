@@ -55,8 +55,8 @@ export default function DTRHistoryPage() {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1)
 
-  // Check if user is crew
-  const isCrew = user?.role === 'crew' || user?.role === 'order_taker_crew'
+  // Check if user is crew (crew, order_taker_crew, or staff can use DTR)
+  const isCrew = user?.role === 'crew' || user?.role === 'order_taker_crew' || user?.role === 'staff'
 
   useEffect(() => {
     if (!authLoading && !user) {

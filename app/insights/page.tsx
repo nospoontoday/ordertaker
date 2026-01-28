@@ -51,8 +51,8 @@ export default function InsightsPage() {
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  // Check if user can access (all roles except crew)
-  const canAccess = user?.role !== "crew"
+  // Check if user can access (all roles except crew and staff)
+  const canAccess = user?.role !== "crew" && user?.role !== "staff"
 
   useEffect(() => {
     setMounted(true)

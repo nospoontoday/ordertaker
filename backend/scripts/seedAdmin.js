@@ -100,34 +100,34 @@ const seedUsers = async () => {
       isActive: true
     }, passwords.krisnela);
 
-    // 4. Jowicks - Order Taker + Crew
+    // 4. Jowicks - Staff
     const jowicks = await createUserIfNotExists({
       email: 'jowicks@mail.com',
-      role: 'order_taker_crew',
+      role: 'staff',
       name: 'Jowicks',
       isActive: true
     }, passwords.jowicks);
 
-    // 5. Allen - Order Taker + Crew
+    // 5. Allen - Staff
     const allen = await createUserIfNotExists({
       email: 'allen@mail.com',
-      role: 'order_taker_crew',
+      role: 'staff',
       name: 'Allen',
       isActive: true
     }, passwords.allen);
 
-    // 6. Jay - Order Taker + Crew
+    // 6. Jay - Staff
     const jay = await createUserIfNotExists({
       email: 'jay@mail.com',
-      role: 'order_taker_crew',
+      role: 'staff',
       name: 'Jay',
       isActive: true
     }, passwords.jay);
 
-    // 7. Baan 1 - Order Taker + Crew
+    // 7. Baan 1 - Staff
     const baan1 = await createUserIfNotExists({
       email: 'baan1@mail.com',
-      role: 'order_taker_crew',
+      role: 'staff',
       name: 'Baan 1',
       isActive: true
     }, passwords.baan1);
@@ -147,19 +147,19 @@ const seedUsers = async () => {
     console.log(`   Email: ${krisnela.email}`);
     console.log(`   Password: ${passwords.krisnela}`);
     console.log('');
-    console.log(`4. Jowicks (Order Taker + Crew)`);
+    console.log(`4. Jowicks (Staff)`);
     console.log(`   Email: ${jowicks.email}`);
     console.log(`   Password: ${passwords.jowicks}`);
     console.log('');
-    console.log(`5. Allen (Order Taker + Crew)`);
+    console.log(`5. Allen (Staff)`);
     console.log(`   Email: ${allen.email}`);
     console.log(`   Password: ${passwords.allen}`);
     console.log('');
-    console.log(`6. Jay (Order Taker + Crew)`);
+    console.log(`6. Jay (Staff)`);
     console.log(`   Email: ${jay.email}`);
     console.log(`   Password: ${passwords.jay}`);
     console.log('');
-    console.log(`7. Baan 1 (Order Taker + Crew)`);
+    console.log(`7. Baan 1 (Staff)`);
     console.log(`   Email: ${baan1.email}`);
     console.log(`   Password: ${passwords.baan1}`);
     console.log('');

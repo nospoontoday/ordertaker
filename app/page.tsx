@@ -39,10 +39,12 @@ export default function Home() {
 
   // Role-based permission checks
   const isCrew = user?.role === "crew"
-  const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew"
+  const isStaff = user?.role === "staff"
+  const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew" || user?.role === "staff"
   const canAccessAdmin = user?.role === "super_admin"
   const canAccessPastOrders = user?.role === "super_admin" || user?.role === "order_taker" || user?.role === "order_taker_crew"
-  const isOrderTakerCrew = user?.role === "order_taker_crew"
+  const canAccessReports = user?.role === "super_admin" || user?.role === "order_taker" || user?.role === "order_taker_crew"
+  const isOrderTakerCrew = user?.role === "order_taker_crew" || user?.role === "staff"
 
   useEffect(() => {
     setMounted(true)
@@ -158,24 +160,25 @@ export default function Home() {
               <span className="text-sm text-slate-600">{user?.email}</span>
               <div className="h-6 w-px bg-slate-300" />
 
-              {isCrew && (
+              {(isCrew || isStaff) && (
                 <Button variant="outline" onClick={() => router.push("/dtr")}>
                   <Clock className="h-4 w-4 mr-2" />
                   DTR
                 </Button>
               )}
 
+              {canAccessReports && (
+                <Button variant="outline" onClick={() => router.push("/sales-reports")}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Sales
+                </Button>
+              )}
+
               {!isCrew && (
-                <>
-                  <Button variant="outline" onClick={() => router.push("/sales-reports")}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Sales
-                  </Button>
-                  <Button variant="outline" onClick={() => router.push("/inventory")}>
-                    <Package className="h-4 w-4 mr-2" />
-                    Inventory
-                  </Button>
-                </>
+                <Button variant="outline" onClick={() => router.push("/inventory")}>
+                  <Package className="h-4 w-4 mr-2" />
+                  Inventory
+                </Button>
               )}
 
               {/* More Actions Dropdown */}
@@ -186,7 +189,7 @@ export default function Home() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  {!isCrew && (
+                  {canAccessReports && (
                     <>
                       <DropdownMenuItem onClick={() => router.push("/insights")}>
                         <Lightbulb className="h-4 w-4 mr-2" />
@@ -196,11 +199,13 @@ export default function Home() {
                         <BarChart3 className="h-4 w-4 mr-2" />
                         Statistics
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push("/withdrawals")}>
-                        <Wallet className="h-4 w-4 mr-2" />
-                        Withdrawals
-                      </DropdownMenuItem>
                     </>
+                  )}
+                  {!isCrew && (
+                    <DropdownMenuItem onClick={() => router.push("/withdrawals")}>
+                      <Wallet className="h-4 w-4 mr-2" />
+                      Withdrawals
+                    </DropdownMenuItem>
                   )}
                   {canAccessAdmin && (
                     <>
@@ -214,7 +219,7 @@ export default function Home() {
                       </DropdownMenuItem>
                     </>
                   )}
-                  {(!isCrew || canAccessAdmin) && <DropdownMenuSeparator />}
+                  {(canAccessReports || !isCrew || canAccessAdmin) && <DropdownMenuSeparator />}
                   <DropdownMenuItem onClick={() => router.push("/change-password")}>
                     <KeyRound className="h-4 w-4 mr-2" />
                     Change Password
@@ -263,20 +268,21 @@ export default function Home() {
                       <span className="sr-only">Open menu</span>
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                  <SheetContent side="right" className="w-[300px] sm:w-[400px] flex flex-col">
                     <SheetHeader>
                       <SheetTitle>Menu</SheetTitle>
                       <SheetDescription className="text-xs">
                         {user?.email}
                       </SheetDescription>
                     </SheetHeader>
-                    <div className="mt-6 mb-4">
-                      <p className="text-xs text-muted-foreground mb-2">Current Branch</p>
-                      <BranchSelector variant="default" className="w-full" />
-                    </div>
-                    <Separator className="my-4" />
-                    <div className="space-y-2">
-                      {!isCrew && (
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="mt-6 mb-4">
+                        <p className="text-xs text-muted-foreground mb-2">Current Branch</p>
+                        <BranchSelector variant="default" className="w-full" />
+                      </div>
+                      <Separator className="my-4" />
+                      <div className="space-y-2">
+                      {canAccessReports && (
                         <>
                           <Button
                             variant="ghost"
@@ -310,6 +316,10 @@ export default function Home() {
                             <BarChart3 className="h-5 w-5 mr-3" />
                             Statistics
                           </Button>
+                        </>
+                      )}
+                      {!isCrew && (
+                        <>
                           <Button
                             variant="ghost"
                             className="w-full justify-start h-12"
@@ -340,7 +350,7 @@ export default function Home() {
                           </Button>
                         </SheetClose>
                       )}
-                      {isCrew && (
+                      {(isCrew || isStaff) && (
                         <Button
                           variant="ghost"
                           className="w-full justify-start h-12"
@@ -387,6 +397,7 @@ export default function Home() {
                         <LogOut className="h-5 w-5 mr-3" />
                         Logout
                       </Button>
+                      </div>
                     </div>
                   </SheetContent>
                 </Sheet>

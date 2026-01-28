@@ -4,7 +4,7 @@ const { VALID_BRANCH_IDS } = require('../config/branches');
 /**
  * User Schema
  * Represents a user in the system with role-based access
- * Roles: super_admin, order_taker, crew, order_taker_crew
+ * Roles: super_admin, order_taker, crew, order_taker_crew, staff
  * Users can belong to multiple branches
  */
 const userSchema = new mongoose.Schema(
@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['super_admin', 'order_taker', 'crew', 'order_taker_crew'],
+      enum: ['super_admin', 'order_taker', 'crew', 'order_taker_crew', 'staff'],
       default: 'crew',
       required: true
     },
@@ -80,12 +80,12 @@ userSchema.methods.isAdmin = function() {
 
 // Instance method to check if user is order taker
 userSchema.methods.isOrderTaker = function() {
-  return this.role === 'order_taker' || this.role === 'order_taker_crew';
+  return this.role === 'order_taker' || this.role === 'order_taker_crew' || this.role === 'staff';
 };
 
 // Instance method to check if user is crew
 userSchema.methods.isCrew = function() {
-  return this.role === 'crew' || this.role === 'order_taker_crew';
+  return this.role === 'crew' || this.role === 'order_taker_crew' || this.role === 'staff';
 };
 
 // Instance method to check if user has access to a specific branch

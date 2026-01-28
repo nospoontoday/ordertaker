@@ -250,11 +250,13 @@ export function CrewDashboard({
   // Order Taker: Can take orders, mark as paid, append items, delete orders/items
   // Crew: Can ONLY update item status (pending → preparing → ready)
   // Order Taker + Crew: Can do both (status updates + payments/deletes/appends/mark served)
+  // Staff: Can do order taker + crew tasks BUT cannot delete orders or access reports
   // Super Admin: Has all permissions
-  const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew"
-  const isCrew = user?.role === "crew" || user?.role === "order_taker_crew" || user?.role === "super_admin"
+  const isOrderTaker = user?.role === "order_taker" || user?.role === "super_admin" || user?.role === "order_taker_crew" || user?.role === "staff"
+  const isCrew = user?.role === "crew" || user?.role === "order_taker_crew" || user?.role === "super_admin" || user?.role === "staff"
+  const isStaff = user?.role === "staff"
   const canManagePayments = isOrderTaker
-  const canDeleteOrders = isOrderTaker
+  const canDeleteOrders = isOrderTaker && !isStaff
   const canAppendItems = isOrderTaker
 
   // WebSocket real-time event handlers - memoized to prevent unnecessary re-registrations

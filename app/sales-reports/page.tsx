@@ -33,8 +33,8 @@ export default function SalesReportsPage() {
   const [showAnalytics, setShowAnalytics] = useState(true)
   const [allDailySales, setAllDailySales] = useState<DailySalesSummary[]>([])
 
-  // Check if user can access (all roles except crew)
-  const canAccess = user?.role !== "crew"
+  // Check if user can access (all roles except crew and staff)
+  const canAccess = user?.role !== "crew" && user?.role !== "staff"
   // Check if user is super admin
   const isSuperAdmin = user?.role === "super_admin"
 

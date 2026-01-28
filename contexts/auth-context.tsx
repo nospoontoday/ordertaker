@@ -7,7 +7,7 @@ import type { BranchId } from "@/lib/branches"
 interface User {
   id: string
   email: string
-  role: "super_admin" | "order_taker" | "crew" | "order_taker_crew"
+  role: "super_admin" | "order_taker" | "crew" | "order_taker_crew" | "staff"
   name: string
   preferredBranch: BranchId | null
 }
@@ -16,7 +16,7 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  register: (email: string, password: string, role: "order_taker" | "crew" | "order_taker_crew", name?: string) => Promise<{ success: boolean; error?: string }>
+  register: (email: string, password: string, role: "order_taker" | "crew" | "order_taker_crew" | "staff", name?: string) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   changePassword: (email: string, currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
   setPreferredBranch: (branchId: BranchId | null) => Promise<{ success: boolean; error?: string }>
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (
     email: string,
     password: string,
-    role: "order_taker" | "crew" | "order_taker_crew",
+    role: "order_taker" | "crew" | "order_taker_crew" | "staff",
     name?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
