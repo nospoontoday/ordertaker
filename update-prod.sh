@@ -107,13 +107,23 @@ echo ""
 echo "Step 6: Waiting for services to initialize..."
 sleep 10
 
-echo "Step 7: Verifying services..."
+echo "Step 7: Running user migrations..."
+echo "=========================================="
+docker exec ordertaker-backend node scripts/migrateUsers.js
+if [ $? -eq 0 ]; then
+    echo "✓ User migrations completed successfully"
+else
+    echo "⚠️  User migration had issues (may already be applied)"
+fi
+echo ""
+
+echo "Step 8: Verifying services..."
 echo "=========================================="
 docker compose -f docker-compose.prod.yml ps
 echo "✓ Services verified"
 echo ""
 
-echo "Step 8: Verifying Nginx configuration..."
+echo "Step 9: Verifying Nginx configuration..."
 echo "=========================================="
 if nginx -t 2>/dev/null; then
     echo "✓ Nginx configuration is valid"

@@ -53,7 +53,9 @@ const seedUsers = async () => {
       elwin: STATIC_PASSWORD,
       krisnela: STATIC_PASSWORD,
       jowicks: STATIC_PASSWORD,
-      allen: STATIC_PASSWORD
+      allen: STATIC_PASSWORD,
+      jay: STATIC_PASSWORD,
+      baan1: STATIC_PASSWORD
     };
 
     // Helper function to create user if not exists
@@ -98,21 +100,37 @@ const seedUsers = async () => {
       isActive: true
     }, passwords.krisnela);
 
-    // 4. Jowicks - Crew
+    // 4. Jowicks - Order Taker + Crew
     const jowicks = await createUserIfNotExists({
       email: 'jowicks@mail.com',
-      role: 'crew',
+      role: 'order_taker_crew',
       name: 'Jowicks',
       isActive: true
     }, passwords.jowicks);
 
-    // 5. Allen - Crew
+    // 5. Allen - Order Taker + Crew
     const allen = await createUserIfNotExists({
       email: 'allen@mail.com',
-      role: 'crew',
+      role: 'order_taker_crew',
       name: 'Allen',
       isActive: true
     }, passwords.allen);
+
+    // 6. Jay - Order Taker + Crew
+    const jay = await createUserIfNotExists({
+      email: 'jay@mail.com',
+      role: 'order_taker_crew',
+      name: 'Jay',
+      isActive: true
+    }, passwords.jay);
+
+    // 7. Baan 1 - Order Taker + Crew
+    const baan1 = await createUserIfNotExists({
+      email: 'baan1@mail.com',
+      role: 'order_taker_crew',
+      name: 'Baan 1',
+      isActive: true
+    }, passwords.baan1);
 
     console.log('\n✓ User seeding completed successfully\n');
     console.log('User Credentials:');
@@ -129,13 +147,21 @@ const seedUsers = async () => {
     console.log(`   Email: ${krisnela.email}`);
     console.log(`   Password: ${passwords.krisnela}`);
     console.log('');
-    console.log(`4. Jowicks (Crew)`);
+    console.log(`4. Jowicks (Order Taker + Crew)`);
     console.log(`   Email: ${jowicks.email}`);
     console.log(`   Password: ${passwords.jowicks}`);
     console.log('');
-    console.log(`5. Allen (Crew)`);
+    console.log(`5. Allen (Order Taker + Crew)`);
     console.log(`   Email: ${allen.email}`);
     console.log(`   Password: ${passwords.allen}`);
+    console.log('');
+    console.log(`6. Jay (Order Taker + Crew)`);
+    console.log(`   Email: ${jay.email}`);
+    console.log(`   Password: ${passwords.jay}`);
+    console.log('');
+    console.log(`7. Baan 1 (Order Taker + Crew)`);
+    console.log(`   Email: ${baan1.email}`);
+    console.log(`   Password: ${passwords.baan1}`);
     console.log('');
     console.log('⚠️  IMPORTANT: Save these passwords securely!');
     console.log('⚠️  Users should change their passwords after first login!');
