@@ -473,6 +473,8 @@ export function CrewDashboard({
     const fetchStats = async () => {
       try {
         const stats = await statsApi.get(currentBranch.id)
+        console.log("[Stats Debug] Fetched stats for branch", currentBranch.id, ":", stats)
+        console.log("[Stats Debug] averageWaitTimeMs:", stats.averageWaitTimeMs)
         setHistoricalAverageWaitTimeMs(stats.averageWaitTimeMs || 0)
       } catch (error) {
         console.error("Failed to fetch stats:", error)

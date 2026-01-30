@@ -173,10 +173,14 @@ class OrderDB {
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(['orders'], 'readonly');
       const store = transaction.objectStore('orders');
-      const index = store.index('synced');
-      const request = index.getAll(IDBKeyRange.only(false));
+      const request = store.getAll();
 
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        // Filter for unsynced orders (synced === false or synced is undefined)
+        const allOrders = request.result || [];
+        const unsyncedOrders = allOrders.filter(order => !order.synced);
+        resolve(unsyncedOrders);
+      };
       request.onerror = () => reject(request.error);
     });
   }

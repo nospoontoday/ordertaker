@@ -61,6 +61,11 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [isCollapsed, setIsCollapsed] = useState(false)
 
+  // Debug logging
+  useEffect(() => {
+    console.log("[WaitingCustomers Debug] historicalAverageWaitTimeMs received:", historicalAverageWaitTimeMs)
+  }, [historicalAverageWaitTimeMs])
+
   // Update current time every second for live timer
   useEffect(() => {
     const interval = setInterval(() => {
@@ -153,17 +158,10 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
     return customers.sort((a, b) => a.createdAt - b.createdAt)
   }, [orders, currentTime])
 
-  // Use historical average if provided, otherwise fall back to current waiting customers average
+  // Use only historical average from completed orders (no fallback to current waiting customers)
   const averageWaitTime = useMemo(() => {
-    // Prefer historical average from all completed orders
-    if (historicalAverageWaitTimeMs && historicalAverageWaitTimeMs > 0) {
-      return historicalAverageWaitTimeMs
-    }
-    // Fallback to current waiting customers average
-    if (waitingCustomers.length === 0) return 0
-    const totalWaitTime = waitingCustomers.reduce((sum, c) => sum + c.waitTimeMs, 0)
-    return totalWaitTime / waitingCustomers.length
-  }, [waitingCustomers, historicalAverageWaitTimeMs])
+    return historicalAverageWaitTimeMs ?? 0
+  }, [historicalAverageWaitTimeMs])
 
   // Format duration as "Xm Ys"
   const formatWaitTime = (ms: number): string => {
