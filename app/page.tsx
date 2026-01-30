@@ -8,7 +8,8 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb, Wallet } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb, Wallet, Globe } from "lucide-react"
+import { OnlineOrderNotification } from "@/components/online-order-notification"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
   Sheet,
@@ -84,10 +85,10 @@ export default function Home() {
     }
   }, [appendingOrderId])
 
-  // Redirect to login if not authenticated
+  // Redirect to customer order page if not authenticated
   useEffect(() => {
     if (mounted && !isLoading && !user) {
-      router.push("/login")
+      router.push("/order")
     }
   }, [mounted, isLoading, user, router])
 
@@ -157,6 +158,8 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <BranchSelector variant="compact" />
               <div className="h-6 w-px bg-slate-300" />
+              <OnlineOrderNotification />
+              <div className="h-6 w-px bg-slate-300" />
               <span className="text-sm text-slate-600">{user?.email}</span>
               <div className="h-6 w-px bg-slate-300" />
 
@@ -189,6 +192,10 @@ export default function Home() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => router.push("/online-orders")}>
+                    <Globe className="h-4 w-4 mr-2" />
+                    Online Orders
+                  </DropdownMenuItem>
                   {canAccessReports && (
                     <>
                       <DropdownMenuItem onClick={() => router.push("/insights")}>
@@ -260,6 +267,9 @@ export default function Home() {
                   </Button>
                 )}
 
+                {/* Online Order Notification */}
+                <OnlineOrderNotification />
+
                 {/* Hamburger Menu */}
                 <Sheet>
                   <SheetTrigger asChild>
@@ -282,6 +292,14 @@ export default function Home() {
                       </div>
                       <Separator className="my-4" />
                       <div className="space-y-2">
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start h-12"
+                        onClick={() => router.push("/online-orders")}
+                      >
+                        <Globe className="h-5 w-5 mr-3" />
+                        Online Orders
+                      </Button>
                       {canAccessReports && (
                         <>
                           <Button

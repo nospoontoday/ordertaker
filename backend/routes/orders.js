@@ -176,6 +176,50 @@ router.delete('/all', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/orders/online
+ * @desc    Get all pending online orders
+ * @access  Public
+ */
+router.get('/online', async (req, res) => {
+  try {
+    const orders = await Order.find({
+      orderSource: 'online',
+      onlinePaymentStatus: 'pending'
+    }).sort({ createdAt: -1 });
+
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching online orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch online orders'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/orders/online/count
+ * @desc    Get count of pending online orders
+ * @access  Public
+ */
+router.get('/online/count', async (req, res) => {
+  try {
+    const count = await Order.countDocuments({
+      orderSource: 'online',
+      onlinePaymentStatus: 'pending'
+    });
+
+    res.json({ count });
+  } catch (error) {
+    console.error('Error counting online orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to count online orders'
+    });
+  }
+});
+
+/**
  * @route   GET /api/orders/daily-sales
  * @desc    Get daily sales summaries grouped by date
  * @query   page - Page number (default: 1)
@@ -1373,7 +1417,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, branchId, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount, notes } = req.body;
+    const { id, branchId, customerName, items, createdAt, isPaid, paymentMethod, orderType, appendedOrders, orderTakerName, orderTakerEmail, amountReceived, cashAmount, gcashAmount, notes, orderSource, onlineOrderCode, onlinePaymentStatus, selectedPaymentMethod } = req.body;
 
     // Use provided branchId or default
     const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
@@ -1441,7 +1485,12 @@ router.post('/', async (req, res) => {
       appendedOrders: appendedOrders || [],
       orderTakerName: orderTakerName || null,
       orderTakerEmail: orderTakerEmail || null,
-      notes: notes || []
+      notes: notes || [],
+      // Online order fields
+      orderSource: orderSource || 'counter',
+      onlineOrderCode: onlineOrderCode || null,
+      onlinePaymentStatus: onlinePaymentStatus || null,
+      selectedPaymentMethod: selectedPaymentMethod || null
     });
 
     console.log('🔍 BACKEND DEBUG - Order object before save, notes:', order.notes)
@@ -1458,6 +1507,10 @@ router.post('/', async (req, res) => {
     if (io) {
       setImmediate(() => {
         io.emit('order:created', order.toObject());
+        // Also emit online order event if applicable
+        if (order.orderSource === 'online') {
+          io.emit('online-order:created', order.toObject());
+        }
       });
     }
 
@@ -1480,6 +1533,65 @@ router.post('/', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to create order'
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/orders/:id/confirm-payment
+ * @desc    Confirm payment for an online order
+ * @access  Public
+ */
+router.put('/:id/confirm-payment', async (req, res) => {
+  try {
+    const order = await Order.findOne({ 
+      $or: [{ id: req.params.id }, { _id: req.params.id }]
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    if (order.orderSource !== 'online') {
+      return res.status(400).json({
+        success: false,
+        error: 'This is not an online order'
+      });
+    }
+
+    if (order.onlinePaymentStatus === 'confirmed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment already confirmed'
+      });
+    }
+
+    order.onlinePaymentStatus = 'confirmed';
+    order.isPaid = true;
+    await order.save();
+
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('online-order:confirmed', order.toObject());
+      io.emit('order:updated', order.toObject());
+    }
+
+    // Invalidate cache
+    invalidateOrders();
+
+    res.json({
+      success: true,
+      data: order
+    });
+  } catch (error) {
+    console.error('Error confirming online payment:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to confirm payment'
     });
   }
 });

@@ -287,6 +287,31 @@ const orderSchema = new mongoose.Schema(
         }
       }],
       default: []
+    },
+    // Online order fields
+    orderSource: {
+      type: String,
+      enum: ['counter', 'online'],
+      default: 'counter',
+      index: true
+    },
+    onlineOrderCode: {
+      type: String,
+      required: false,
+      sparse: true,
+      uppercase: true,
+      trim: true,
+      maxlength: [10, 'Order code cannot be more than 10 characters']
+    },
+    onlinePaymentStatus: {
+      type: String,
+      enum: ['pending', 'confirmed', null],
+      default: null
+    },
+    selectedPaymentMethod: {
+      type: String,
+      enum: ['cash', 'gcash', null],
+      default: null
     }
   },
   {
@@ -300,6 +325,8 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ branchId: 1, createdAt: -1, isPaid: 1 });
 orderSchema.index({ branchId: 1, customerName: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1, isPaid: 1 }); // Keep for backward compatibility
+orderSchema.index({ orderSource: 1, onlinePaymentStatus: 1, createdAt: -1 }); // For online orders
+orderSchema.index({ onlineOrderCode: 1 }, { sparse: true }); // For order code lookup
 
 // Virtual for total order amount
 orderSchema.virtual('totalAmount').get(function() {

@@ -118,6 +118,11 @@ export interface Order {
   orderTakerName?: string;
   orderTakerEmail?: string;
   notes?: OrderNote[];
+  // Online order fields
+  orderSource?: "counter" | "online";
+  onlineOrderCode?: string;
+  onlinePaymentStatus?: "pending" | "confirmed" | null;
+  selectedPaymentMethod?: "cash" | "gcash" | null;
 }
 
 export interface ApiResponse<T> {
@@ -441,6 +446,11 @@ export const ordersApi = {
     cashAmount?: number;
     gcashAmount?: number;
     amountReceived?: number;
+    // Online order fields
+    orderSource?: "counter" | "online";
+    onlineOrderCode?: string;
+    onlinePaymentStatus?: "pending" | "confirmed" | null;
+    selectedPaymentMethod?: "cash" | "gcash" | null;
   }): Promise<Order> => {
     const response = await apiCall<Order>('/orders', {
       method: 'POST',
@@ -654,6 +664,39 @@ export const ordersApi = {
       todayOrders: 0,
       totalRevenue: 0
     };
+  },
+
+  /**
+   * Get pending online orders
+   */
+  getOnlineOrders: async (): Promise<Order[]> => {
+    const response = await fetch(`${API_BASE_URL}/orders/online`);
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * Get count of pending online orders
+   */
+  getOnlineOrdersCount: async (): Promise<{ count: number }> => {
+    const response = await fetch(`${API_BASE_URL}/orders/online/count`);
+    const data = await response.json();
+    return data || { count: 0 };
+  },
+
+  /**
+   * Confirm payment for an online order
+   */
+  confirmOnlinePayment: async (orderId: string): Promise<Order> => {
+    const response = await apiCall<Order>(`/orders/${orderId}/confirm-payment`, {
+      method: 'PUT',
+    });
+
+    if (!response.data) {
+      throw new Error('Failed to confirm online payment');
+    }
+
+    return response.data;
   },
 };
 
