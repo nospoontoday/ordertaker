@@ -364,15 +364,29 @@ export function OrderTaker({
       try {
         // Try API first - filter by current branch
         const apiOrders = await ordersApi.getAll({ branchId: currentBranch.id, sortBy: 'createdAt', sortOrder: 'asc' })
-        setOrders(apiOrders)
+        // Filter out unconfirmed online orders - they shouldn't appear until payment is confirmed
+        const filteredOrders = apiOrders.filter((order: any) => {
+          if (order.orderSource === 'online' && order.onlinePaymentStatus !== 'confirmed') {
+            return false
+          }
+          return true
+        })
+        setOrders(filteredOrders)
         // Cache to IndexedDB
-        await orderDB.saveOrders(apiOrders.map((o: any) => ({ ...o, synced: true })))
+        await orderDB.saveOrders(filteredOrders.map((o: any) => ({ ...o, synced: true })))
       } catch (error) {
         console.error("Failed to load orders from API, falling back to IndexedDB:", error)
         // Fallback to IndexedDB if offline
         try {
           const cachedOrders = await orderDB.getAllOrders()
-          setOrders(cachedOrders)
+          // Also filter cached orders
+          const filteredCachedOrders = cachedOrders.filter((order: any) => {
+            if (order.orderSource === 'online' && order.onlinePaymentStatus !== 'confirmed') {
+              return false
+            }
+            return true
+          })
+          setOrders(filteredCachedOrders)
         } catch (dbError) {
           console.error("Failed to load orders from IndexedDB:", dbError)
         }

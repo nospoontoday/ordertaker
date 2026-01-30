@@ -34,6 +34,9 @@ interface Order {
   isPaid: boolean
   orderType?: "dine-in" | "take-out"
   appendedOrders?: AppendedOrder[]
+  // Online order fields
+  orderSource?: "counter" | "online"
+  onlinePaymentStatus?: "pending" | "confirmed" | null
 }
 
 interface UnservedItem {
@@ -80,6 +83,11 @@ export function WaitingCustomersBanner({ orders, historicalAverageWaitTimeMs, ki
     const customers: WaitingCustomer[] = []
 
     orders.forEach((order) => {
+      // Skip online orders that are not yet confirmed by crew
+      if (order.orderSource === 'online' && order.onlinePaymentStatus !== 'confirmed') {
+        return
+      }
+
       // Collect all unserved items from main order and appended orders
       const unservedItemsMap = new Map<string, UnservedItem>()
 

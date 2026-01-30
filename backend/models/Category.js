@@ -24,6 +24,11 @@ const categorySchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    isPublic: {
+      type: Boolean,
+      default: false,
+      description: 'If true, category is visible to online customers. Private categories hide all items within them.'
     }
   },
   {
@@ -35,6 +40,7 @@ const categorySchema = new mongoose.Schema(
 
 // Index for faster queries
 categorySchema.index({ id: 1 });
+categorySchema.index({ isPublic: 1 });
 
 // Pre-save middleware to ensure ID is lowercase
 categorySchema.pre('save', function(next) {

@@ -17,7 +17,9 @@ export interface MenuItem {
   price: number;
   category: string;
   image: string;
+  onlineImage?: string;  // Image shown to online customers (placeholder if empty)
   isBestSeller?: boolean;
+  isPublic?: boolean;    // If true, visible to online customers (default: false)
   owner?: "john" | "elwin";
   createdAt?: string;
   updatedAt?: string;
@@ -28,6 +30,7 @@ export interface Category {
   id: string;
   name: string;
   image: string;
+  isPublic?: boolean;    // If true, visible to online customers (default: false)
   createdAt?: string;
   updatedAt?: string;
 }
@@ -697,6 +700,40 @@ export const ordersApi = {
     }
 
     return response.data;
+  },
+
+  /**
+   * Get order codes currently in use by pending (for approval) online orders
+   * Used to ensure unique code generation - codes can be recycled once confirmed
+   */
+  getPendingOnlineOrderCodes: async (): Promise<string[]> => {
+    const response = await apiCall<string[]>('/orders/online/pending-codes');
+    return response.data || [];
+  },
+
+  /**
+   * Delete a pending online order (before payment confirmation)
+   * Crew members can delete pending online orders
+   */
+  deleteOnlineOrder: async (orderId: string): Promise<void> => {
+    await apiCall(`/orders/online/${orderId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Get orders that are currently being prepared
+   * Returns orders where at least one item has status "preparing"
+   * Excludes pending online orders (not yet confirmed by crew)
+   */
+  getPreparingOrders: async (branchId?: string): Promise<Order[]> => {
+    const params = new URLSearchParams();
+    if (branchId) params.append('branchId', branchId);
+    const queryString = params.toString();
+    const endpoint = `/orders/preparing${queryString ? `?${queryString}` : ''}`;
+
+    const response = await apiCall<Order[]>(endpoint);
+    return response.data || [];
   },
 };
 

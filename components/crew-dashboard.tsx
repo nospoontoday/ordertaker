@@ -85,6 +85,10 @@ interface Order {
   orderTakerName?: string
   orderTakerEmail?: string
   notes?: OrderNote[]
+  // Online order fields
+  orderSource?: "counter" | "online"
+  onlinePaymentStatus?: "pending" | "confirmed" | null
+  onlineOrderCode?: string
 }
 
 type ItemStatus = "pending" | "preparing" | "ready" | "served"
@@ -264,6 +268,12 @@ export function CrewDashboard({
     console.log('WebSocket: Order created', newOrder)
     console.log('WebSocket: Order items with notes:', newOrder.items.map((i: any) => ({ name: i.name, note: i.note })))
 
+    // Skip unconfirmed online orders - they shouldn't appear in the kitchen dashboard
+    if (newOrder.orderSource === 'online' && newOrder.onlinePaymentStatus !== 'confirmed') {
+      console.log('WebSocket: Skipping unconfirmed online order', newOrder.id)
+      return
+    }
+
     // Transform and add the new order
     const transformedOrder: Order = {
       id: newOrder.id,
@@ -283,6 +293,9 @@ export function CrewDashboard({
       totalPaidAmount: newOrder.totalPaidAmount,
       pendingAmount: newOrder.pendingAmount,
       notes: newOrder.notes || [],
+      orderSource: newOrder.orderSource,
+      onlinePaymentStatus: newOrder.onlinePaymentStatus,
+      onlineOrderCode: newOrder.onlineOrderCode,
       items: newOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -349,6 +362,9 @@ export function CrewDashboard({
     console.log('WebSocket: Order updated', updatedOrder)
     console.log('WebSocket: Appended orders:', updatedOrder.appendedOrders)
 
+    // Check if this is an unconfirmed online order
+    const isUnconfirmedOnlineOrder = updatedOrder.orderSource === 'online' && updatedOrder.onlinePaymentStatus !== 'confirmed'
+
     // Transform and update the order
     const transformedOrder: Order = {
       id: updatedOrder.id,
@@ -368,6 +384,9 @@ export function CrewDashboard({
       totalPaidAmount: updatedOrder.totalPaidAmount,
       pendingAmount: updatedOrder.pendingAmount,
       notes: updatedOrder.notes || [],
+      orderSource: updatedOrder.orderSource,
+      onlinePaymentStatus: updatedOrder.onlinePaymentStatus,
+      onlineOrderCode: updatedOrder.onlineOrderCode,
       items: updatedOrder.items.map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -428,9 +447,20 @@ export function CrewDashboard({
 
     setOrders(prevOrders => {
       const index = prevOrders.findIndex(o => o.id === transformedOrder.id)
+      
+      // If this is an unconfirmed online order, don't add it and remove if exists
+      if (isUnconfirmedOnlineOrder) {
+        if (index !== -1) {
+          console.log('WebSocket: Removing unconfirmed online order from state')
+          return prevOrders.filter(o => o.id !== transformedOrder.id)
+        }
+        console.log('WebSocket: Skipping unconfirmed online order update')
+        return prevOrders
+      }
+      
       if (index === -1) {
-        // Order doesn't exist yet, add it
-        console.log('WebSocket: Adding new order to state')
+        // Order doesn't exist yet, add it (this happens when online order is confirmed)
+        console.log('WebSocket: Adding new order to state (likely confirmed online order)')
         return [...prevOrders, transformedOrder]
       }
       // Update existing order
@@ -512,45 +542,32 @@ export function CrewDashboard({
       const apiOrders = await ordersApi.getAll({ branchId: currentBranch.id, sortBy: 'createdAt', sortOrder: 'asc' })
 
       // Transform API data to match component interface
-      const transformedOrders = apiOrders.map((order: any) => ({
-        id: order.id,
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        isPaid: order.isPaid || false,
-        paymentMethod: order.paymentMethod || null,
-        cashAmount: order.cashAmount,
-        gcashAmount: order.gcashAmount,
-        orderType: order.orderType || "dine-in",
-        createdAt: order.createdAt,
-        allItemsServedAt: order.allItemsServedAt,
-        orderTakerName: order.orderTakerName,
-        orderTakerEmail: order.orderTakerEmail,
-        notes: order.notes || [],
-        items: order.items.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity || 1,
-          status: item.status || "pending",
-          itemType: item.itemType || "dine-in",
-          note: item.note,
-          category: item.category,
-          preparingAt: item.preparingAt,
-          readyAt: item.readyAt,
-          servedAt: item.servedAt,
-          preparedBy: item.preparedBy,
-          preparedByEmail: item.preparedByEmail,
-          servedBy: item.servedBy,
-          servedByEmail: item.servedByEmail,
-        })),
-        appendedOrders: (order.appendedOrders || []).map((appended: any) => ({
-          id: appended.id,
-          isPaid: appended.isPaid || false,
-          paymentMethod: appended.paymentMethod || null,
-          cashAmount: appended.cashAmount,
-          gcashAmount: appended.gcashAmount,
-          createdAt: appended.createdAt,
-          items: appended.items.map((item: any) => ({
+      const transformedOrders = apiOrders
+        // Filter out online orders that are not yet confirmed (still pending payment)
+        .filter((order: any) => {
+          if (order.orderSource === 'online' && order.onlinePaymentStatus !== 'confirmed') {
+            return false
+          }
+          return true
+        })
+        .map((order: any) => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          isPaid: order.isPaid || false,
+          paymentMethod: order.paymentMethod || null,
+          cashAmount: order.cashAmount,
+          gcashAmount: order.gcashAmount,
+          orderType: order.orderType || "dine-in",
+          createdAt: order.createdAt,
+          allItemsServedAt: order.allItemsServedAt,
+          orderTakerName: order.orderTakerName,
+          orderTakerEmail: order.orderTakerEmail,
+          notes: order.notes || [],
+          orderSource: order.orderSource,
+          onlinePaymentStatus: order.onlinePaymentStatus,
+          onlineOrderCode: order.onlineOrderCode,
+          items: order.items.map((item: any) => ({
             id: item.id,
             name: item.name,
             price: item.price,
@@ -567,8 +584,32 @@ export function CrewDashboard({
             servedBy: item.servedBy,
             servedByEmail: item.servedByEmail,
           })),
-        })),
-      }))
+          appendedOrders: (order.appendedOrders || []).map((appended: any) => ({
+            id: appended.id,
+            isPaid: appended.isPaid || false,
+            paymentMethod: appended.paymentMethod || null,
+            cashAmount: appended.cashAmount,
+            gcashAmount: appended.gcashAmount,
+            createdAt: appended.createdAt,
+            items: appended.items.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity || 1,
+              status: item.status || "pending",
+              itemType: item.itemType || "dine-in",
+              note: item.note,
+              category: item.category,
+              preparingAt: item.preparingAt,
+              readyAt: item.readyAt,
+              servedAt: item.servedAt,
+              preparedBy: item.preparedBy,
+              preparedByEmail: item.preparedByEmail,
+              servedBy: item.servedBy,
+              servedByEmail: item.servedByEmail,
+            })),
+          })),
+        }))
 
       setOrders(transformedOrders)
       setIsOnline(true)

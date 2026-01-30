@@ -33,13 +33,18 @@ export default function AdminDashboard() {
     price: "",
     category: "",
     image: "",
+    onlineImage: "",
     isBestSeller: false,
+    isPublic: false,
     owner: "john" as "john" | "elwin",
   })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedOnlineFile, setSelectedOnlineFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [onlineImagePreview, setOnlineImagePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const onlineFileInputRef = useRef<HTMLInputElement>(null)
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -101,10 +106,13 @@ export default function AdminDashboard() {
         price: item.price.toString(),
         category: item.category,
         image: item.image || "",
+        onlineImage: item.onlineImage || "",
         isBestSeller: item.isBestSeller || false,
+        isPublic: item.isPublic || false,
         owner: item.owner || "john",
       })
       setImagePreview(item.image ? getImageUrl(item.image) : null)
+      setOnlineImagePreview(item.onlineImage ? getImageUrl(item.onlineImage) : null)
     } else {
       setEditingItem(null)
       setFormData({
@@ -112,12 +120,16 @@ export default function AdminDashboard() {
         price: "",
         category: "",
         image: "",
+        onlineImage: "",
         isBestSeller: false,
+        isPublic: false,
         owner: "john",
       })
       setImagePreview(null)
+      setOnlineImagePreview(null)
     }
     setSelectedFile(null)
+    setSelectedOnlineFile(null)
     setIsDialogOpen(true)
   }
 
@@ -129,11 +141,15 @@ export default function AdminDashboard() {
       price: "",
       category: "",
       image: "",
+      onlineImage: "",
       isBestSeller: false,
+      isPublic: false,
       owner: "john",
     })
     setSelectedFile(null)
+    setSelectedOnlineFile(null)
     setImagePreview(null)
+    setOnlineImagePreview(null)
     setIsUploading(false)
   }
 
@@ -181,6 +197,50 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleOnlineFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please select a valid image file (JPG, PNG, GIF, or WebP)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Image must be less than 5MB",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSelectedOnlineFile(file)
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setOnlineImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveOnlineImage = () => {
+    setSelectedOnlineFile(null)
+    setOnlineImagePreview(null)
+    setFormData({ ...formData, onlineImage: "" })
+    if (onlineFileInputRef.current) {
+      onlineFileInputRef.current.value = ""
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -196,15 +256,31 @@ export default function AdminDashboard() {
     try {
       setIsUploading(true)
       let imageUrl = formData.image
+      let onlineImageUrl = formData.onlineImage
 
-      // Upload new image if one was selected
+      // Upload crew image if one was selected
       if (selectedFile) {
         try {
           imageUrl = await uploadImage(selectedFile)
         } catch (uploadError: any) {
           toast({
             title: "Upload Error",
-            description: uploadError.message || "Failed to upload image",
+            description: uploadError.message || "Failed to upload crew image",
+            variant: "destructive",
+          })
+          setIsUploading(false)
+          return
+        }
+      }
+
+      // Upload online image if one was selected
+      if (selectedOnlineFile) {
+        try {
+          onlineImageUrl = await uploadImage(selectedOnlineFile)
+        } catch (uploadError: any) {
+          toast({
+            title: "Upload Error",
+            description: uploadError.message || "Failed to upload online image",
             variant: "destructive",
           })
           setIsUploading(false)
@@ -217,7 +293,9 @@ export default function AdminDashboard() {
         price: parseFloat(formData.price),
         category: formData.category,
         image: imageUrl,
+        onlineImage: onlineImageUrl,
         isBestSeller: formData.isBestSeller,
+        isPublic: formData.isPublic,
         owner: formData.owner,
       }
 
@@ -334,7 +412,8 @@ export default function AdminDashboard() {
                     <TableHead>Price (₱)</TableHead>
                     <TableHead className="hidden md:table-cell">Category</TableHead>
                     <TableHead className="hidden lg:table-cell">Owner</TableHead>
-                    <TableHead className="hidden md:table-cell">Best Seller</TableHead>
+                    <TableHead className="hidden md:table-cell">Visibility</TableHead>
+                    <TableHead className="hidden lg:table-cell">Best Seller</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -365,6 +444,13 @@ export default function AdminDashboard() {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
+                        <Badge className={`text-xs ${
+                          item.isPublic ? 'bg-green-600 text-white' : 'bg-slate-500 text-white'
+                        }`}>
+                          {item.isPublic ? '🌐 Public' : '🔒 Private'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {item.isBestSeller && <Badge className="bg-yellow-500 text-xs">Best Seller</Badge>}
                       </TableCell>
                       <TableCell className="text-right">
@@ -463,12 +549,14 @@ export default function AdminDashboard() {
                   Select who owns this menu item. Sales will be credited to the owner.
                 </p>
               </div>
+              {/* Crew Image */}
               <div className="grid gap-2">
-                <Label htmlFor="image">Image</Label>
+                <Label htmlFor="image">Crew Image (Internal)</Label>
+                <p className="text-xs text-muted-foreground">This image is shown to crew members in the dashboard.</p>
 
                 {imagePreview ? (
                   <div className="space-y-2">
-                    <div className="relative w-full h-48 border rounded-lg overflow-hidden bg-gray-50">
+                    <div className="relative w-full h-32 border rounded-lg overflow-hidden bg-gray-50">
                       <img
                         src={imagePreview}
                         alt="Preview"
@@ -484,7 +572,7 @@ export default function AdminDashboard() {
                         className="flex-1"
                       >
                         <Upload className="mr-2 h-4 w-4" />
-                        Change Image
+                        Change
                       </Button>
                       <Button
                         type="button"
@@ -498,15 +586,12 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div
-                    className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                    className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Click to upload an image
-                    </p>
+                    <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-1" />
                     <p className="text-xs text-muted-foreground">
-                      JPG, PNG, GIF, or WebP (max 5MB)
+                      Click to upload (JPG, PNG, GIF, WebP - max 5MB)
                     </p>
                   </div>
                 )}
@@ -519,17 +604,94 @@ export default function AdminDashboard() {
                   className="hidden"
                 />
               </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="bestSeller"
-                  checked={formData.isBestSeller}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isBestSeller: checked === true })
-                  }
+
+              {/* Online Customer Image */}
+              <div className="grid gap-2">
+                <Label htmlFor="onlineImage">Online Order Image (Customer-Facing)</Label>
+                <p className="text-xs text-muted-foreground">This image is shown to online customers. Leave empty to show a placeholder.</p>
+
+                {onlineImagePreview ? (
+                  <div className="space-y-2">
+                    <div className="relative w-full h-32 border rounded-lg overflow-hidden bg-gray-50">
+                      <img
+                        src={onlineImagePreview}
+                        alt="Online Preview"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onlineFileInputRef.current?.click()}
+                        className="flex-1"
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRemoveOnlineImage}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => onlineFileInputRef.current?.click()}
+                  >
+                    <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-1" />
+                    <p className="text-xs text-muted-foreground">
+                      Click to upload (JPG, PNG, GIF, WebP - max 5MB)
+                    </p>
+                  </div>
+                )}
+
+                <input
+                  ref={onlineFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  onChange={handleOnlineFileSelect}
+                  className="hidden"
                 />
-                <Label htmlFor="bestSeller" className="cursor-pointer">
-                  Mark as Best Seller
-                </Label>
+              </div>
+
+              {/* Checkboxes */}
+              <div className="space-y-3 pt-2 border-t">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="isPublic"
+                    checked={formData.isPublic}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, isPublic: checked === true })
+                    }
+                  />
+                  <div>
+                    <Label htmlFor="isPublic" className="cursor-pointer">
+                      Visible to Online Customers
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      If checked, this item will appear in the online ordering page
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="bestSeller"
+                    checked={formData.isBestSeller}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, isBestSeller: checked === true })
+                    }
+                  />
+                  <Label htmlFor="bestSeller" className="cursor-pointer">
+                    Mark as Best Seller
+                  </Label>
+                </div>
               </div>
             </div>
             <DialogFooter>

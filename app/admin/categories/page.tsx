@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Trash2, Edit, Plus, ArrowLeft, Upload, X, Loader2 } from "lucide-react"
 import { categoriesApi, uploadImage, getImageUrl, type Category } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
@@ -26,6 +28,7 @@ export default function CategoriesAdmin() {
     id: "",
     name: "",
     image: "",
+    isPublic: false,
   })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -70,6 +73,7 @@ export default function CategoriesAdmin() {
         id: category.id,
         name: category.name,
         image: category.image || "",
+        isPublic: category.isPublic || false,
       })
       setImagePreview(category.image ? getImageUrl(category.image) : null)
     } else {
@@ -78,6 +82,7 @@ export default function CategoriesAdmin() {
         id: "",
         name: "",
         image: "",
+        isPublic: false,
       })
       setImagePreview(null)
     }
@@ -92,6 +97,7 @@ export default function CategoriesAdmin() {
       id: "",
       name: "",
       image: "",
+      isPublic: false,
     })
     setSelectedFile(null)
     setImagePreview(null)
@@ -177,12 +183,14 @@ export default function CategoriesAdmin() {
         id: formData.id.toLowerCase().replace(/\s+/g, "-"),
         name: formData.name,
         image: imageUrl,
+        isPublic: formData.isPublic,
       }
 
       if (editingCategory) {
         await categoriesApi.update(editingCategory.id, {
           name: categoryData.name,
           image: categoryData.image,
+          isPublic: categoryData.isPublic,
         })
         toast({
           title: "Success",
@@ -286,6 +294,7 @@ export default function CategoriesAdmin() {
                     <TableHead className="hidden sm:table-cell">Image</TableHead>
                     <TableHead>ID</TableHead>
                     <TableHead>Name</TableHead>
+                    <TableHead className="hidden md:table-cell">Visibility</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -301,6 +310,13 @@ export default function CategoriesAdmin() {
                       </TableCell>
                       <TableCell className="font-mono text-xs sm:text-sm">{category.id}</TableCell>
                       <TableCell className="font-medium text-sm sm:text-base">{category.name}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge className={`text-xs ${
+                          category.isPublic ? 'bg-green-600 text-white' : 'bg-slate-500 text-white'
+                        }`}>
+                          {category.isPublic ? '🌐 Public' : '🔒 Private'}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1 sm:gap-2">
                           <Button
@@ -419,6 +435,27 @@ export default function CategoriesAdmin() {
                   onChange={handleFileSelect}
                   className="hidden"
                 />
+              </div>
+
+              {/* Visibility */}
+              <div className="pt-2 border-t">
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="isPublic"
+                    checked={formData.isPublic}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, isPublic: checked === true })
+                    }
+                  />
+                  <div>
+                    <Label htmlFor="isPublic" className="cursor-pointer">
+                      Visible to Online Customers
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      If unchecked, this category and ALL items within it will be hidden from online customers
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>

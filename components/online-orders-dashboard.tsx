@@ -14,8 +14,20 @@ import {
   Banknote,
   QrCode,
   User,
-  ShoppingBag
+  ShoppingBag,
+  Trash2
 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { ordersApi, type Order } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { useOrderEvents } from "@/contexts/websocket-context"
@@ -28,6 +40,7 @@ export function OnlineOrdersDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<"all" | "cash" | "gcash">("all")
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null)
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null)
   
   const { toast } = useToast()
 
@@ -60,6 +73,9 @@ export function OnlineOrdersDashboard() {
     onOnlineOrderConfirmed: (order) => {
       setOrders((prev) => prev.filter((o) => o._id !== order._id))
     },
+    onOrderDeleted: (orderId) => {
+      setOrders((prev) => prev.filter((o) => o.id !== orderId && o._id !== orderId))
+    },
   })
 
   const handleConfirmPayment = async (orderId: string) => {
@@ -80,6 +96,27 @@ export function OnlineOrdersDashboard() {
       })
     } finally {
       setConfirmingOrderId(null)
+    }
+  }
+
+  const handleDeleteOrder = async (orderId: string) => {
+    setDeletingOrderId(orderId)
+    try {
+      await ordersApi.deleteOnlineOrder(orderId)
+      setOrders((prev) => prev.filter((o) => o._id !== orderId))
+      toast({
+        title: "Order deleted",
+        description: "The online order has been removed.",
+      })
+    } catch (error) {
+      console.error("Error deleting order:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete order",
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingOrderId(null)
     }
   }
 
@@ -268,24 +305,61 @@ export function OnlineOrdersDashboard() {
                 </span>
               </div>
 
-              {/* Confirm Button */}
-              <Button
-                className="w-full mt-4 gap-2"
-                onClick={() => handleConfirmPayment(order._id!)}
-                disabled={confirmingOrderId === order._id}
-              >
-                {confirmingOrderId === order._id ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    Confirming...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Confirm Payment
-                  </>
-                )}
-              </Button>
+              {/* Action Buttons */}
+              <div className="flex gap-2 mt-4">
+                <Button
+                  className="flex-1 gap-2"
+                  onClick={() => handleConfirmPayment(order._id!)}
+                  disabled={confirmingOrderId === order._id || deletingOrderId === order._id}
+                >
+                  {confirmingOrderId === order._id ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Confirming...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Confirm Payment
+                    </>
+                  )}
+                </Button>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      disabled={confirmingOrderId === order._id || deletingOrderId === order._id}
+                    >
+                      {deletingOrderId === order._id ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Online Order?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete the order from <strong>{order.customerName}</strong> with code <strong>{order.onlineOrderCode ? formatOrderCode(order.onlineOrderCode) : "N/A"}</strong>.
+                        This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDeleteOrder(order._id!)}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Delete Order
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </Card>
           ))}
         </div>

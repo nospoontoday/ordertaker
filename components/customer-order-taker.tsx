@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Minus, Clock, ShoppingCart, Search, Coffee, Loader2, QrCode, Banknote, CheckCircle2, Users, RefreshCw } from "lucide-react"
+import { X, Plus, Minus, Clock, ShoppingCart, Search, Coffee, Loader2, QrCode, Banknote, CheckCircle2, Users, RefreshCw, ChefHat, MessageSquare } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -23,8 +24,58 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { menuItemsApi, categoriesApi, ordersApi, getImageUrl, type Order as ApiOrder } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-import { generateUniqueOrderCode, formatOrderCode } from "@/lib/order-code-generator"
+import { generateUniqueShortCode, formatOrderCode } from "@/lib/order-code-generator"
 import { DEFAULT_BRANCH } from "@/lib/branches"
+
+// Customer session interface for tracking order codes
+interface CustomerSession {
+  codes: string[]  // Order codes (e.g., ["A7K", "B3M"])
+  lastUpdated: number
+}
+
+// Constants
+const CUSTOMER_SESSION_KEY = "customerOrderSession"
+const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+// Helper functions for customer session management
+function loadCustomerSession(): CustomerSession {
+  if (typeof window === 'undefined') return { codes: [], lastUpdated: Date.now() }
+  
+  try {
+    const stored = localStorage.getItem(CUSTOMER_SESSION_KEY)
+    if (stored) {
+      const session: CustomerSession = JSON.parse(stored)
+      // Check if session is still valid (within 24 hours)
+      if (Date.now() - session.lastUpdated < SESSION_EXPIRY_MS) {
+        return session
+      }
+    }
+  } catch (error) {
+    console.error('Error loading customer session:', error)
+  }
+  return { codes: [], lastUpdated: Date.now() }
+}
+
+function saveCustomerSession(session: CustomerSession): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    localStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify({
+      ...session,
+      lastUpdated: Date.now()
+    }))
+  } catch (error) {
+    console.error('Error saving customer session:', error)
+  }
+}
+
+function addCodeToSession(code: string): void {
+  const session = loadCustomerSession()
+  if (!session.codes.includes(code.toUpperCase())) {
+    session.codes.push(code.toUpperCase())
+    saveCustomerSession(session)
+  }
+}
 
 interface OrderItem {
   id: string
@@ -45,35 +96,39 @@ export interface MenuItem {
   price: number
   category: string
   image: string
+  onlineImage?: string  // Image shown to online customers
   isBestSeller?: boolean
+  isPublic?: boolean    // If true, visible to online customers
 }
 
 export interface Category {
   id: string
   name: string
   image: string
+  isPublic?: boolean    // If true, visible to online customers
 }
 
-// Fallback data if API is unavailable
+// Fallback data if API is unavailable (shown only when API fails)
+// Note: These are marked as public for fallback purposes
 const FALLBACK_CATEGORIES: Category[] = [
-  { id: "coffee", name: "Coffee", image: "/coffee-cup.png" },
-  { id: "food", name: "Food", image: "/food-plate.png" },
-  { id: "pastry", name: "Pastry", image: "/pastry-dessert.jpg" },
+  { id: "coffee", name: "Coffee", image: "/coffee-cup.png", isPublic: true },
+  { id: "food", name: "Food", image: "/food-plate.png", isPublic: true },
+  { id: "pastry", name: "Pastry", image: "/pastry-dessert.jpg", isPublic: true },
 ]
 
 const FALLBACK_MENU_ITEMS: MenuItem[] = [
-  { id: "1", name: "Espresso", owner: "john", price: 3.5, category: "coffee", image: "/espresso-shot.png", isBestSeller: true },
-  { id: "2", name: "Cappuccino", owner: "john", price: 4.5, category: "coffee", image: "/frothy-cappuccino.png", isBestSeller: true },
-  { id: "3", name: "Latte", price: 4.5, category: "coffee", image: "/latte-art.png", isBestSeller: true },
-  { id: "4", name: "Americano", price: 3.0, category: "coffee", image: "/americano-coffee.png" },
-  { id: "5", name: "Macchiato", price: 4.0, category: "coffee", image: "/macchiato.jpg" },
-  { id: "6", name: "Flat White", price: 4.5, category: "coffee", image: "/flat-white.jpg" },
-  { id: "7", name: "Croissant", owner: "john", price: 3.5, category: "pastry", image: "/golden-croissant.png", isBestSeller: true },
-  { id: "8", name: "Muffin", price: 3.0, category: "pastry", image: "/blueberry-muffin.png", isBestSeller: true },
-  { id: "9", name: "Sandwich", price: 7.5, category: "food", image: "/classic-sandwich.png", isBestSeller: true },
-  { id: "10", name: "Salad", price: 8.0, category: "food", image: "/vibrant-mixed-salad.png" },
-  { id: "11", name: "Pastry", price: 2.5, category: "pastry", image: "/assorted-pastries.png" },
-  { id: "12", name: "Cookie", price: 2.0, category: "pastry", image: "/chocolate-chip-cookie.png" },
+  { id: "1", name: "Espresso", owner: "john", price: 3.5, category: "coffee", image: "/espresso-shot.png", onlineImage: "/espresso-shot.png", isBestSeller: true, isPublic: true },
+  { id: "2", name: "Cappuccino", owner: "john", price: 4.5, category: "coffee", image: "/frothy-cappuccino.png", onlineImage: "/frothy-cappuccino.png", isBestSeller: true, isPublic: true },
+  { id: "3", name: "Latte", price: 4.5, category: "coffee", image: "/latte-art.png", onlineImage: "/latte-art.png", isBestSeller: true, isPublic: true },
+  { id: "4", name: "Americano", price: 3.0, category: "coffee", image: "/americano-coffee.png", onlineImage: "/americano-coffee.png", isPublic: true },
+  { id: "5", name: "Macchiato", price: 4.0, category: "coffee", image: "/macchiato.jpg", onlineImage: "/macchiato.jpg", isPublic: true },
+  { id: "6", name: "Flat White", price: 4.5, category: "coffee", image: "/flat-white.jpg", onlineImage: "/flat-white.jpg", isPublic: true },
+  { id: "7", name: "Croissant", owner: "john", price: 3.5, category: "pastry", image: "/golden-croissant.png", onlineImage: "/golden-croissant.png", isBestSeller: true, isPublic: true },
+  { id: "8", name: "Muffin", price: 3.0, category: "pastry", image: "/blueberry-muffin.png", onlineImage: "/blueberry-muffin.png", isBestSeller: true, isPublic: true },
+  { id: "9", name: "Sandwich", price: 7.5, category: "food", image: "/classic-sandwich.png", onlineImage: "/classic-sandwich.png", isBestSeller: true, isPublic: true },
+  { id: "10", name: "Salad", price: 8.0, category: "food", image: "/vibrant-mixed-salad.png", onlineImage: "/vibrant-mixed-salad.png", isPublic: true },
+  { id: "11", name: "Pastry", price: 2.5, category: "pastry", image: "/assorted-pastries.png", onlineImage: "/assorted-pastries.png", isPublic: true },
+  { id: "12", name: "Cookie", price: 2.0, category: "pastry", image: "/chocolate-chip-cookie.png", onlineImage: "/chocolate-chip-cookie.png", isPublic: true },
 ]
 
 export function CustomerOrderTaker() {
@@ -100,16 +155,45 @@ export function CustomerOrderTaker() {
   // Mobile sheet state
   const [showMobileSheet, setShowMobileSheet] = useState(false)
   
+  // Customer session state (tracks their order codes)
+  const [customerSession, setCustomerSession] = useState<CustomerSession>({ codes: [], lastUpdated: Date.now() })
+  
+  // Orders currently being prepared (for display component)
+  const [preparingOrders, setPreparingOrders] = useState<ApiOrder[]>([])
+  
+  // Banner notification state
+  const [showPreparingBanner, setShowPreparingBanner] = useState(false)
+  const [preparingOrderCode, setPreparingOrderCode] = useState<string>("")
+  
+  // Order note state
+  const [orderNote, setOrderNote] = useState("")
+  
+  // Item note expansion state (tracks which items have note input expanded)
+  const [expandedNoteItems, setExpandedNoteItems] = useState<Set<string>>(new Set())
+  
   const { toast } = useToast()
+
+  // Load customer session from localStorage on mount
+  useEffect(() => {
+    const session = loadCustomerSession()
+    setCustomerSession(session)
+  }, [])
 
   // Load menu data from API
   useEffect(() => {
     fetchMenuData()
     fetchKitchenOrders()
+    fetchPreparingOrders()
     
     // Refresh kitchen orders periodically
-    const interval = setInterval(fetchKitchenOrders, 30000)
-    return () => clearInterval(interval)
+    const kitchenInterval = setInterval(fetchKitchenOrders, 30000)
+    // Refresh preparing orders more frequently for real-time updates
+    const preparingInterval = setInterval(fetchPreparingOrders, 10000)
+    
+    return () => {
+      clearInterval(kitchenInterval)
+      clearInterval(preparingInterval)
+    }
   }, [])
 
   const fetchMenuData = async () => {
@@ -120,21 +204,35 @@ export function CustomerOrderTaker() {
         categoriesApi.getAll(),
       ])
 
-      const transformedItems: MenuItem[] = itemsData.map((item) => ({
-        id: item._id || item.id || "",
-        name: item.name,
-        owner: item.owner,
-        price: item.price,
-        category: item.category,
-        image: item.image,
-        isBestSeller: item.isBestSeller,
-      }))
+      // Transform categories and filter to only show public ones
+      const transformedCategories: Category[] = categoriesData
+        .filter((cat) => cat.isPublic === true)  // Only public categories
+        .map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          image: cat.image,
+          isPublic: cat.isPublic,
+        }))
 
-      const transformedCategories: Category[] = categoriesData.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        image: cat.image,
-      }))
+      // Get set of public category IDs for filtering items
+      const publicCategoryIds = new Set(transformedCategories.map(cat => cat.id))
+
+      // Transform items and filter:
+      // - Item must be public (isPublic === true)
+      // - Item must be in a public category
+      const transformedItems: MenuItem[] = itemsData
+        .filter((item) => item.isPublic === true && publicCategoryIds.has(item.category))
+        .map((item) => ({
+          id: item._id || item.id || "",
+          name: item.name,
+          owner: item.owner,
+          price: item.price,
+          category: item.category,
+          image: item.image,
+          onlineImage: item.onlineImage,  // Image for online customers
+          isBestSeller: item.isBestSeller,
+          isPublic: item.isPublic,
+        }))
 
       setMenuItems(transformedItems.length > 0 ? transformedItems : FALLBACK_MENU_ITEMS)
       setCategories(transformedCategories.length > 0 ? transformedCategories : FALLBACK_CATEGORIES)
@@ -170,6 +268,35 @@ export function CustomerOrderTaker() {
       console.error("Error fetching kitchen orders:", error)
     }
   }
+
+  // Fetch orders that are currently being prepared
+  const fetchPreparingOrders = useCallback(async () => {
+    try {
+      const orders = await ordersApi.getPreparingOrders(DEFAULT_BRANCH.id)
+      setPreparingOrders(orders)
+      
+      // Check if any of customer's orders are being prepared
+      const session = loadCustomerSession()
+      if (session.codes.length > 0) {
+        const customerPreparingOrder = orders.find(order => {
+          if (order.onlineOrderCode) {
+            return session.codes.includes(order.onlineOrderCode.toUpperCase())
+          }
+          return false
+        })
+        
+        if (customerPreparingOrder && customerPreparingOrder.onlineOrderCode) {
+          // Show banner if not already showing for this order
+          if (preparingOrderCode !== customerPreparingOrder.onlineOrderCode.toUpperCase()) {
+            setPreparingOrderCode(customerPreparingOrder.onlineOrderCode.toUpperCase())
+            setShowPreparingBanner(true)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching preparing orders:", error)
+    }
+  }, [preparingOrderCode])
 
   // Calculate order total
   const orderTotal = useMemo(() => {
@@ -264,16 +391,46 @@ export function CustomerOrderTaker() {
   // Remove item from cart
   const removeItem = (itemId: string) => {
     setCurrentOrder(currentOrder.filter((item) => item.id !== itemId))
+    // Also remove from expanded notes
+    setExpandedNoteItems(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(itemId)
+      return newSet
+    })
+  }
+
+  // Toggle note input for an item
+  const toggleItemNote = (itemId: string) => {
+    setExpandedNoteItems(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId)
+      } else {
+        newSet.add(itemId)
+      }
+      return newSet
+    })
+  }
+
+  // Update item note
+  const updateItemNote = (itemId: string, note: string) => {
+    setCurrentOrder(
+      currentOrder.map((item) =>
+        item.id === itemId ? { ...item, note } : item
+      )
+    )
   }
 
   // Clear cart
   const clearCart = () => {
     setCurrentOrder([])
     setCustomerName("")
+    setOrderNote("")
+    setExpandedNoteItems(new Set())
   }
 
   // Handle checkout
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (currentOrder.length === 0) {
       toast({
         title: "Your cart is empty",
@@ -292,12 +449,25 @@ export function CustomerOrderTaker() {
       return
     }
 
-    const code = generateUniqueOrderCode()
-    setOrderCode(code)
-    setShowPaymentDialog(true)
-    setSelectedPaymentMethod(null)
-    setOrderSubmitted(false)
-    setShowMobileSheet(false)
+    try {
+      // Fetch pending codes to ensure uniqueness
+      const pendingCodes = await ordersApi.getPendingOnlineOrderCodes()
+      const code = generateUniqueShortCode(pendingCodes)
+      setOrderCode(code)
+      setShowPaymentDialog(true)
+      setSelectedPaymentMethod(null)
+      setOrderSubmitted(false)
+      setShowMobileSheet(false)
+    } catch (error) {
+      console.error("Error generating order code:", error)
+      // Fallback to generating code without uniqueness check
+      const code = generateUniqueShortCode([])
+      setOrderCode(code)
+      setShowPaymentDialog(true)
+      setSelectedPaymentMethod(null)
+      setOrderSubmitted(false)
+      setShowMobileSheet(false)
+    }
   }
 
   // Submit order
@@ -316,6 +486,14 @@ export function CustomerOrderTaker() {
     try {
       const orderId = `order-${Date.now()}`
       
+      // Build order notes array if there's an order-level note
+      const orderNotes = orderNote.trim() ? [{
+        id: `note-${Date.now()}`,
+        content: orderNote.trim(),
+        createdAt: Date.now(),
+        createdBy: customerName.trim(),
+      }] : []
+
       await ordersApi.create({
         id: orderId,
         branchId: DEFAULT_BRANCH.id,
@@ -331,7 +509,12 @@ export function CustomerOrderTaker() {
         onlineOrderCode: orderCode,
         onlinePaymentStatus: "pending",
         selectedPaymentMethod: selectedPaymentMethod,
+        notes: orderNotes,
       } as any)
+
+      // Save order code to customer session for tracking
+      addCodeToSession(orderCode)
+      setCustomerSession(loadCustomerSession())
 
       setOrderSubmitted(true)
       
@@ -388,7 +571,7 @@ export function CustomerOrderTaker() {
       {/* Image Container with Best Seller Badge */}
       <div className="relative">
         <img
-          src={getImageUrl(item.image) || "/placeholder.svg"}
+          src={item.onlineImage ? getImageUrl(item.onlineImage) : "/placeholder.svg"}
           alt={item.name}
           className="w-24 h-24 lg:w-20 lg:h-20 rounded-lg object-cover group-hover:scale-105 transition-transform duration-200"
         />
@@ -448,6 +631,68 @@ export function CustomerOrderTaker() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 pb-32 lg:pb-8">
+        {/* Preparation Banner - Shows when customer's order starts preparing */}
+        {showPreparingBanner && preparingOrderCode && (
+          <div className="mb-4 animate-in slide-in-from-top duration-500">
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl p-4 shadow-lg flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
+                  <ChefHat className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-bold text-lg">Your order {formatOrderCode(preparingOrderCode)} is being prepared!</p>
+                  <p className="text-emerald-100 text-sm">You will be served soon</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPreparingBanner(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Currently Being Prepared Component */}
+        {preparingOrders.length > 0 && (
+          <div className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ChefHat className="h-5 w-5 text-amber-600" />
+              <h3 className="font-bold text-amber-900">Currently Being Prepared</h3>
+              <Badge className="bg-amber-500 text-white border-0 text-xs">
+                {preparingOrders.length} order{preparingOrders.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {preparingOrders.map((order) => {
+                const orderCode = order.onlineOrderCode?.toUpperCase()
+                const isCustomerOrder = orderCode && customerSession.codes.includes(orderCode)
+                const displayCode = orderCode ? formatOrderCode(orderCode) : "Counter Order"
+                
+                return (
+                  <div
+                    key={order.id}
+                    className={cn(
+                      "px-4 py-2 rounded-lg font-bold text-sm transition-all",
+                      isCustomerOrder
+                        ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200 animate-pulse ring-2 ring-emerald-300"
+                        : orderCode
+                          ? "bg-white text-amber-800 border border-amber-300"
+                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                    )}
+                  >
+                    {displayCode}
+                    {isCustomerOrder && (
+                      <span className="ml-2 text-xs font-normal">(You)</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -660,36 +905,70 @@ export function CustomerOrderTaker() {
               ) : (
                 <div className="space-y-3 mb-5 max-h-[300px] overflow-y-auto">
                   {currentOrder.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{item.name}</p>
-                        <Badge variant="outline" className={cn(
-                          "text-[10px] font-bold mt-1",
-                          item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
-                        )}>
-                          {item.itemType === "dine-in" ? "DINE IN" : "TAKE OUT"}
-                        </Badge>
+                    <div key={item.id} className="p-3 bg-slate-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{item.name}</p>
+                          <Badge variant="outline" className={cn(
+                            "text-[10px] font-bold mt-1",
+                            item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
+                          )}>
+                            {item.itemType === "dine-in" ? "DINE IN" : "TAKE OUT"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, -1)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-8 text-center font-bold">{item.quantity}</span>
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, 1)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeItem(item.id)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, -1)}>
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(item.id, 1)}>
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeItem(item.id)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {/* Item Note */}
+                      {expandedNoteItems.has(item.id) || item.note ? (
+                        <div className="mt-2">
+                          <Input
+                            placeholder="Add note (e.g., less sugar, extra hot)..."
+                            value={item.note || ""}
+                            onChange={(e) => updateItemNote(item.id, e.target.value)}
+                            className="text-xs h-8"
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => toggleItemNote(item.id)}
+                          className="mt-2 text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          Add note
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
 
               {currentOrder.length > 0 && (
-                <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-4">
+                <div className="border-t pt-4 space-y-4">
+                  {/* Order Note */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Special Instructions (Optional)
+                    </label>
+                    <Textarea
+                      placeholder="Any special requests for your order..."
+                      value={orderNote}
+                      onChange={(e) => setOrderNote(e.target.value)}
+                      className="text-sm resize-none"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-slate-900">Total</span>
                     <span className="text-xl font-bold text-blue-600">₱{orderTotal.toFixed(2)}</span>
                   </div>
@@ -749,33 +1028,68 @@ export function CustomerOrderTaker() {
                 ) : (
                   <div className="space-y-3">
                     {currentOrder.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-base font-semibold text-slate-900 truncate">{item.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className={cn(
-                              "text-xs font-bold",
-                              item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
-                            )}>
-                              {item.itemType === "dine-in" ? "DINE IN" : "TAKE OUT"}
-                            </Badge>
-                            <span className="text-sm text-slate-500">₱{item.price.toFixed(2)}</span>
+                      <div key={item.id} className="p-4 bg-slate-50 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-base font-semibold text-slate-900 truncate">{item.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className={cn(
+                                "text-xs font-bold",
+                                item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
+                              )}>
+                                {item.itemType === "dine-in" ? "DINE IN" : "TAKE OUT"}
+                              </Badge>
+                              <span className="text-sm text-slate-500">₱{item.price.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => updateQuantity(item.id, -1)}>
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <span className="w-10 text-center font-bold text-lg">{item.quantity}</span>
+                            <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => updateQuantity(item.id, 1)}>
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-10 w-10 text-red-500" onClick={() => removeItem(item.id)}>
+                              <X className="h-5 w-5" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => updateQuantity(item.id, -1)}>
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <span className="w-10 text-center font-bold text-lg">{item.quantity}</span>
-                          <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => updateQuantity(item.id, 1)}>
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-10 w-10 text-red-500" onClick={() => removeItem(item.id)}>
-                            <X className="h-5 w-5" />
-                          </Button>
-                        </div>
+                        {/* Item Note */}
+                        {expandedNoteItems.has(item.id) || item.note ? (
+                          <div className="mt-3">
+                            <Input
+                              placeholder="Add note (e.g., less sugar, extra hot)..."
+                              value={item.note || ""}
+                              onChange={(e) => updateItemNote(item.id, e.target.value)}
+                              className="text-sm h-10"
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => toggleItemNote(item.id)}
+                            className="mt-2 text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Add note
+                          </button>
+                        )}
                       </div>
                     ))}
+
+                    {/* Order Note */}
+                    <div className="pt-3 border-t border-slate-200">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Special Instructions (Optional)
+                      </label>
+                      <Textarea
+                        placeholder="Any special requests for your order..."
+                        value={orderNote}
+                        onChange={(e) => setOrderNote(e.target.value)}
+                        className="text-sm resize-none"
+                        rows={2}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

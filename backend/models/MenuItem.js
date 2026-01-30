@@ -33,9 +33,20 @@ const menuItemSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    onlineImage: {
+      type: String,
+      trim: true,
+      default: '',
+      description: 'Image shown to online customers (if empty, placeholder is shown)'
+    },
     isBestSeller: {
       type: Boolean,
       default: false
+    },
+    isPublic: {
+      type: Boolean,
+      default: false,
+      description: 'If true, item is visible to online customers'
     },
     owner: {
       type: String,
@@ -54,6 +65,7 @@ const menuItemSchema = new mongoose.Schema(
 // Index for faster queries
 menuItemSchema.index({ category: 1 });
 menuItemSchema.index({ isBestSeller: 1 });
+menuItemSchema.index({ isPublic: 1 });
 
 // Virtual for formatted price
 menuItemSchema.virtual('formattedPrice').get(function() {

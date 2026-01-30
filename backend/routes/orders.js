@@ -220,6 +220,90 @@ router.get('/online/count', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/orders/online/pending-codes
+ * @desc    Get all order codes currently in use by pending (for approval) online orders
+ *          Used for generating unique codes - only pending orders block code reuse
+ * @access  Public
+ */
+router.get('/online/pending-codes', async (req, res) => {
+  try {
+    const orders = await Order.find({
+      orderSource: 'online',
+      onlinePaymentStatus: 'pending',
+      onlineOrderCode: { $exists: true, $ne: null, $ne: '' }
+    }).select('onlineOrderCode');
+
+    const codes = orders.map(order => order.onlineOrderCode).filter(Boolean);
+
+    res.json({
+      success: true,
+      data: codes
+    });
+  } catch (error) {
+    console.error('Error fetching pending online order codes:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch pending codes'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/orders/preparing
+ * @desc    Get all orders that are currently being prepared (at least one item has status "preparing")
+ *          Returns confirmed online orders and counter orders (excludes pending online orders)
+ * @access  Public
+ */
+router.get('/preparing', async (req, res) => {
+  try {
+    const { branchId } = req.query;
+    const effectiveBranchId = branchId && isValidBranchId(branchId) ? branchId : DEFAULT_BRANCH.id;
+
+    // Find orders where at least one item (main or appended) has status "preparing"
+    // Exclude pending online orders (not yet confirmed by crew)
+    const orders = await Order.find({
+      branchId: effectiveBranchId,
+      $and: [
+        // Exclude pending online orders
+        {
+          $or: [
+            { orderSource: { $ne: 'online' } },
+            { orderSource: 'online', onlinePaymentStatus: 'confirmed' }
+          ]
+        },
+        // Must have at least one item preparing (in main items OR appended orders)
+        {
+          $or: [
+            { 'items.status': 'preparing' },
+            { 'appendedOrders.items.status': 'preparing' }
+          ]
+        }
+      ]
+    }).sort({ createdAt: 1 }).select('id customerName orderSource onlineOrderCode items appendedOrders createdAt');
+
+    // Filter to only return orders where not all items are served
+    const preparingOrders = orders.filter(order => {
+      const mainItemsNotServed = order.items.some(item => item.status !== 'served');
+      const appendedItemsNotServed = order.appendedOrders?.some(appended => 
+        appended.items.some(item => item.status !== 'served')
+      );
+      return mainItemsNotServed || appendedItemsNotServed;
+    });
+
+    res.json({
+      success: true,
+      data: preparingOrders
+    });
+  } catch (error) {
+    console.error('Error fetching preparing orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch preparing orders'
+    });
+  }
+});
+
+/**
  * @route   GET /api/orders/daily-sales
  * @desc    Get daily sales summaries grouped by date
  * @query   page - Page number (default: 1)
@@ -1660,6 +1744,67 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to update order'
+    });
+  }
+});
+
+/**
+ * @route   DELETE /api/orders/online/:id
+ * @desc    Delete a pending online order (before payment confirmation)
+ * @access  Crew members can delete pending online orders
+ */
+router.delete('/online/:id', async (req, res) => {
+  try {
+    // Find the order first to verify it's a pending online order
+    const order = await Order.findOne({ id: req.params.id });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Only allow deletion of pending online orders
+    if (order.orderSource !== 'online') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only online orders can be deleted through this endpoint'
+      });
+    }
+
+    if (order.onlinePaymentStatus === 'confirmed') {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot delete confirmed online orders. Contact super admin.'
+      });
+    }
+
+    // Delete the order
+    await Order.findOneAndDelete({ id: req.params.id });
+
+    // Invalidate orders cache
+    invalidateOrders();
+
+    // Emit WebSocket event for order deletion
+    const io = req.app.get('io');
+    if (io) {
+      setImmediate(() => {
+        io.emit('order:deleted', order.id);
+        io.emit('online-order:deleted', order);
+      });
+    }
+
+    res.json({
+      success: true,
+      data: order,
+      message: 'Online order deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting online order:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete online order'
     });
   }
 });
