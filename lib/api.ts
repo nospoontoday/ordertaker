@@ -1238,3 +1238,107 @@ export const statsApi = {
     };
   }
 };
+
+// Customer Photos Types
+export interface CustomerPhoto {
+  _id: string;
+  imageUrl: string;
+  displayOrder: number;
+  isActive: boolean;
+  altText?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Customer Photos API
+export const customerPhotosApi = {
+  /**
+   * Get all customer photos (ordered by displayOrder)
+   */
+  getAll: async (): Promise<CustomerPhoto[]> => {
+    const response = await apiCall<CustomerPhoto[]>('/customer-photos');
+    return response.data || [];
+  },
+
+  /**
+   * Get active customer photos (max 6, for Hero section)
+   */
+  getActive: async (): Promise<CustomerPhoto[]> => {
+    const response = await apiCall<CustomerPhoto[]>('/customer-photos/active');
+    return response.data || [];
+  },
+
+  /**
+   * Get a single customer photo by ID
+   */
+  getById: async (id: string): Promise<CustomerPhoto | null> => {
+    const response = await apiCall<CustomerPhoto>(`/customer-photos/${id}`);
+    return response.data || null;
+  },
+
+  /**
+   * Create a new customer photo (super admin only)
+   */
+  create: async (data: {
+    imageUrl: string;
+    displayOrder?: number;
+    isActive?: boolean;
+    altText?: string;
+    userId: string;
+  }): Promise<CustomerPhoto> => {
+    const response = await apiCall<CustomerPhoto>('/customer-photos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.data) {
+      throw new Error('Failed to create customer photo');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Update a customer photo (super admin only)
+   */
+  update: async (id: string, data: {
+    imageUrl?: string;
+    displayOrder?: number;
+    isActive?: boolean;
+    altText?: string;
+    userId: string;
+  }): Promise<CustomerPhoto> => {
+    const response = await apiCall<CustomerPhoto>(`/customer-photos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.data) {
+      throw new Error('Failed to update customer photo');
+    }
+
+    return response.data;
+  },
+
+  /**
+   * Delete a customer photo (super admin only)
+   */
+  delete: async (id: string, userId: string): Promise<void> => {
+    await apiCall(`/customer-photos/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
+    });
+  },
+
+  /**
+   * Reorder customer photos (super admin only)
+   */
+  reorder: async (photos: { id: string; displayOrder: number }[], userId: string): Promise<CustomerPhoto[]> => {
+    const response = await apiCall<CustomerPhoto[]>('/customer-photos/reorder/batch', {
+      method: 'PUT',
+      body: JSON.stringify({ photos, userId }),
+    });
+
+    return response.data || [];
+  },
+};

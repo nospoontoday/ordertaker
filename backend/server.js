@@ -77,6 +77,7 @@ app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/cart', require('./routes/cart'));
 app.use('/api/dtr', require('./routes/dtr'));
 app.use('/api/stats', require('./routes/stats'));
+app.use('/api/customer-photos', require('./routes/customerPhotos'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -125,6 +126,7 @@ app.get('/', (req, res) => {
       cart: '/api/cart',
       dtr: '/api/dtr',
       stats: '/api/stats',
+      customerPhotos: '/api/customer-photos',
       images: '/uploads/:filename'
     }
   });
@@ -186,6 +188,7 @@ server.listen(PORT, () => {
   - Inventory:    http://localhost:${PORT}/api/inventory
   - DTR:          http://localhost:${PORT}/api/dtr
   - Stats:        http://localhost:${PORT}/api/stats
+  - Customer Photos: http://localhost:${PORT}/api/customer-photos
   - Images:       http://localhost:${PORT}/uploads/:filename
 
   WebSocket:

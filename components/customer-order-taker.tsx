@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { menuItemsApi, categoriesApi, ordersApi, insightsApi, getImageUrl, type Order as ApiOrder } from "@/lib/api"
+import { menuItemsApi, categoriesApi, ordersApi, insightsApi, customerPhotosApi, getImageUrl, type Order as ApiOrder, type CustomerPhoto } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { generateUniqueShortCode, formatOrderCode } from "@/lib/order-code-generator"
 import { DEFAULT_BRANCH } from "@/lib/branches"
@@ -570,7 +570,10 @@ interface ProductCardProps {
 }
 
 const ProductCard = ({ item, onAdd, quantityInCart }: ProductCardProps) => (
-  <div className="group relative bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 border border-gray-100/50 flex flex-col h-full">
+  <button 
+    onClick={() => onAdd(item)}
+    className="group relative bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 border border-gray-100/50 flex flex-col h-full text-left w-full active:scale-[0.98] cursor-pointer"
+  >
     <div className="aspect-[4/3] overflow-hidden relative">
       <img 
         src={item.onlineImage ? getImageUrl(item.onlineImage) : "/placeholder.svg"} 
@@ -587,12 +590,12 @@ const ProductCard = ({ item, onAdd, quantityInCart }: ProductCardProps) => (
           {quantityInCart}
         </span>
       )}
-      <button 
-        onClick={() => onAdd(item)}
-        className="absolute bottom-3 right-3 bg-white text-black p-3 rounded-full shadow-lg opacity-0 transform translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 hover:bg-black hover:text-white active:scale-95"
+      {/* Plus icon - visible on hover (desktop) and always visible on mobile */}
+      <span 
+        className="absolute bottom-3 right-3 bg-white text-black p-3 rounded-full shadow-lg md:opacity-0 md:transform md:translate-y-4 md:group-hover:opacity-100 md:group-hover:translate-y-0 transition-all duration-300 group-hover:bg-black group-hover:text-white"
       >
         <Plus size={18} />
-      </button>
+      </span>
     </div>
     <div className="p-5 flex flex-col flex-1">
       <div className="flex justify-between items-start mb-2">
@@ -603,7 +606,7 @@ const ProductCard = ({ item, onAdd, quantityInCart }: ProductCardProps) => (
         {item.category}
       </p>
     </div>
-  </div>
+  </button>
 )
 
 /**
@@ -866,6 +869,7 @@ export function CustomerOrderTaker() {
   // Menu data state
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [heroPhotos, setHeroPhotos] = useState<CustomerPhoto[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
@@ -1205,10 +1209,14 @@ export function CustomerOrderTaker() {
   const fetchMenuData = async () => {
     setIsLoadingData(true)
     try {
-      const [itemsData, categoriesData] = await Promise.all([
+      const [itemsData, categoriesData, heroPhotosData] = await Promise.all([
         menuItemsApi.getAll(),
         categoriesApi.getAll(),
+        customerPhotosApi.getActive().catch(() => []), // Gracefully handle if API fails
       ])
+      
+      // Set hero photos (fallback to empty if API fails)
+      setHeroPhotos(heroPhotosData)
 
       // Transform categories and filter to only show public ones
       const transformedCategories: Category[] = categoriesData
@@ -1884,12 +1892,14 @@ export function CustomerOrderTaker() {
         <header className="relative py-20 md:py-28 text-center overflow-hidden rounded-3xl mb-8">
           {/* Customer Photo Collage - 6 unique photos in a clean grid */}
           <div className="absolute inset-0 grid grid-cols-3 grid-rows-2">
-            {[1, 2, 3, 4, 5, 6].map((photoNum) => (
+            {(heroPhotos.length > 0 ? heroPhotos : [1, 2, 3, 4, 5, 6]).map((photo, index) => (
               <div 
-                key={photoNum} 
+                key={typeof photo === 'number' ? photo : photo._id} 
                 className="bg-cover bg-center"
                 style={{
-                  backgroundImage: `url(/customer-photos/photo-${photoNum}.jpg)`,
+                  backgroundImage: typeof photo === 'number' 
+                    ? `url(/customer-photos/photo-${photo}.jpg)`
+                    : `url(${getImageUrl(photo.imageUrl)})`,
                   backgroundColor: '#d4a574',
                 }}
               />

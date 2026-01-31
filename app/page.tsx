@@ -8,7 +8,7 @@ import { CrewDashboard } from "@/components/crew-dashboard"
 import { PastOrders } from "@/components/past-orders"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb, Wallet, Globe } from "lucide-react"
+import { LogOut, Settings, FileText, KeyRound, ChefHat, BarChart3, Package, Menu, MoreVertical, TrendingUp, Clock, Lightbulb, Wallet, Globe, ImageIcon } from "lucide-react"
 import { OnlineOrderNotification } from "@/components/online-order-notification"
 import type { KitchenStatusData } from "@/components/kitchen-status-banner"
 import {
@@ -220,6 +220,10 @@ export default function Home() {
                         <Settings className="h-4 w-4 mr-2" />
                         Admin
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push("/admin/customer-photos")}>
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        Customer Photos
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => router.push("/dtr/admin")}>
                         <Clock className="h-4 w-4 mr-2" />
                         DTR Management
@@ -387,6 +391,14 @@ export default function Home() {
                           >
                             <Settings className="h-5 w-5 mr-3" />
                             Admin Panel
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start h-12"
+                            onClick={() => router.push("/admin/customer-photos")}
+                          >
+                            <ImageIcon className="h-5 w-5 mr-3" />
+                            Customer Photos
                           </Button>
                           <Button
                             variant="ghost"

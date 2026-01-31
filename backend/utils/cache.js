@@ -34,7 +34,9 @@ const CACHE_KEYS = {
   ORDERS: 'orders:',
   DAILY_SALES: 'daily-sales:',
   INVENTORY: 'inventory:',
-  INVENTORY_STATS: 'inventory:stats'
+  INVENTORY_STATS: 'inventory:stats',
+  CUSTOMER_PHOTOS: 'customer-photos:all',
+  CUSTOMER_PHOTOS_ACTIVE: 'customer-photos:active'
 };
 
 // TTL settings in seconds for different data types
@@ -163,6 +165,14 @@ function invalidateInventory() {
 }
 
 /**
+ * Invalidate customer photos caches
+ */
+function invalidateCustomerPhotos() {
+  delByPrefix('customer-photos:');
+  console.log('[Cache] Customer photos cache invalidated');
+}
+
+/**
  * Cache middleware for Express routes
  * @param {string} keyGenerator - Function to generate cache key from req
  * @param {number} ttl - TTL in seconds
@@ -235,6 +245,7 @@ module.exports = {
   invalidateCategories,
   invalidateOrders,
   invalidateInventory,
+  invalidateCustomerPhotos,
   cacheMiddleware,
   CACHE_KEYS,
   TTL
