@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const DailyReportValidation = require('../models/DailyReportValidation');
 const User = require('../models/User');
@@ -1755,8 +1756,19 @@ router.put('/:id', async (req, res) => {
  */
 router.delete('/online/:id', async (req, res) => {
   try {
+    const paramId = req.params.id;
+    
+    // Build query to support both custom id and MongoDB _id
+    const query = { id: paramId };
+    
+    // If the param is a valid ObjectId, also search by _id
+    if (mongoose.isValidObjectId(paramId)) {
+      query.$or = [{ id: paramId }, { _id: paramId }];
+      delete query.id;
+    }
+    
     // Find the order first to verify it's a pending online order
-    const order = await Order.findOne({ id: req.params.id });
+    const order = await Order.findOne(query);
 
     if (!order) {
       return res.status(404).json({
@@ -1781,7 +1793,7 @@ router.delete('/online/:id', async (req, res) => {
     }
 
     // Delete the order
-    await Order.findOneAndDelete({ id: req.params.id });
+    await Order.findByIdAndDelete(order._id);
 
     // Invalidate orders cache
     invalidateOrders();

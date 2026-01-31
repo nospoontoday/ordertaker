@@ -75,7 +75,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { id, name, image } = req.body;
+    const { id, name, image, isPublic } = req.body;
 
     // Validation
     if (!id || !name) {
@@ -98,7 +98,8 @@ router.post('/', async (req, res) => {
     const category = await Category.create({
       id,
       name,
-      image: image || ''
+      image: image || '',
+      isPublic: isPublic || false
     });
 
     // Invalidate categories cache
@@ -142,7 +143,7 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    const { name, image } = req.body;
+    const { name, image, isPublic } = req.body;
 
     // Check if category exists
     let category = await Category.findOne({ id: req.params.id });
@@ -158,6 +159,7 @@ router.put('/:id', async (req, res) => {
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (image !== undefined) updateData.image = image;
+    if (isPublic !== undefined) updateData.isPublic = isPublic;
 
     // Update category
     category = await Category.findOneAndUpdate(

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sheet"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import { menuItemsApi, categoriesApi, ordersApi, getImageUrl, type Order as ApiOrder } from "@/lib/api"
+import { menuItemsApi, categoriesApi, ordersApi, insightsApi, getImageUrl, type Order as ApiOrder } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { generateUniqueShortCode, formatOrderCode } from "@/lib/order-code-generator"
 import { DEFAULT_BRANCH } from "@/lib/branches"
@@ -35,7 +35,8 @@ interface CustomerSession {
 
 // Constants
 const CUSTOMER_SESSION_KEY = "customerOrderSession"
-const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours for customer session
+const ACTIVE_ORDER_EXPIRY_MS = 8 * 60 * 60 * 1000 // 8 hours for active orders
 
 // Helper functions for customer session management
 function loadCustomerSession(): CustomerSession {
@@ -74,6 +75,174 @@ function addCodeToSession(code: string): void {
   if (!session.codes.includes(code.toUpperCase())) {
     session.codes.push(code.toUpperCase())
     saveCustomerSession(session)
+  }
+}
+
+// Active order tracking interface (tracks multiple orders per session)
+interface ActiveOrderState {
+  orderId: string
+  orderCode: string
+  customerName: string
+  orderTotal: number
+  paymentMethod: "cash" | "gcash"
+  submittedAt: number
+  paymentConfirmed: boolean
+  fullyServed: boolean
+  items: Array<{ name: string; quantity: number; price: number }>
+}
+
+const ACTIVE_ORDERS_KEY = "customerActiveOrders"
+
+function loadActiveOrders(): ActiveOrderState[] {
+  if (typeof window === 'undefined') return []
+  
+  try {
+    const stored = localStorage.getItem(ACTIVE_ORDERS_KEY)
+    if (stored) {
+      const orders: ActiveOrderState[] = JSON.parse(stored)
+      // Filter out expired orders (older than 8 hours)
+      const validOrders = orders.filter(order => Date.now() - order.submittedAt < ACTIVE_ORDER_EXPIRY_MS)
+      if (validOrders.length !== orders.length) {
+        // Save filtered list back
+        localStorage.setItem(ACTIVE_ORDERS_KEY, JSON.stringify(validOrders))
+      }
+      return validOrders
+    }
+  } catch (error) {
+    console.error('Error loading active orders:', error)
+  }
+  return []
+}
+
+function saveActiveOrder(state: ActiveOrderState): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    const existing = loadActiveOrders()
+    // Check if order already exists (update it) or add new
+    const existingIndex = existing.findIndex(o => o.orderId === state.orderId || o.orderCode === state.orderCode)
+    if (existingIndex >= 0) {
+      existing[existingIndex] = state
+    } else {
+      existing.push(state)
+    }
+    localStorage.setItem(ACTIVE_ORDERS_KEY, JSON.stringify(existing))
+  } catch (error) {
+    console.error('Error saving active order:', error)
+  }
+}
+
+function updateActiveOrderStatus(orderCode: string, updates: Partial<ActiveOrderState>): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    const orders = loadActiveOrders()
+    const index = orders.findIndex(o => o.orderCode.toUpperCase() === orderCode.toUpperCase())
+    if (index >= 0) {
+      orders[index] = { ...orders[index], ...updates }
+      localStorage.setItem(ACTIVE_ORDERS_KEY, JSON.stringify(orders))
+    }
+  } catch (error) {
+    console.error('Error updating active order:', error)
+  }
+}
+
+function removeActiveOrder(orderCode: string): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    const orders = loadActiveOrders()
+    const filtered = orders.filter(o => o.orderCode.toUpperCase() !== orderCode.toUpperCase())
+    localStorage.setItem(ACTIVE_ORDERS_KEY, JSON.stringify(filtered))
+  } catch (error) {
+    console.error('Error removing active order:', error)
+  }
+}
+
+function clearAllActiveOrders(): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    localStorage.removeItem(ACTIVE_ORDERS_KEY)
+  } catch (error) {
+    console.error('Error clearing active orders:', error)
+  }
+}
+
+// Customer name persistence (auto-fill for returning customers)
+const CUSTOMER_NAME_KEY = "customerOnlineName"
+
+function loadSavedCustomerName(): string {
+  if (typeof window === 'undefined') return ""
+  
+  try {
+    return localStorage.getItem(CUSTOMER_NAME_KEY) || ""
+  } catch (error) {
+    console.error('Error loading customer name:', error)
+    return ""
+  }
+}
+
+function saveCustomerName(name: string): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    if (name.trim()) {
+      localStorage.setItem(CUSTOMER_NAME_KEY, name.trim())
+    }
+  } catch (error) {
+    console.error('Error saving customer name:', error)
+  }
+}
+
+// Pending payment state persistence (locked modal until cashier confirms)
+const PENDING_PAYMENT_KEY = "customerPendingPayment"
+
+interface PendingPaymentState {
+  orderCode: string
+  orderId: string
+  orderTotal: number
+  paymentMethod: "cash" | "gcash"
+  submittedAt: number
+}
+
+function loadPendingPayment(): PendingPaymentState | null {
+  if (typeof window === 'undefined') return null
+  
+  try {
+    const stored = localStorage.getItem(PENDING_PAYMENT_KEY)
+    if (stored) {
+      const state: PendingPaymentState = JSON.parse(stored)
+      // Expire after 8 hours
+      if (Date.now() - state.submittedAt < ACTIVE_ORDER_EXPIRY_MS) {
+        return state
+      }
+      // Clear expired state
+      localStorage.removeItem(PENDING_PAYMENT_KEY)
+    }
+  } catch (error) {
+    console.error('Error loading pending payment:', error)
+  }
+  return null
+}
+
+function savePendingPayment(state: PendingPaymentState): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    localStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(state))
+  } catch (error) {
+    console.error('Error saving pending payment:', error)
+  }
+}
+
+function clearPendingPayment(): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    localStorage.removeItem(PENDING_PAYMENT_KEY)
+  } catch (error) {
+    console.error('Error clearing pending payment:', error)
   }
 }
 
@@ -138,19 +307,40 @@ export function CustomerOrderTaker() {
   const [searchQuery, setSearchQuery] = useState("")
   
   // Menu data state
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(FALLBACK_MENU_ITEMS)
-  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES)
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Kitchen queue state
   const [kitchenOrders, setKitchenOrders] = useState<ApiOrder[]>([])
   
-  // Payment flow state
+  // Payment flow state (for current order being submitted)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"cash" | "gcash" | null>(null)
   const [orderCode, setOrderCode] = useState<string>("")
   const [orderSubmitted, setOrderSubmitted] = useState(false)
+  
+  // Pending payment state (locked modal until cashier confirms)
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<{
+    orderCode: string
+    orderId: string
+    orderTotal: number
+    paymentMethod: "cash" | "gcash"
+  } | null>(null)
+  
+  // Multiple active orders tracking
+  const [activeOrders, setActiveOrders] = useState<ActiveOrderState[]>([])
+  
+  // Currently viewed served order (for the "Order Ready" modal)
+  const [viewingServedOrder, setViewingServedOrder] = useState<ActiveOrderState | null>(null)
+  const [showServedModal, setShowServedModal] = useState(false)
+  
+  // Slow-moving items for upselling (promote items that need more sales)
+  const [slowMovingItems, setSlowMovingItems] = useState<string[]>([])
+  
+  // Upsell selection state (items selected in the "order served" upsell modal)
+  const [upsellSelections, setUpsellSelections] = useState<Map<string, { item: MenuItem; quantity: number }>>(new Map())
   
   // Mobile sheet state
   const [showMobileSheet, setShowMobileSheet] = useState(false)
@@ -161,9 +351,15 @@ export function CustomerOrderTaker() {
   // Orders currently being prepared (for display component)
   const [preparingOrders, setPreparingOrders] = useState<ApiOrder[]>([])
   
-  // Banner notification state
-  const [showPreparingBanner, setShowPreparingBanner] = useState(false)
-  const [preparingOrderCode, setPreparingOrderCode] = useState<string>("")
+  // Customer's orders with their current statuses (derived from active orders + API data)
+  const [customerOrderStatuses, setCustomerOrderStatuses] = useState<Array<{
+    orderCode: string
+    status: 'pending_payment' | 'preparing' | 'ready' | 'served'
+    items: Array<{ name: string; quantity: number; price: number; status: string }>
+  }>>([])
+  
+  // Show multi-order status banner
+  const [showOrdersBanner, setShowOrdersBanner] = useState(false)
   
   // Order note state
   const [orderNote, setOrderNote] = useState("")
@@ -173,10 +369,42 @@ export function CustomerOrderTaker() {
   
   const { toast } = useToast()
 
-  // Load customer session from localStorage on mount
+  // Load customer session and saved name from localStorage on mount
   useEffect(() => {
     const session = loadCustomerSession()
     setCustomerSession(session)
+    
+    // Auto-fill customer name from previous orders
+    const savedName = loadSavedCustomerName()
+    if (savedName) {
+      setCustomerName(savedName)
+    }
+  }, [])
+
+  // Load active orders from localStorage on mount
+  useEffect(() => {
+    const orders = loadActiveOrders()
+    if (orders.length > 0) {
+      setActiveOrders(orders)
+      setShowOrdersBanner(true)
+    }
+  }, [])
+
+  // Load pending payment state on mount (locked modal persists across refresh)
+  useEffect(() => {
+    const pendingPayment = loadPendingPayment()
+    if (pendingPayment) {
+      setPendingPaymentOrder({
+        orderCode: pendingPayment.orderCode,
+        orderId: pendingPayment.orderId,
+        orderTotal: pendingPayment.orderTotal,
+        paymentMethod: pendingPayment.paymentMethod,
+      })
+      setOrderCode(pendingPayment.orderCode)
+      setSelectedPaymentMethod(pendingPayment.paymentMethod)
+      setOrderSubmitted(true)
+      setShowPaymentDialog(true)
+    }
   }, [])
 
   // Load menu data from API
@@ -195,6 +423,188 @@ export function CustomerOrderTaker() {
       clearInterval(preparingInterval)
     }
   }, [])
+
+  // Poll for pending payment confirmation (locked modal until confirmed)
+  useEffect(() => {
+    if (!pendingPaymentOrder) return
+
+    const checkPaymentConfirmation = async () => {
+      try {
+        const orders = await ordersApi.getAll({ branchId: DEFAULT_BRANCH.id })
+        
+        // Find the pending payment order
+        const order = orders.find(o => 
+          o._id === pendingPaymentOrder.orderId || 
+          o.id === pendingPaymentOrder.orderId ||
+          (o.onlineOrderCode?.toUpperCase() === pendingPaymentOrder.orderCode.toUpperCase())
+        )
+        
+        if (order && order.onlinePaymentStatus === 'confirmed') {
+          // Payment confirmed! Clear the lock
+          clearPendingPayment()
+          setPendingPaymentOrder(null)
+          setShowPaymentDialog(false)
+          setOrderSubmitted(false)
+          setOrderCode("")
+          setSelectedPaymentMethod(null)
+          clearCart()
+          
+          toast({
+            title: "Payment Confirmed!",
+            description: `Order ${formatOrderCode(pendingPaymentOrder.orderCode)} is now being prepared.`,
+          })
+        }
+      } catch (error) {
+        console.error("Error checking payment confirmation:", error)
+      }
+    }
+
+    // Check immediately
+    checkPaymentConfirmation()
+    
+    // Then poll every 3 seconds (more frequent for payment confirmation)
+    const paymentInterval = setInterval(checkPaymentConfirmation, 3000)
+    
+    return () => clearInterval(paymentInterval)
+  }, [pendingPaymentOrder])
+
+  // Fetch slow-moving items for upselling promotions
+  useEffect(() => {
+    const fetchSlowMovingItems = async () => {
+      try {
+        const insights = await insightsApi.getInsights(DEFAULT_BRANCH.id)
+        if (insights.productPerformance?.slowMovingItems?.length > 0) {
+          // Get names of slow-moving items and shuffle them
+          const slowItems = insights.productPerformance.slowMovingItems
+            .map(item => item.name)
+            .sort(() => Math.random() - 0.5) // Randomize order
+          setSlowMovingItems(slowItems)
+        }
+      } catch (error) {
+        console.error("Error fetching slow-moving items:", error)
+      }
+    }
+    
+    fetchSlowMovingItems()
+  }, [])
+
+  // Poll for all active orders status (payment confirmation and served status)
+  useEffect(() => {
+    if (activeOrders.length === 0) return
+
+    const checkAllOrderStatuses = async () => {
+      try {
+        const orders = await ordersApi.getAll({ branchId: DEFAULT_BRANCH.id })
+        const session = loadCustomerSession()
+        
+        // Build statuses for customer's orders
+        const statuses: typeof customerOrderStatuses = []
+        let updatedActiveOrders = [...activeOrders]
+        let hasChanges = false
+        
+        for (const activeOrder of activeOrders) {
+          // Find the order in the API response
+          const apiOrder = orders.find(o => 
+            o._id === activeOrder.orderId || 
+            o.id === activeOrder.orderId ||
+            (o.onlineOrderCode?.toUpperCase() === activeOrder.orderCode.toUpperCase())
+          )
+          
+          if (apiOrder) {
+            // Check payment status
+            const paymentConfirmed = apiOrder.onlinePaymentStatus === 'confirmed'
+            
+            // Check if all items are served
+            const allItemsServed = apiOrder.items.every(item => item.status === 'served')
+            const allAppendedServed = !apiOrder.appendedOrders || apiOrder.appendedOrders.length === 0 || 
+              apiOrder.appendedOrders.every(appended => appended.items.every(item => item.status === 'served'))
+            const fullyServed = allItemsServed && allAppendedServed
+            
+            // Determine status
+            let status: 'pending_payment' | 'preparing' | 'ready' | 'served' = 'pending_payment'
+            if (!paymentConfirmed) {
+              status = 'pending_payment'
+            } else if (fullyServed) {
+              status = 'served'
+            } else if (apiOrder.items.some(item => item.status === 'ready')) {
+              status = 'ready'
+            } else {
+              status = 'preparing'
+            }
+            
+            // Collect items with their statuses
+            const itemsWithStatus = apiOrder.items.map(item => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+              status: item.status
+            }))
+            
+            statuses.push({
+              orderCode: activeOrder.orderCode,
+              status,
+              items: itemsWithStatus
+            })
+            
+            // Check if this order just became served (and wasn't before)
+            if (fullyServed && !activeOrder.fullyServed) {
+              hasChanges = true
+              // Update the active order state
+              const idx = updatedActiveOrders.findIndex(o => o.orderCode === activeOrder.orderCode)
+              if (idx >= 0) {
+                updatedActiveOrders[idx] = { 
+                  ...updatedActiveOrders[idx], 
+                  fullyServed: true, 
+                  paymentConfirmed,
+                  items: itemsWithStatus
+                }
+              }
+              
+              // Show the served modal for this order
+              setViewingServedOrder({
+                ...activeOrder,
+                fullyServed: true,
+                paymentConfirmed,
+                items: itemsWithStatus
+              })
+              setShowServedModal(true)
+              
+              // Update localStorage
+              updateActiveOrderStatus(activeOrder.orderCode, { fullyServed: true, paymentConfirmed })
+            } else if (paymentConfirmed && !activeOrder.paymentConfirmed) {
+              hasChanges = true
+              // Update payment confirmed status
+              const idx = updatedActiveOrders.findIndex(o => o.orderCode === activeOrder.orderCode)
+              if (idx >= 0) {
+                updatedActiveOrders[idx] = { ...updatedActiveOrders[idx], paymentConfirmed: true }
+              }
+              updateActiveOrderStatus(activeOrder.orderCode, { paymentConfirmed: true })
+            }
+          }
+        }
+        
+        if (hasChanges) {
+          setActiveOrders(updatedActiveOrders)
+        }
+        setCustomerOrderStatuses(statuses)
+        
+        // Show banner if there are any active orders
+        if (statuses.length > 0) {
+          setShowOrdersBanner(true)
+        }
+      } catch (error) {
+        console.error("Error checking order statuses:", error)
+      }
+    }
+
+    // Check immediately
+    checkAllOrderStatuses()
+    
+    // Then poll every 5 seconds
+    const statusInterval = setInterval(checkAllOrderStatuses, 5000)
+    
+    return () => clearInterval(statusInterval)
+  }, [activeOrders])
 
   const fetchMenuData = async () => {
     setIsLoadingData(true)
@@ -234,8 +644,9 @@ export function CustomerOrderTaker() {
           isPublic: item.isPublic,
         }))
 
-      setMenuItems(transformedItems.length > 0 ? transformedItems : FALLBACK_MENU_ITEMS)
-      setCategories(transformedCategories.length > 0 ? transformedCategories : FALLBACK_CATEGORIES)
+      // Only show public items and categories - no fallback data
+      setMenuItems(transformedItems)
+      setCategories(transformedCategories)
     } catch (error) {
       console.error("Error fetching menu data:", error)
     } finally {
@@ -269,34 +680,15 @@ export function CustomerOrderTaker() {
     }
   }
 
-  // Fetch orders that are currently being prepared
+  // Fetch orders that are currently being prepared (for queue display)
   const fetchPreparingOrders = useCallback(async () => {
     try {
       const orders = await ordersApi.getPreparingOrders(DEFAULT_BRANCH.id)
       setPreparingOrders(orders)
-      
-      // Check if any of customer's orders are being prepared
-      const session = loadCustomerSession()
-      if (session.codes.length > 0) {
-        const customerPreparingOrder = orders.find(order => {
-          if (order.onlineOrderCode) {
-            return session.codes.includes(order.onlineOrderCode.toUpperCase())
-          }
-          return false
-        })
-        
-        if (customerPreparingOrder && customerPreparingOrder.onlineOrderCode) {
-          // Show banner if not already showing for this order
-          if (preparingOrderCode !== customerPreparingOrder.onlineOrderCode.toUpperCase()) {
-            setPreparingOrderCode(customerPreparingOrder.onlineOrderCode.toUpperCase())
-            setShowPreparingBanner(true)
-          }
-        }
-      }
     } catch (error) {
       console.error("Error fetching preparing orders:", error)
     }
-  }, [preparingOrderCode])
+  }, [])
 
   // Calculate order total
   const orderTotal = useMemo(() => {
@@ -307,6 +699,34 @@ export function CustomerOrderTaker() {
   const totalItems = useMemo(() => {
     return currentOrder.reduce((sum, item) => sum + item.quantity, 0)
   }, [currentOrder])
+
+  // Get promotional items for upselling (memoized to prevent shuffling on re-render)
+  const promoItems = useMemo(() => {
+    // Only consider items that are public (visible to online customers)
+    const publicItems = menuItems.filter(item => item.isPublic === true)
+    
+    let items: MenuItem[] = []
+    
+    if (slowMovingItems.length > 0) {
+      // Filter public items by slow-moving item names
+      items = publicItems.filter(item => 
+        slowMovingItems.some(name => 
+          name.toLowerCase() === item.name.toLowerCase()
+        )
+      ).slice(0, 4)
+    }
+    
+    // If no slow-moving items found, use random public items (shuffled once)
+    if (items.length < 4) {
+      const otherItems = publicItems
+        .filter(item => !items.some(p => p.id === item.id))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 4 - items.length)
+      items = [...items, ...otherItems]
+    }
+    
+    return items
+  }, [menuItems, slowMovingItems])
 
   // Get item quantity in cart by name
   const getItemQuantityInCart = (itemName: string) => {
@@ -399,6 +819,17 @@ export function CustomerOrderTaker() {
     })
   }
 
+  // Toggle item type between dine-in and take-out
+  const toggleItemType = (itemId: string) => {
+    setCurrentOrder(
+      currentOrder.map((item) =>
+        item.id === itemId
+          ? { ...item, itemType: item.itemType === "dine-in" ? "take-out" : "dine-in" }
+          : item
+      )
+    )
+  }
+
   // Toggle note input for an item
   const toggleItemNote = (itemId: string) => {
     setExpandedNoteItems(prev => {
@@ -421,10 +852,12 @@ export function CustomerOrderTaker() {
     )
   }
 
-  // Clear cart
+  // Clear cart (but preserve customer name for returning customers)
   const clearCart = () => {
     setCurrentOrder([])
-    setCustomerName("")
+    // Restore saved customer name instead of clearing
+    const savedName = loadSavedCustomerName()
+    setCustomerName(savedName)
     setOrderNote("")
     setExpandedNoteItems(new Set())
   }
@@ -494,7 +927,7 @@ export function CustomerOrderTaker() {
         createdBy: customerName.trim(),
       }] : []
 
-      await ordersApi.create({
+      const createdOrder = await ordersApi.create({
         id: orderId,
         branchId: DEFAULT_BRANCH.id,
         customerName: customerName.trim(),
@@ -515,8 +948,51 @@ export function CustomerOrderTaker() {
       // Save order code to customer session for tracking
       addCodeToSession(orderCode)
       setCustomerSession(loadCustomerSession())
+      
+      // Save customer name for auto-fill on next orders
+      saveCustomerName(customerName)
 
+      // Track the submitted order for status polling
+      const finalOrderId = createdOrder._id || createdOrder.id || orderId
       setOrderSubmitted(true)
+      
+      // Save pending payment state (locks modal until cashier confirms)
+      const pendingPayment: PendingPaymentState = {
+        orderCode: orderCode,
+        orderId: finalOrderId,
+        orderTotal: orderTotal,
+        paymentMethod: selectedPaymentMethod,
+        submittedAt: Date.now(),
+      }
+      savePendingPayment(pendingPayment)
+      setPendingPaymentOrder({
+        orderCode: orderCode,
+        orderId: finalOrderId,
+        orderTotal: orderTotal,
+        paymentMethod: selectedPaymentMethod,
+      })
+      
+      // Create active order entry for multi-order tracking
+      const newActiveOrder: ActiveOrderState = {
+        orderId: finalOrderId,
+        orderCode: orderCode,
+        customerName: customerName.trim(),
+        orderTotal: orderTotal,
+        paymentMethod: selectedPaymentMethod,
+        submittedAt: Date.now(),
+        paymentConfirmed: false,
+        fullyServed: false,
+        items: currentOrder.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      }
+      
+      // Add to active orders
+      setActiveOrders(prev => [...prev, newActiveOrder])
+      saveActiveOrder(newActiveOrder)
+      setShowOrdersBanner(true)
       
       toast({
         title: "Order submitted!",
@@ -536,13 +1012,98 @@ export function CustomerOrderTaker() {
     }
   }
 
-  // Start new order after submission
+  // Start new order (clears current cart but keeps active orders tracking)
   const startNewOrder = () => {
     clearCart()
     setShowPaymentDialog(false)
     setOrderCode("")
     setOrderSubmitted(false)
     setSelectedPaymentMethod(null)
+    setUpsellSelections(new Map())
+    setShowServedModal(false)
+    setViewingServedOrder(null)
+  }
+  
+  // Close the served order modal (order stays in banner for the session)
+  const closeServedOrderModal = () => {
+    setShowServedModal(false)
+    setViewingServedOrder(null)
+    setUpsellSelections(new Map())
+  }
+  
+  // Permanently remove an order from tracking (manual clear)
+  const clearOrderFromTracking = (orderCodeToClear: string) => {
+    removeActiveOrder(orderCodeToClear)
+    setActiveOrders(prev => prev.filter(o => o.orderCode !== orderCodeToClear))
+    setCustomerOrderStatuses(prev => prev.filter(o => o.orderCode !== orderCodeToClear))
+    
+    // Close modal if viewing this order
+    if (viewingServedOrder?.orderCode === orderCodeToClear) {
+      setShowServedModal(false)
+      setViewingServedOrder(null)
+    }
+    
+    // Hide banner if no more active orders
+    const remainingOrders = activeOrders.filter(o => o.orderCode !== orderCodeToClear)
+    if (remainingOrders.length === 0) {
+      setShowOrdersBanner(false)
+    }
+  }
+
+  // Upsell item management
+  const addUpsellItem = (item: MenuItem) => {
+    setUpsellSelections(prev => {
+      const newMap = new Map(prev)
+      const existing = newMap.get(item.id)
+      if (existing) {
+        newMap.set(item.id, { item, quantity: existing.quantity + 1 })
+      } else {
+        newMap.set(item.id, { item, quantity: 1 })
+      }
+      return newMap
+    })
+  }
+
+  const removeUpsellItem = (itemId: string) => {
+    setUpsellSelections(prev => {
+      const newMap = new Map(prev)
+      const existing = newMap.get(itemId)
+      if (existing && existing.quantity > 1) {
+        newMap.set(itemId, { item: existing.item, quantity: existing.quantity - 1 })
+      } else {
+        newMap.delete(itemId)
+      }
+      return newMap
+    })
+  }
+
+  const upsellTotal = useMemo(() => {
+    let total = 0
+    upsellSelections.forEach(({ item, quantity }) => {
+      total += item.price * quantity
+    })
+    return total
+  }, [upsellSelections])
+
+  // Add upsell items to cart and go to cart
+  const addUpsellToCart = () => {
+    upsellSelections.forEach(({ item, quantity }) => {
+      for (let i = 0; i < quantity; i++) {
+        addItem(item, "dine-in")
+      }
+    })
+    
+    // Clear the served order from tracking (user is ordering more)
+    if (viewingServedOrder) {
+      clearOrderFromTracking(viewingServedOrder.orderCode)
+    } else {
+      setUpsellSelections(new Map())
+      setShowServedModal(false)
+      setViewingServedOrder(null)
+    }
+    
+    // Open cart on mobile
+    setShowMobileSheet(true)
   }
 
   // Calculate kitchen queue stats
@@ -631,25 +1192,78 @@ export function CustomerOrderTaker() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 pb-32 lg:pb-8">
-        {/* Preparation Banner - Shows when customer's order starts preparing */}
-        {showPreparingBanner && preparingOrderCode && (
+        {/* Active Orders Banner - Shows status of all customer's active orders */}
+        {showOrdersBanner && customerOrderStatuses.length > 0 && (
           <div className="mb-4 animate-in slide-in-from-top duration-500">
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl p-4 shadow-lg flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
-                  <ChefHat className="h-5 w-5" />
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl p-4 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Coffee className="h-5 w-5" />
+                  <span className="font-bold">Your Orders</span>
+                  <Badge className="bg-white/20 text-white border-0">
+                    {customerOrderStatuses.length}
+                  </Badge>
                 </div>
-                <div>
-                  <p className="font-bold text-lg">Your order {formatOrderCode(preparingOrderCode)} is being prepared!</p>
-                  <p className="text-emerald-100 text-sm">You will be served soon</p>
-                </div>
+                <button 
+                  onClick={() => setShowOrdersBanner(false)}
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button 
-                onClick={() => setShowPreparingBanner(false)}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="space-y-2">
+                {customerOrderStatuses.map((order) => (
+                  <div 
+                    key={order.orderCode}
+                    className={cn(
+                      "flex items-center justify-between p-2 rounded-lg",
+                      order.status === 'served' ? 'bg-emerald-400/30' :
+                      order.status === 'ready' ? 'bg-amber-400/30' :
+                      order.status === 'preparing' ? 'bg-white/20' :
+                      'bg-white/10'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold">{formatOrderCode(order.orderCode)}</span>
+                      <Badge className={cn(
+                        "text-[10px] border-0",
+                        order.status === 'served' ? 'bg-emerald-500' :
+                        order.status === 'ready' ? 'bg-amber-500' :
+                        order.status === 'preparing' ? 'bg-blue-400' :
+                        'bg-slate-400'
+                      )}>
+                        {order.status === 'pending_payment' ? 'Awaiting Payment' :
+                         order.status === 'preparing' ? 'Preparing' :
+                         order.status === 'ready' ? 'Ready!' :
+                         'Served'}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {order.status === 'served' && (
+                        <button
+                          onClick={() => {
+                            const activeOrder = activeOrders.find(o => o.orderCode === order.orderCode)
+                            if (activeOrder) {
+                              setViewingServedOrder({ ...activeOrder, items: order.items })
+                              setShowServedModal(true)
+                            }
+                          }}
+                          className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition-colors"
+                        >
+                          View
+                        </button>
+                      )}
+                      <button
+                        onClick={() => clearOrderFromTracking(order.orderCode)}
+                        className="p-1 hover:bg-white/20 rounded transition-colors opacity-60 hover:opacity-100"
+                        title="Remove from tracking"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -733,6 +1347,12 @@ export function CustomerOrderTaker() {
               <div className="flex flex-col items-center justify-center py-24">
                 <RefreshCw className="h-10 w-10 animate-spin text-slate-400 mb-4" />
                 <p className="text-base font-medium text-slate-500">Loading menu...</p>
+              </div>
+            ) : categories.length === 0 && menuItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24">
+                <Coffee className="h-16 w-16 text-slate-300 mb-4" />
+                <p className="text-xl font-semibold text-slate-500 mb-2">Menu not available</p>
+                <p className="text-sm text-slate-400">Please check back later</p>
               </div>
             ) : (
               <>
@@ -909,10 +1529,14 @@ export function CustomerOrderTaker() {
                       <div className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-slate-900 truncate">{item.name}</p>
-                          <Badge variant="outline" className={cn(
-                            "text-[10px] font-bold mt-1",
-                            item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
-                          )}>
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "text-[10px] font-bold mt-1 cursor-pointer hover:opacity-80 transition-opacity",
+                              item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
+                            )}
+                            onClick={() => toggleItemType(item.id)}
+                          >
                             {item.itemType === "dine-in" ? "DINE IN" : "TAKE OUT"}
                           </Badge>
                         </div>
@@ -1033,10 +1657,14 @@ export function CustomerOrderTaker() {
                           <div className="flex-1 min-w-0">
                             <p className="text-base font-semibold text-slate-900 truncate">{item.name}</p>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className={cn(
-                                "text-xs font-bold",
-                                item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
-                              )}>
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "text-xs font-bold cursor-pointer hover:opacity-80 transition-opacity",
+                                  item.itemType === "dine-in" ? "border-blue-300 text-blue-700" : "border-orange-300 text-orange-700"
+                                )}
+                                onClick={() => toggleItemType(item.id)}
+                              >
                                 {item.itemType === "dine-in" ? "DINE IN" : "TAKE OUT"}
                               </Badge>
                               <span className="text-sm text-slate-500">₱{item.price.toFixed(2)}</span>
@@ -1113,9 +1741,23 @@ export function CustomerOrderTaker() {
         </Sheet>
       </div>
 
-      {/* Payment Dialog */}
-      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+      {/* Payment Dialog - Locked when order submitted until payment confirmed */}
+      <Dialog 
+        open={showPaymentDialog} 
+        onOpenChange={(open) => {
+          // Prevent closing if there's a pending payment (locked state)
+          if (!open && (orderSubmitted || pendingPaymentOrder)) {
+            return
+          }
+          setShowPaymentDialog(open)
+        }}
+      >
+        <DialogContent 
+          className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto"
+          showCloseButton={!orderSubmitted && !pendingPaymentOrder}
+          onPointerDownOutside={(orderSubmitted || pendingPaymentOrder) ? (e) => e.preventDefault() : undefined}
+          onEscapeKeyDown={(orderSubmitted || pendingPaymentOrder) ? (e) => e.preventDefault() : undefined}
+        >
           {!orderSubmitted ? (
             <>
               <DialogHeader>
@@ -1205,69 +1847,213 @@ export function CustomerOrderTaker() {
             </>
           ) : (
             <>
-              {/* Order Submitted State */}
+              {/* Order Submitted - Locked until cashier confirms */}
               <div className="py-6 text-center">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                  <Clock className="h-8 w-8 text-amber-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 mb-2">Order Submitted!</h2>
-                <p className="text-slate-600 mb-6">
+                <h2 className="text-xl font-bold text-slate-900 mb-2">Show This to the Cashier</h2>
+                <p className="text-slate-600 mb-4">
                   Please proceed to the cashier with your order code.
                 </p>
 
-                {/* Order Code */}
-                <div className="bg-slate-900 text-white rounded-xl p-6 mb-6">
+                {/* Order Code - Large and prominent */}
+                <div className="bg-slate-900 text-white rounded-xl p-6 mb-4">
                   <p className="text-sm uppercase tracking-wide mb-2 opacity-75">Your Order Code</p>
-                  <p className="text-4xl font-mono font-bold tracking-widest">{formatOrderCode(orderCode)}</p>
+                  <p className="text-5xl font-mono font-bold tracking-widest">{formatOrderCode(pendingPaymentOrder?.orderCode || orderCode)}</p>
                 </div>
 
                 {/* Payment Instructions */}
-                {selectedPaymentMethod === "gcash" ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
+                {(pendingPaymentOrder?.paymentMethod || selectedPaymentMethod) === "gcash" ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-left">
                     <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
                       <QrCode className="h-5 w-5" />
-                      GCash Payment Instructions
+                      GCash Payment
                     </h3>
                     <div className="bg-white rounded-lg p-4 mb-4 flex flex-col items-center">
                       <img 
                         src="/gcash-qr.jpg" 
                         alt="GCash QR Code" 
-                        className="w-48 h-48 object-contain mb-3"
+                        className="w-40 h-40 object-contain mb-2"
                       />
                       <p className="text-sm text-slate-500">Scan to pay</p>
                     </div>
-                    <div className="space-y-2 text-sm">
-                      <p><span className="font-semibold">GCash Name:</span> Maria Krisnela Burdeos</p>
-                      <p><span className="font-semibold">GCash Number:</span> 0965 082 3998</p>
-                      <p><span className="font-semibold">Amount:</span> ₱{orderTotal.toFixed(2)}</p>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-semibold">Name:</span> Maria Krisnela Burdeos</p>
+                      <p><span className="font-semibold">Number:</span> 0965 082 3998</p>
+                      <p><span className="font-semibold">Amount:</span> <span className="text-blue-600 font-bold">₱{(pendingPaymentOrder?.orderTotal || orderTotal).toFixed(2)}</span></p>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-blue-200">
+                    <div className="mt-3 pt-3 border-t border-blue-200">
                       <p className="text-blue-800 text-sm font-medium">
-                        After payment, show your screenshot to the cashier along with your order code.
+                        Show your payment screenshot to the cashier.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6 text-left">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-left">
                     <h3 className="font-bold text-emerald-900 mb-3 flex items-center gap-2">
                       <Banknote className="h-5 w-5" />
-                      Cash Payment Instructions
+                      Cash Payment
                     </h3>
-                    <div className="bg-white rounded-lg p-4 mb-4">
+                    <div className="bg-white rounded-lg p-4 mb-3">
                       <p className="text-sm text-slate-600 mb-1">Amount to Pay</p>
-                      <p className="text-3xl font-bold text-emerald-600">₱{orderTotal.toFixed(2)}</p>
+                      <p className="text-3xl font-bold text-emerald-600">₱{(pendingPaymentOrder?.orderTotal || orderTotal).toFixed(2)}</p>
                     </div>
                     <p className="text-emerald-800 text-sm font-medium">
-                      Go to the cashier, tell them your order code, and pay the amount shown above.
+                      Pay this amount at the cashier counter.
                     </p>
                   </div>
                 )}
 
-                <Button className="w-full h-14 text-base font-semibold" variant="outline" onClick={startNewOrder}>
-                  Start New Order
-                </Button>
+                {/* Locked - Waiting for cashier confirmation */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Loader2 className="h-5 w-5 text-amber-600 animate-spin" />
+                    <p className="font-semibold text-amber-900">Waiting for cashier confirmation...</p>
+                  </div>
+                  <p className="text-xs text-amber-700 text-center">
+                    This screen will close automatically once the cashier confirms your payment.
+                  </p>
+                </div>
               </div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Served Order Modal - Shows when an order is ready */}
+      <Dialog 
+        open={showServedModal} 
+        onOpenChange={setShowServedModal}
+      >
+        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+          {viewingServedOrder && (
+            <div className="py-4 text-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-200">
+                <CheckCircle2 className="h-10 w-10 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Your Order is Ready!</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Order Code: <span className="font-mono font-bold">{formatOrderCode(viewingServedOrder.orderCode)}</span>
+              </p>
+
+              {/* Order Items List */}
+              <div className="bg-slate-50 rounded-xl p-4 mb-4 text-left">
+                <h3 className="font-semibold text-slate-700 mb-2 text-sm">Items in this order:</h3>
+                <div className="space-y-2">
+                  {viewingServedOrder.items.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-700">
+                        {item.name} × {item.quantity}
+                      </span>
+                      <span className="text-slate-500">₱{(item.price * item.quantity).toFixed(0)}</span>
+                    </div>
+                  ))}
+                  <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between font-bold">
+                    <span>Total</span>
+                    <span className="text-emerald-600">₱{viewingServedOrder.orderTotal.toFixed(0)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-slate-600 mb-4">
+                All items have been served. We hope you enjoy!
+              </p>
+
+              {/* Upsell Section - Promote slow-moving items */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
+                <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+                  <Coffee className="h-5 w-5" />
+                  Still hungry? Try something new!
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {promoItems.map(item => {
+                    const selection = upsellSelections.get(item.id)
+                    const quantity = selection?.quantity || 0
+                    
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "relative flex items-center gap-2 p-2 bg-white rounded-lg border transition-all",
+                          quantity > 0 
+                            ? "border-emerald-400 ring-1 ring-emerald-200" 
+                            : "border-amber-200 hover:border-amber-400"
+                        )}
+                      >
+                        <button
+                          onClick={() => addUpsellItem(item)}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left overflow-hidden"
+                        >
+                          <img
+                            src={item.onlineImage ? getImageUrl(item.onlineImage) : "/placeholder.svg"}
+                            alt={item.name}
+                            className="w-10 h-10 rounded-md object-cover flex-shrink-0"
+                          />
+                          <div className="min-w-0 flex-1 overflow-hidden">
+                            <p className="text-xs font-semibold text-slate-900 truncate">{item.name}</p>
+                            <p className="text-xs font-bold text-amber-600">₱{item.price.toFixed(0)}</p>
+                          </div>
+                        </button>
+                        {quantity > 0 && (
+                          <div className="w-6 h-6 min-w-[24px] flex-shrink-0 rounded-full bg-emerald-500 flex items-center justify-center">
+                            <span className="text-xs font-bold text-white">{quantity}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Upsell Summary */}
+              {upsellSelections.size > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-emerald-800">Your selections:</span>
+                    <span className="text-sm font-bold text-emerald-600">₱{upsellTotal.toFixed(0)}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {Array.from(upsellSelections.values()).map(({ item, quantity }) => (
+                      <div key={item.id} className="flex items-center justify-between text-xs text-emerald-700">
+                        <span>{item.name} × {quantity}</span>
+                        <span>₱{(item.price * quantity).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {upsellSelections.size > 0 ? (
+                  <Button 
+                    className="w-full h-14 text-base font-bold bg-emerald-600 hover:bg-emerald-700" 
+                    onClick={addUpsellToCart}
+                  >
+                    <ShoppingCart className="h-5 w-5 mr-2" />
+                    Add to Cart (₱{upsellTotal.toFixed(0)})
+                  </Button>
+                ) : (
+                  <Button 
+                    className="w-full h-14 text-base font-bold" 
+                    onClick={() => {
+                      clearOrderFromTracking(viewingServedOrder.orderCode)
+                      startNewOrder()
+                    }}
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    Order More
+                  </Button>
+                )}
+                <Button 
+                  className="w-full h-12 text-sm font-medium" 
+                  variant="ghost"
+                  onClick={closeServedOrderModal}
+                >
+                  Done for now
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

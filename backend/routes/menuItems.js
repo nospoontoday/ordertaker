@@ -100,7 +100,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, price, category, image, isBestSeller, owner } = req.body;
+    const { name, price, category, image, isBestSeller, owner, isPublic, onlineImage } = req.body;
 
     // Validation
     if (!name || !price || !category) {
@@ -125,7 +125,9 @@ router.post('/', async (req, res) => {
       category,
       image: image || '',
       isBestSeller: isBestSeller || false,
-      owner: owner || 'john'
+      owner: owner || 'john',
+      isPublic: isPublic || false,
+      onlineImage: onlineImage || ''
     });
 
     // Invalidate menu cache
@@ -161,7 +163,7 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    const { name, price, category, image, isBestSeller } = req.body;
+    const { name, price, category, image, isBestSeller, isPublic, onlineImage } = req.body;
 
     // Check if menu item exists
     let menuItem = await MenuItem.findById(req.params.id);
@@ -180,6 +182,8 @@ router.put('/:id', async (req, res) => {
     if (category !== undefined) updateData.category = category;
     if (image !== undefined) updateData.image = image;
     if (isBestSeller !== undefined) updateData.isBestSeller = isBestSeller;
+    if (isPublic !== undefined) updateData.isPublic = isPublic;
+    if (onlineImage !== undefined) updateData.onlineImage = onlineImage;
 
     // Update menu item
     menuItem = await MenuItem.findByIdAndUpdate(
